@@ -88,8 +88,9 @@ local ROLE_COORDS = {
 local CHANNELS = { "Zone", "Newcomers", "World" }
 local OFFER_SECONDS = 300
 local MAX_TOASTS = 5
--- Room per button: "Dungeon" and "Active" side by side overlapped at 40.
-local BUTTON_STEP = 46
+-- Room per button: "Dungeon" and "Active" side by side overlapped at 40, "Dungeon" was still cut at 52.
+-- A caption may run a little past its slot into the gap between two icons.
+local BUTTON_STEP, CAPTION_WIDTH = 58, 64
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
 local PROBE_DELAY, PROBE_WINDOW = 3, 10
@@ -327,7 +328,7 @@ local function BarButton(key, icon, label, tip, onClick)
 	button.ring:SetAlpha(0.8)
 	button.caption = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	button.caption:SetPoint("TOP", button, "BOTTOM", 0, -1)
-	button.caption:SetWidth(BUTTON_STEP)
+	button.caption:SetWidth(CAPTION_WIDTH)
 	button.label, button.tip, button.onClick = label, tip, onClick
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")

@@ -4,6 +4,8 @@ A World of Warcraft 3.3.5 addon for [CoA Bots](https://github.com/Zyth45/mod-pla
 
 No window. A thin bar of buttons, the bots' roles drawn straight onto the party frames you already have, and offers arriving as small toasts.
 
+![The SquidBots Lite bar in game](images/bar.png)
+
 ## The bar
 
 Six orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
