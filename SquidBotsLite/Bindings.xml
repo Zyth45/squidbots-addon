@@ -1,0 +1,9 @@
+<Bindings>
+	<Binding name="SQUIDBOTSLITE_FOLLOW" header="SQUIDBOTSLITE">SquidBotsLite_Order("follow")</Binding>
+	<Binding name="SQUIDBOTSLITE_STAY">SquidBotsLite_Order("stay")</Binding>
+	<Binding name="SQUIDBOTSLITE_ATTACK">SquidBotsLite_Order("attack")</Binding>
+	<Binding name="SQUIDBOTSLITE_PASSIVE">SquidBotsLite_Order("passive")</Binding>
+	<Binding name="SQUIDBOTSLITE_DUNGEON">SquidBotsLite_Order("dungeon")</Binding>
+	<Binding name="SQUIDBOTSLITE_SUMMON">SquidBotsLite_Order("summon")</Binding>
+	<Binding name="SQUIDBOTSLITE_RELEASE">SquidBotsLite_Order("release")</Binding>
+</Bindings>

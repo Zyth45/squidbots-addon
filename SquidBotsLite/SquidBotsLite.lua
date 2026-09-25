@@ -1,14 +1,16 @@
--- SquidBots Lite: the minimal take. No window: a thin bar of six buttons (five orders and "+" to
--- recruit), the bots' roles and alerts drawn on the game's own party frames, and the offers bots
--- whisper as small toasts above the bar, each with an Invite button.
+-- SquidBots Lite: the minimal take. No window: a thin bar of orders (a Release button joins it while
+-- a bot lies dead) and "Bots" to recruit, the bots' roles and alerts drawn on the game's own party
+-- frames, and the offers bots whisper as small toasts above the bar, each with an Invite button.
 
 SquidBotsLiteDB = SquidBotsLiteDB or {}
 
 local STRINGS = {
 	en = {
-		FOLLOW = "Follow", STAY = "Stay", ATTACK = "Target", PASSIVE = "Passive", DUNGEON = "Dungeon", RECRUIT = "Bots",
+		FOLLOW = "Follow", STAY = "Stay", ATTACK = "Target", PASSIVE = "Passive", ACTIVE = "Active", DUNGEON = "Dungeon", RECRUIT = "Bots",
 		TIP_FOLLOW = "Bots follow you.", TIP_STAY = "Bots stay where they are.", TIP_ATTACK = "Bots attack your target.",
-		TIP_PASSIVE = "Bots do not start fights. Click again to end.",
+		TIP_ACTIVE = "Bots fight normally. Click to make them passive: no fights, and the tank stops pulling on its own.",
+		TIP_PASSIVE = "Bots are passive: no fights, no auto pull. Click, or give any order, to wake them.",
+		TOGGLE_PASSIVE = "Passive / Active",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
 		TIP_MOVE = "Shift-drag to move the bar.",
@@ -24,13 +26,24 @@ local STRINGS = {
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
 		M_FOLLOW = "Follow me", M_STAY = "Stay here", M_ATTACK = "Attack my target", M_SUMMON = "Come to me",
 		M_AUTOPULL_ON = "Auto pull on", M_AUTOPULL_OFF = "Auto pull off", M_KICK = "Remove from group",
-		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl gm (GM only), /sbl reset",
+		M_STATS = "Stats (bags, money, xp)", M_GEAR = "Best gear", M_HEAL_ME = "Heal only me", M_HEAL_ALL = "Heal the whole group",
+		SUMMON = "Regroup", TIP_SUMMON = "Bots teleport next to you. Handy when one is stuck.",
+		RELEASE = "Release", TIP_RELEASE = "Shown when a bot is dead: dead bots release their spirit and run back to their body.",
+		ROLE_ORDERS = "Orders by role", R_TANK_ATTACK = "Tank: attack my target", R_DPS_ATTACK = "Damage: attack my target",
+		R_HEAL_FOLLOW = "Healers: follow me", R_HEAL_STAY = "Healers: stay here", R_MELEE_FLEE = "Melee: back to me, hold fire",
+		FORMATION = "Formation", F_NEAR = "Close (default)", F_LINE = "Line", F_CIRCLE = "Circle", F_SHIELD = "Shield around me",
+		F_ARROW = "Arrow", F_QUEUE = "Single file",
+		ROLES_ON = "Automatic roles on: a bot of unknown role is asked \"co ?\" once, answer hidden.",
+		ROLES_OFF = "Automatic roles off.",
+		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
 		LANG_SET = "SquidBots Lite language: English.", CHANNEL_SET = "SquidBots Lite asks in: %s",
 	},
 	fr = {
-		FOLLOW = "Suivre", STAY = "Rester", ATTACK = "Cible", PASSIVE = "Passif", DUNGEON = "Donjon", RECRUIT = "Bots",
+		FOLLOW = "Suivre", STAY = "Rester", ATTACK = "Cible", PASSIVE = "Passif", ACTIVE = "Actif", DUNGEON = "Donjon", RECRUIT = "Bots",
 		TIP_FOLLOW = "Les bots vous suivent.", TIP_STAY = "Les bots restent sur place.", TIP_ATTACK = "Les bots attaquent votre cible.",
-		TIP_PASSIVE = "Les bots n'engagent plus le combat. Recliquez pour arrêter.",
+		TIP_ACTIVE = "Les bots combattent normalement. Cliquez pour les rendre passifs : plus de combat, et le tank arrête de tirer seul.",
+		TIP_PASSIVE = "Les bots sont passifs : pas de combat, pas de pull auto. Cliquez, ou donnez n'importe quel ordre, pour les réveiller.",
+		TOGGLE_PASSIVE = "Passif / Actif",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
 		TIP_MOVE = "Maj + glisser pour déplacer la barre.",
@@ -46,7 +59,16 @@ local STRINGS = {
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
 		M_FOLLOW = "Me suivre", M_STAY = "Rester ici", M_ATTACK = "Attaquer ma cible", M_SUMMON = "Venir à moi",
 		M_AUTOPULL_ON = "Auto pull activé", M_AUTOPULL_OFF = "Auto pull désactivé", M_KICK = "Retirer du groupe",
-		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl gm (MJ), /sbl reset",
+		M_STATS = "Stats (sacs, argent, xp)", M_GEAR = "Meilleur équipement", M_HEAL_ME = "Ne soigner que moi", M_HEAL_ALL = "Soigner tout le groupe",
+		SUMMON = "Rappel", TIP_SUMMON = "Les bots se téléportent près de vous. Pratique quand l'un d'eux est coincé.",
+		RELEASE = "Libérer", TIP_RELEASE = "Visible quand un bot est mort : les bots morts libèrent leur esprit et rejoignent leur corps.",
+		ROLE_ORDERS = "Ordres par rôle", R_TANK_ATTACK = "Tank : attaquer ma cible", R_DPS_ATTACK = "DPS : attaquer ma cible",
+		R_HEAL_FOLLOW = "Soigneurs : me suivre", R_HEAL_STAY = "Soigneurs : rester ici", R_MELEE_FLEE = "Corps à corps : revenir sans attaquer",
+		FORMATION = "Formation", F_NEAR = "Proche (par défaut)", F_LINE = "Ligne", F_CIRCLE = "Cercle", F_SHIELD = "Bouclier autour de moi",
+		F_ARROW = "Flèche", F_QUEUE = "File indienne",
+		ROLES_ON = "Rôles automatiques activés : un bot au rôle inconnu reçoit « co ? » une fois, réponse masquée.",
+		ROLES_OFF = "Rôles automatiques désactivés.",
+		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
 		LANG_SET = "Langue de SquidBots Lite : français.", CHANNEL_SET = "SquidBots Lite demande dans : %s",
 	},
 }
@@ -66,8 +88,20 @@ local ROLE_COORDS = {
 local CHANNELS = { "Zone", "Newcomers", "World" }
 local OFFER_SECONDS = 300
 local MAX_TOASTS = 5
+-- Room per button: "Dungeon" and "Active" side by side overlapped at 40.
+local BUTTON_STEP = 46
+-- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
+-- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
+local PROBE_DELAY, PROBE_WINDOW = 3, 10
+local FORMATIONS = { { "near", "F_NEAR" }, { "line", "F_LINE" }, { "circle", "F_CIRCLE" }, { "shield", "F_SHIELD" },
+	{ "arrow", "F_ARROW" }, { "queue", "F_QUEUE" } }
+-- The Passive button shows the bots' current state: a charge arrow while they fight, Zzz while passive.
+local ICON_ACTIVE, ICON_PASSIVE = "Interface\\Icons\\Ability_Warrior_Charge", "Interface\\Icons\\Spell_Nature_Sleep"
+local BINDINGS = { { "follow", "FOLLOW" }, { "stay", "STAY" }, { "attack", "M_ATTACK" }, { "passive", "TOGGLE_PASSIVE" },
+	{ "dungeon", "DUNGEON" }, { "summon", "SUMMON" }, { "release", "RELEASE" } }
 
 local roleByName, badges, toasts = {}, {}, {}
+local firstSeen, probedAt = {}, {}
 local state = { order = "follow", passive = false }
 local bar, buttons, overlays, toastFrames = nil, {}, {}, {}
 
@@ -81,6 +115,11 @@ local function SetLanguage(lang)
 	end
 	SquidBotsLiteDB.lang = lang
 	L = STRINGS[lang]
+	-- Names shown in the game's Key Bindings window (the bindings themselves are in Bindings.xml).
+	BINDING_HEADER_SQUIDBOTSLITE = "SquidBots Lite"
+	for _, binding in ipairs(BINDINGS) do
+		_G["BINDING_NAME_SQUIDBOTSLITE_" .. string.upper(binding[1])] = L[binding[2]]
+	end
 end
 
 local function SendGroup(...)
@@ -171,13 +210,60 @@ local function RecruitMenu()
 	}
 end
 
+-- Set by the bar and by the menus alike, so the lit button always matches the last order sent.
+local Highlight
+local function SetOrder(order)
+	state.order = order
+	Highlight()
+end
+
+-- "co +passive" only holds the combat engine, while the tank's auto pull runs out of combat: a passive
+-- tank would still pull, then stand there. So passive also stops its auto pull, and waking restores it
+-- (it is on by default for a CoA tank).
+local function SetPassive(on)
+	if on then
+		return SendGroup("co +passive", "@tank nc -coa auto pull")
+	end
+	return SendGroup("co -passive", "@tank nc +coa auto pull")
+end
+
+-- For every group order: follow, stay and tank attack already end "passive" on the bots, and "attack"
+-- is ignored by a passive bot. So any order wakes the bots first, and the Passive button follows.
+local function SendOrder(...)
+	if state.passive then
+		if not SetPassive(false) then return false end
+		state.passive = false
+		Highlight()
+	end
+	return SendGroup(...)
+end
+
 local function ProfileMenu()
+	local roleOrders = {
+		{ text = L.R_TANK_ATTACK, notCheckable = true, func = function() SendOrder("@tank attack") end },
+		{ text = L.R_DPS_ATTACK, notCheckable = true, func = function() SendOrder("@dps attack") end },
+		{ text = L.R_HEAL_FOLLOW, notCheckable = true, func = function() SendOrder("@heal follow") end },
+		{ text = L.R_HEAL_STAY, notCheckable = true, func = function() SendOrder("@heal stay") end },
+		{ text = L.R_MELEE_FLEE, notCheckable = true, func = function() SendGroup("@melee flee") end },
+	}
+	local formations = {}
+	for _, f in ipairs(FORMATIONS) do
+		table.insert(formations, { text = L[f[2]], notCheckable = true, func = function() SendGroup("formation " .. f[1]) end })
+	end
 	return {
 		{ text = L.PROFILES, isTitle = true, notCheckable = true },
 		{ text = L.P_FARM, notCheckable = true, func = function() SendGroup("nc +grind,+loot,+food") end },
-		{ text = L.P_STRICT, notCheckable = true, func = function() SendGroup("nc +follow,-grind,-rpg,-move random", "follow") end },
-		{ text = L.P_DUNGEON, notCheckable = true, func = function() SendGroup("co -wait for attack,+avoid aoe", "follow") end },
-		{ text = L.P_LEAVE_DUNGEON, notCheckable = true, func = function() SendGroup("co -wait for attack,-avoid aoe,-mark rti") end },
+		{ text = L.P_STRICT, notCheckable = true, func = function()
+			if SendOrder("nc +follow,-grind,-rpg,-move random", "follow") then SetOrder("follow") end
+		end },
+		{ text = L.P_DUNGEON, notCheckable = true, func = function()
+			if SendOrder("co -wait for attack,+avoid aoe", "follow") then SetOrder("dungeon") end
+		end },
+		{ text = L.P_LEAVE_DUNGEON, notCheckable = true, func = function()
+			if SendGroup("co -wait for attack,-avoid aoe,-mark rti") and state.order == "dungeon" then SetOrder("follow") end
+		end },
+		{ text = L.ROLE_ORDERS, hasArrow = true, notCheckable = true, menuList = roleOrders },
+		{ text = L.FORMATION, hasArrow = true, notCheckable = true, menuList = formations },
 		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 	}
@@ -194,7 +280,14 @@ local function BotMenu(name)
 	if roleByName[name] == "tank" then
 		table.insert(items, { text = L.M_AUTOPULL_ON, notCheckable = true, func = function() Whisper(name, "nc +coa auto pull") end })
 		table.insert(items, { text = L.M_AUTOPULL_OFF, notCheckable = true, func = function() Whisper(name, "nc -coa auto pull") end })
+	elseif roleByName[name] == "heal" then
+		-- "focus heal" makes the healer heal ONLY the listed players: meant for a duo, undone by "clear".
+		local me = UnitName("player")
+		table.insert(items, { text = L.M_HEAL_ME, notCheckable = true, func = function() Whisper(name, "focus heal +" .. me) end })
+		table.insert(items, { text = L.M_HEAL_ALL, notCheckable = true, func = function() Whisper(name, "focus heal clear") end })
 	end
+	table.insert(items, { text = L.M_STATS, notCheckable = true, func = function() Whisper(name, "stats") end })
+	table.insert(items, { text = L.M_GEAR, notCheckable = true, func = function() Whisper(name, "autogear") end })
 	table.insert(items, { text = L.M_KICK, notCheckable = true, func = function() UninviteUnit(name) end })
 	return items
 end
@@ -202,10 +295,17 @@ end
 -- ---------------------------------------------------------------------------
 -- The bar
 -- ---------------------------------------------------------------------------
-local function Highlight()
+Highlight = function()
 	for key, button in pairs(buttons) do
 		local active = key == state.order or (key == "passive" and state.passive)
 		button.ring:SetVertexColor(active and 1 or 0.35, active and 0.82 or 0.35, active and 0 or 0.35)
+	end
+	local passive = buttons.passive
+	if passive then
+		passive.icon:SetTexture(state.passive and ICON_PASSIVE or ICON_ACTIVE)
+		passive.label = state.passive and "PASSIVE" or "ACTIVE"
+		passive.tip = state.passive and "TIP_PASSIVE" or "TIP_ACTIVE"
+		passive.caption:SetText(L[passive.label])
 	end
 end
 
@@ -216,6 +316,7 @@ local function BarButton(key, icon, label, tip, onClick)
 	local texture = button:CreateTexture(nil, "ARTWORK")
 	texture:SetAllPoints()
 	texture:SetTexture(icon)
+	button.icon = texture
 	texture:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 	button.ring = button:CreateTexture(nil, "OVERLAY")
 	button.ring:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
@@ -226,7 +327,8 @@ local function BarButton(key, icon, label, tip, onClick)
 	button.ring:SetAlpha(0.8)
 	button.caption = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	button.caption:SetPoint("TOP", button, "BOTTOM", 0, -1)
-	button.label, button.tip = label, tip
+	button.caption:SetWidth(BUTTON_STEP)
+	button.label, button.tip, button.onClick = label, tip, onClick
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	button:RegisterForDrag("LeftButton")
@@ -266,9 +368,21 @@ local function RefreshTexts()
 	end
 end
 
+-- Party members lying dead, spirit not yet released (a ghost is already on its way back).
+local function DeadMembers()
+	local dead = {}
+	for i = 1, 4 do
+		local unit = "party" .. i
+		if UnitExists(unit) and UnitIsDead(unit) and not UnitIsGhost(unit) then
+			table.insert(dead, UnitName(unit))
+		end
+	end
+	return dead
+end
+
 local function BuildBar()
 	bar = CreateFrame("Frame", "SquidBotsLiteBar", UIParent)
-	bar:SetWidth(6 * 40)
+	bar:SetWidth(8 * BUTTON_STEP)
 	bar:SetHeight(48)
 	bar:SetMovable(true)
 	bar:SetClampedToScreen(true)
@@ -280,34 +394,46 @@ local function BuildBar()
 	end
 	local defs = {
 		{ "follow", "Interface\\Icons\\Ability_Hunter_Pathfinding", "FOLLOW", "TIP_FOLLOW", function()
-			local sent = state.passive and SendGroup("follow", "co -passive") or SendGroup("follow")
-			if sent then state.passive = false; state.order = "follow"; Highlight() end
+			if SendOrder("follow") then SetOrder("follow") end
 		end },
 		{ "stay", "Interface\\Icons\\Spell_Nature_TimeStop", "STAY", "TIP_STAY", function()
-			if SendGroup("stay") then state.order = "stay"; Highlight() end
+			if SendOrder("stay") then SetOrder("stay") end
 		end },
 		{ "attack", "Interface\\Icons\\Ability_DualWield", "ATTACK", "TIP_ATTACK", function()
-			if SendGroup("attack") then state.order = "attack"; Highlight() end
+			if SendOrder("attack") then SetOrder("attack") end
 		end },
-		{ "passive", "Interface\\Icons\\Spell_Nature_Sleep", "PASSIVE", "TIP_PASSIVE", function()
-			if SendGroup(state.passive and "co -passive" or "co +passive") then state.passive = not state.passive; Highlight() end
+		{ "passive", ICON_ACTIVE, "ACTIVE", "TIP_ACTIVE", function()
+			if SetPassive(not state.passive) then state.passive = not state.passive; Highlight() end
 		end },
 		{ "dungeon", "Interface\\Icons\\Achievement_Dungeon_ClassicDungeonMaster", "DUNGEON", "TIP_DUNGEON", function()
-			if SendGroup("co -wait for attack,+avoid aoe", "follow") then state.order = "dungeon"; Highlight() end
+			if SendOrder("co -wait for attack,+avoid aoe", "follow") then SetOrder("dungeon") end
+		end },
+		{ "summon", "Interface\\Icons\\Spell_Arcane_PortalDalaran", "SUMMON", "TIP_SUMMON", function()
+			SendGroup("summon")
 		end },
 		{ "recruit", "Interface\\Icons\\Spell_Frost_SummonWaterElemental", "RECRUIT", "TIP_RECRUIT", function()
 			ShowMenu(RecruitMenu())
 		end },
+		-- Whispered to the dead only: "release" tells a living bot to stop following and wait.
+		{ "release", "Interface\\Icons\\Spell_Holy_Resurrection", "RELEASE", "TIP_RELEASE", function()
+			for _, name in ipairs(DeadMembers()) do Whisper(name, "release") end
+		end },
 	}
 	for i, def in ipairs(defs) do
 		local button = BarButton(def[1], def[2], def[3], def[4], def[5])
-		button:SetPoint("TOPLEFT", 3 + (i - 1) * 40, 0)
+		button:SetPoint("TOPLEFT", 3 + (i - 1) * BUTTON_STEP, 0)
 	end
+	buttons.release:Hide()
 	RefreshTexts()
 	Highlight()
 	if SquidBotsLiteDB.hidden then
 		bar:Hide()
 	end
+end
+
+local function RefreshRelease()
+	-- No SetShown on the 3.3.5 client.
+	if #DeadMembers() > 0 then buttons.release:Show() else buttons.release:Hide() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -438,7 +564,53 @@ end
 -- ---------------------------------------------------------------------------
 -- Chat
 -- ---------------------------------------------------------------------------
+-- A party member of unknown role (invited by hand, not through lfg bot) is whispered "co ?" once: a bot
+-- answers with its combat strategies, "coa tank" or "coa heal" giving its role. Question and answer are
+-- kept out of the chat. A human player gets that one whisper too; /sbl roles off stops it.
+local function ProbeRoles()
+	if SquidBotsLiteDB.autoRoles == false then return end
+	local now = GetTime()
+	for i = 1, 4 do
+		local unit = "party" .. i
+		local name = UnitName(unit)
+		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and not probedAt[name] and UnitIsConnected(unit) then
+			firstSeen[name] = firstSeen[name] or now
+			if now - firstSeen[name] >= PROBE_DELAY then
+				probedAt[name] = now
+				Whisper(name, "co ?")
+			end
+		end
+	end
+end
+
+local function InProbeWindow(name)
+	return probedAt[name] and GetTime() - probedAt[name] < PROBE_WINDOW
+end
+
+local function OnStrategies(message, sender)
+	local list = {}
+	for strategy in message:sub(13):gmatch("[^,]+") do
+		list[strtrim(strategy)] = true
+	end
+	roleByName[sender] = (list["coa tank"] or list["tank"] or list["bear"]) and "tank"
+		or (list["coa heal"] or list["heal"] or list["holy heal"]) and "heal" or "dps"
+end
+
+local function HideProbe(_, _, message, name)
+	if InProbeWindow(name) and (message == "co ?" or message:find("^Strategies: ")) then
+		return true
+	end
+end
+-- A bot answers on the channel of the last order it got within a second, so party too.
+for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do
+	ChatFrame_AddMessageEventFilter(e, HideProbe)
+end
+
 local function OnWhisper(message, sender)
+	if InProbeWindow(sender) and message:find("^Strategies: ") then
+		OnStrategies(message, sender)
+		return
+	end
 	local level = message:match("[Ll]evel (%d+)")
 	if not level then return end
 	local class
@@ -463,6 +635,10 @@ local function OnWhisper(message, sender)
 end
 
 local function OnGroupChat(message, sender)
+	if InProbeWindow(sender) and message:find("^Strategies: ") then
+		OnStrategies(message, sender)
+		return
+	end
 	if message:find("Low on mana", 1, true) then
 		badges[sender] = { text = L.LOW_MANA, r = 1, g = 0.75, b = 0.2, untilTime = GetTime() + 30 }
 		return
@@ -505,6 +681,8 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			elapsed = 0
 			RefreshOverlays()
 			RefreshToasts()
+			RefreshRelease()
+			ProbeRoles()
 		end)
 	elseif event == "CHAT_MSG_WHISPER" then
 		OnWhisper(arg1, arg2)
@@ -515,6 +693,12 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		OnGroupChat(arg1, arg2)
 	end
 end)
+
+-- Called by Bindings.xml: a key does what a left click on that bar button does, bar shown or not.
+function SquidBotsLite_Order(key)
+	local button = buttons[key]
+	if button then button.onClick(button, "LeftButton") end
+end
 
 SLASH_SQUIDBOTSLITE1 = "/sbl"
 SLASH_SQUIDBOTSLITE2 = "/squidlite"
@@ -528,6 +712,9 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 	elseif command == "channel" then
 		SquidBotsLiteDB.channel = rest
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
+	elseif command == "roles" then
+		SquidBotsLiteDB.autoRoles = string.lower(rest) ~= "off"
+		Print(SquidBotsLiteDB.autoRoles and L.ROLES_ON or L.ROLES_OFF)
 	elseif command == "gm" then
 		-- No entry in the menu: a player without the right would only see an error.
 		SquidBotsLiteDB.gm = not SquidBotsLiteDB.gm

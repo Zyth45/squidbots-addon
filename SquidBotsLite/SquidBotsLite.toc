@@ -2,7 +2,7 @@
 ## Title: SquidBots Lite
 ## Notes: A thin bar of bot orders, role badges on the party frames, lfg bot offers as toasts - CoA Bots
 ## Notes-frFR: Une barre fine d'ordres aux bots, rôles sur les cadres de groupe, offres lfg bot en notifications - CoA Bots
-## Version: 1.4
+## Version: 1.5
 ## Author: CoA Bots team
 ## X-License: GPL-2.0
 ## X-Website: https://github.com/Zyth45/mod-playerbots
