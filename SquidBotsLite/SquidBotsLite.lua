@@ -88,9 +88,10 @@ local ROLE_COORDS = {
 local CHANNELS = { "Zone", "Newcomers", "World" }
 local OFFER_SECONDS = 300
 local MAX_TOASTS = 5
--- Room per button: "Dungeon" and "Active" side by side overlapped at 40, "Dungeon" was still cut at 52.
--- A caption may run a little past its slot into the gap between two icons.
-local BUTTON_STEP, CAPTION_WIDTH = 58, 64
+-- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
+-- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
+local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 4, 38, 52
+local BAR_ORDER = { "follow", "stay", "attack", "passive", "dungeon", "summon", "recruit", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
 local PROBE_DELAY, PROBE_WINDOW = 3, 10
@@ -327,8 +328,9 @@ local function BarButton(key, icon, label, tip, onClick)
 	button.ring:SetPoint("CENTER")
 	button.ring:SetAlpha(0.8)
 	button.caption = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	local font, _, flags = button.caption:GetFont()
+	button.caption:SetFont(font, CAPTION_SIZE, flags)
 	button.caption:SetPoint("TOP", button, "BOTTOM", 0, -1)
-	button.caption:SetWidth(CAPTION_WIDTH)
 	button.label, button.tip, button.onClick = label, tip, onClick
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -360,10 +362,34 @@ local function BarButton(key, icon, label, tip, onClick)
 	return button
 end
 
+-- Spaces the buttons evenly by the widest caption, "Active" and "Passive" both counted so that the bar
+-- does not move when the Passive button flips.
+local function LayoutBar()
+	local measure = buttons.follow.caption
+	local shown = measure:GetText()
+	local texts = { L.ACTIVE, L.PASSIVE }
+	for _, button in pairs(buttons) do
+		table.insert(texts, L[button.label])
+	end
+	local widest = 0
+	for _, text in ipairs(texts) do
+		measure:SetText(text)
+		widest = math.max(widest, measure:GetStringWidth() or 0)
+	end
+	measure:SetText(shown)
+	local step = widest > 0 and math.max(MIN_STEP, math.ceil(widest) + CAPTION_GAP) or FALLBACK_STEP
+	for i, key in ipairs(BAR_ORDER) do
+		buttons[key]:ClearAllPoints()
+		buttons[key]:SetPoint("TOPLEFT", 3 + (i - 1) * step, 0)
+	end
+	bar:SetWidth(#BAR_ORDER * step)
+end
+
 local function RefreshTexts()
 	for _, button in pairs(buttons) do
 		button.caption:SetText(L[button.label])
 	end
+	if buttons.follow then LayoutBar() end
 	for _, toast in ipairs(toastFrames) do
 		toast.invite:SetText(L.INVITE)
 	end
@@ -383,7 +409,7 @@ end
 
 local function BuildBar()
 	bar = CreateFrame("Frame", "SquidBotsLiteBar", UIParent)
-	bar:SetWidth(8 * BUTTON_STEP)
+	bar:SetWidth(#BAR_ORDER * FALLBACK_STEP)
 	bar:SetHeight(48)
 	bar:SetMovable(true)
 	bar:SetClampedToScreen(true)
@@ -420,9 +446,8 @@ local function BuildBar()
 			for _, name in ipairs(DeadMembers()) do Whisper(name, "release") end
 		end },
 	}
-	for i, def in ipairs(defs) do
-		local button = BarButton(def[1], def[2], def[3], def[4], def[5])
-		button:SetPoint("TOPLEFT", 3 + (i - 1) * BUTTON_STEP, 0)
+	for _, def in ipairs(defs) do
+		BarButton(def[1], def[2], def[3], def[4], def[5])
 	end
 	buttons.release:Hide()
 	RefreshTexts()
