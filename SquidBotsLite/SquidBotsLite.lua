@@ -713,7 +713,8 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 	elseif event == "CHAT_MSG_WHISPER" then
 		OnWhisper(arg1, arg2)
 	elseif event == "CHAT_MSG_SYSTEM" then
-		local name, role = arg1:match("^(%S+) joins as (%a+)")
+		-- "Kegarink Bot joins as tank": a bot name can hold a space since CoA Bots 1.5 (CoaBotSurname).
+		local name, role = arg1:match("^(.-) joins as (%a+)")
 		if name and ROLE_COORDS[role] then roleByName[name] = role end
 	elseif arg1 and arg2 then
 		OnGroupChat(arg1, arg2)
