@@ -401,7 +401,10 @@ local function DeadMembers()
 	for i = 1, 4 do
 		local unit = "party" .. i
 		if UnitExists(unit) and UnitIsDead(unit) and not UnitIsGhost(unit) then
-			table.insert(dead, UnitName(unit))
+			-- The name only: UnitName also returns the realm, "" for a member out of range or on a flight
+			-- path, and table.insert took it for a position (jealous-sound/azerothcore-wotlk-coa#5441).
+			local name = UnitName(unit)
+			table.insert(dead, name)
 		end
 	end
 	return dead

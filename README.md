@@ -56,6 +56,9 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**1.5.2**
+- Fixed: a Lua error when a bot lay dead out of range or on a flight path ("bad argument #2 to 'insert'").
+
 **1.5.1**
 - Fixed: role badges for bots whose name holds a space ("Name Bot", the default since CoA Bots 1.5).
 
