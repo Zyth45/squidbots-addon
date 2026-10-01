@@ -21,6 +21,7 @@ local STRINGS = {
 		GM_ON = "GM mode on: bots are called with .playerbots coa.",
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
+		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		INVITE = "Invite", ASKED = "Asked in %s: %s", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
 		NOT_IN_GROUP = "You are not in a group with bots.",
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
@@ -54,6 +55,7 @@ local STRINGS = {
 		GM_ON = "Mode GM activé : les bots sont appelés avec .playerbots coa.",
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
+		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		INVITE = "Inviter", ASKED = "Demandé dans %s : %s", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
 		NOT_IN_GROUP = "Vous n'êtes pas en groupe avec des bots.",
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
@@ -86,7 +88,7 @@ local ROLE_COORDS = {
 	dps = { 20 / 64, 39 / 64, 22 / 64, 41 / 64 },
 }
 local CHANNELS = { "Zone", "Newcomers", "World" }
-local OFFER_SECONDS = 300
+local OFFER_SECONDS = 120
 local MAX_TOASTS = 5
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
@@ -201,15 +203,22 @@ local function ShowMenu(items)
 end
 
 local function RecruitMenu()
-	return {
+	local items = {
 		{ text = L.RECRUIT, isTitle = true, notCheckable = true },
 		{ text = L.ASK_TANK, notCheckable = true, func = function() Ask("tank") end },
 		{ text = L.ASK_HEAL, notCheckable = true, func = function() Ask("heal") end },
 		{ text = L.ASK_DPS, notCheckable = true, func = function() Ask("dps") end },
 		{ text = L.ASK_ALL, notCheckable = true, func = function() Ask("tank heal dps") end },
+		-- The server answers with a system message: raid built, or how long to wait (players: 30 min).
+		{ text = L.RAID_10, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 10", "SAY") end },
+		{ text = L.RAID_25, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 25", "SAY") end },
 		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 	}
+	if SquidBotsLiteDB.gm then
+		table.insert(items, { text = L.REGEAR, notCheckable = true, func = function() SendChatMessage(".playerbots coa regear", "SAY") end })
+	end
+	return items
 end
 
 -- Set by the bar and by the menus alike, so the lit button always matches the last order sent.
