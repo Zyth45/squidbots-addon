@@ -65,7 +65,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
-**1.7**
+**1.8** (from now on, the same number as CoA Bots)
 - **My alts** panel (Bots menu, `/sbl alts`): log your other characters in or out as bots, and summon them.
 
 **1.6**
