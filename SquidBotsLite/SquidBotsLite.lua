@@ -22,6 +22,10 @@ local STRINGS = {
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
+		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon",
+		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
+		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
+		ALTS_HELP = "Your other characters, played as bots: a logged-in alt joins your group. They keep their look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
 		INVITE = "Invite", ASKED = "Asked in %s: %s", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
 		NOT_IN_GROUP = "You are not in a group with bots.",
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
@@ -36,7 +40,7 @@ local STRINGS = {
 		F_ARROW = "Arrow", F_QUEUE = "Single file",
 		ROLES_ON = "Automatic roles on: a bot of unknown role is asked \"co ?\" once, answer hidden.",
 		ROLES_OFF = "Automatic roles off.",
-		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
+		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
 		LANG_SET = "SquidBots Lite language: English.", CHANNEL_SET = "SquidBots Lite asks in: %s",
 	},
 	fr = {
@@ -56,6 +60,10 @@ local STRINGS = {
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
+		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler",
+		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
+		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
+		ALTS_HELP = "Vos autres personnages, joués en bots : un alt connecté rejoint votre groupe. Ils gardent leur apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
 		INVITE = "Inviter", ASKED = "Demandé dans %s : %s", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
 		NOT_IN_GROUP = "Vous n'êtes pas en groupe avec des bots.",
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
@@ -70,7 +78,7 @@ local STRINGS = {
 		F_ARROW = "Flèche", F_QUEUE = "File indienne",
 		ROLES_ON = "Rôles automatiques activés : un bot au rôle inconnu reçoit « co ? » une fois, réponse masquée.",
 		ROLES_OFF = "Rôles automatiques désactivés.",
-		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
+		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
 		LANG_SET = "Langue de SquidBots Lite : français.", CHANNEL_SET = "SquidBots Lite demande dans : %s",
 	},
 }
@@ -202,6 +210,7 @@ local function ShowMenu(items)
 	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU")
 end
 
+local ShowAlts
 local function RecruitMenu()
 	local items = {
 		{ text = L.RECRUIT, isTitle = true, notCheckable = true },
@@ -212,6 +221,7 @@ local function RecruitMenu()
 		-- The server answers with a system message: raid built, or how long to wait (players: 30 min).
 		{ text = L.RAID_10, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 10", "SAY") end },
 		{ text = L.RAID_25, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 25", "SAY") end },
+		{ text = L.ALTS, notCheckable = true, func = function() ShowAlts() end },
 		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 	}
@@ -600,6 +610,197 @@ local function RefreshToasts()
 end
 
 -- ---------------------------------------------------------------------------
+-- My alts: the player's other characters, logged in as bots
+-- ---------------------------------------------------------------------------
+local ALT_ROWS = 12
+local ROSTER_WAIT, AFTER_TOGGLE = 5, 3   -- seconds: answer to "bot list", new list after a log in / out
+local WOTLK_CLASSES = { Druid = true, Hunter = true, Mage = true, Paladin = true, Priest = true, Rogue = true,
+	Shaman = true, Warlock = true, Warrior = true, DeathKnight = true }
+local altsFrame, altRows, roster = nil, {}, {}
+local rosterAskedAt, refreshAt, hideRosterUntil
+
+local function BotCommand(text)
+	SendChatMessage(".playerbots bot " .. text, "SAY")
+end
+
+local function AskRoster()
+	rosterAskedAt, refreshAt = GetTime(), nil
+	altsFrame.status:SetText(L.ALTS_WAIT)
+	BotCommand("list")
+end
+
+-- "Bot roster: +Aria Dawn , -Brom Warrior": + logged in as a bot, - offline. The server names the class only
+-- for the WotLK classes (blank for a CoA class), and a CoA name may hold a space. The random bots of the
+-- group come last with a +, so a + counts only for a name once seen offline (an alt) or out of the group.
+local function ParseRoster(text)
+	local list, inParty = {}, {}
+	for i = 1, 4 do
+		local name = UnitName("party" .. i)
+		if name then inParty[name] = true end
+	end
+	SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
+	for entry in (text .. ","):gmatch("([^,]+),") do
+		local sign, rest = strtrim(entry):match("^([%+%-])(.*)$")
+		if sign then
+			rest = strtrim(rest)
+			local head, last = rest:match("^(.-)%s+(%S+)$")
+			local name = (last and WOTLK_CLASSES[last]) and head or rest
+			if name ~= "" then
+				if sign == "-" then SquidBotsLiteDB.alts[name] = true end
+				if sign == "-" or SquidBotsLiteDB.alts[name] or not inParty[name] then
+					table.insert(list, { name = name, online = sign == "+" })
+				end
+			end
+		end
+	end
+	return list
+end
+
+local function RefreshAlts()
+	if not altsFrame then return end
+	for i, row in ipairs(altRows) do
+		local alt = roster[i]
+		row.alt = alt
+		if alt then
+			row.name:SetText(alt.name)
+			row.dot:SetVertexColor(alt.online and 0.2 or 0.45, alt.online and 1 or 0.45, alt.online and 0.2 or 0.45)
+			row.toggle:SetText(alt.online and L.ALTS_REMOVE or L.ALTS_ADD)
+			row.toggle:Enable()
+			if alt.online then row.summon:Show() else row.summon:Hide() end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	if #roster == 0 then
+		altsFrame.status:SetText(L.ALTS_EMPTY)
+	elseif #roster > ALT_ROWS then
+		altsFrame.status:SetText(string.format(L.ALTS_MORE, #roster - ALT_ROWS))
+	else
+		altsFrame.status:SetText("")
+	end
+end
+
+local function AltsTexts()
+	if not altsFrame then return end
+	altsFrame.title:SetText("SquidBots Lite - " .. L.ALTS)
+	altsFrame.refresh:SetText(L.ALTS_REFRESH)
+	altsFrame.help:SetText(L.ALTS_HELP)
+	for _, row in ipairs(altRows) do
+		row.summon:SetText(L.ALTS_SUMMON)
+	end
+end
+
+local function BuildAlts()
+	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
+	altsFrame:SetWidth(300)
+	altsFrame:SetHeight(120 + ALT_ROWS * 22)
+	altsFrame:SetPoint("CENTER")
+	altsFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+		edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24,
+		insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+	altsFrame:SetFrameStrata("DIALOG")
+	altsFrame:SetMovable(true)
+	altsFrame:EnableMouse(true)
+	altsFrame:SetClampedToScreen(true)
+	altsFrame:RegisterForDrag("LeftButton")
+	altsFrame:SetScript("OnDragStart", altsFrame.StartMoving)
+	altsFrame:SetScript("OnDragStop", altsFrame.StopMovingOrSizing)
+	-- Escape closes it, as any game window.
+	table.insert(UISpecialFrames, "SquidBotsLiteAlts")
+	altsFrame.title = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	altsFrame.title:SetPoint("TOP", 0, -14)
+	local close = CreateFrame("Button", nil, altsFrame, "UIPanelCloseButton")
+	close:SetPoint("TOPRIGHT", -4, -4)
+	altsFrame.refresh = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
+	altsFrame.refresh:SetWidth(90)
+	altsFrame.refresh:SetHeight(20)
+	altsFrame.refresh:SetPoint("TOPLEFT", 16, -36)
+	altsFrame.refresh:SetScript("OnClick", function() AskRoster() end)
+	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	altsFrame.status:SetPoint("LEFT", altsFrame.refresh, "RIGHT", 8, 0)
+	altsFrame.status:SetWidth(170)
+	altsFrame.status:SetJustifyH("LEFT")
+	for i = 1, ALT_ROWS do
+		local row = CreateFrame("Frame", nil, altsFrame)
+		row:SetWidth(268)
+		row:SetHeight(20)
+		row:SetPoint("TOPLEFT", 16, -62 - (i - 1) * 22)
+		row.dot = row:CreateTexture(nil, "ARTWORK")
+		row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
+		row.dot:SetWidth(8)
+		row.dot:SetHeight(8)
+		row.dot:SetPoint("LEFT", 2, 0)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		row.name:SetPoint("LEFT", 16, 0)
+		row.name:SetWidth(110)
+		row.name:SetJustifyH("LEFT")
+		row.toggle = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.toggle:SetWidth(76)
+		row.toggle:SetHeight(18)
+		row.toggle:SetPoint("LEFT", 128, 0)
+		row.toggle:SetScript("OnClick", function(self)
+			local alt = self:GetParent().alt
+			if not alt then return end
+			BotCommand((alt.online and "remove " or "add ") .. alt.name)
+			self:Disable()
+			refreshAt = GetTime() + AFTER_TOGGLE
+		end)
+		-- An alt logs in where it logged out: Summon brings it over.
+		row.summon = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.summon:SetWidth(60)
+		row.summon:SetHeight(18)
+		row.summon:SetPoint("LEFT", row.toggle, "RIGHT", 4, 0)
+		row.summon:SetScript("OnClick", function(self)
+			local alt = self:GetParent().alt
+			if alt then Whisper(alt.name, "summon") end
+		end)
+		row:Hide()
+		altRows[i] = row
+	end
+	altsFrame.help = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	altsFrame.help:SetPoint("BOTTOMLEFT", 16, 14)
+	altsFrame.help:SetWidth(268)
+	altsFrame.help:SetJustifyH("LEFT")
+	altsFrame:Hide()
+	AltsTexts()
+end
+
+ShowAlts = function()
+	altsFrame:Show()
+	AskRoster()
+end
+
+-- Called with the other refreshes: a new list after a log in / out, a word if the server stays silent.
+local function TickAlts()
+	if not altsFrame:IsShown() then return end
+	local now = GetTime()
+	if refreshAt and now >= refreshAt then
+		AskRoster()
+	elseif rosterAskedAt and now - rosterAskedAt > ROSTER_WAIT then
+		rosterAskedAt = nil
+		altsFrame.status:SetText(L.ALTS_NO_REPLY)
+	end
+end
+
+-- Only the roster the panel asked for is read, and kept out of the chat; a "bot list" typed by hand shows.
+local function OnSystem(message)
+	local text = message:match("^Bot roster: ?(.*)$")
+	if text and rosterAskedAt then
+		-- The chat frames may see this message after this handler: they still hide it for a second.
+		rosterAskedAt, hideRosterUntil = nil, GetTime() + 1
+		roster = ParseRoster(text)
+		RefreshAlts()
+		return true
+	end
+end
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
+	if (rosterAskedAt or (hideRosterUntil and GetTime() < hideRosterUntil)) and message:find("^Bot roster:") then
+		return true
+	end
+end)
+
+-- ---------------------------------------------------------------------------
 -- Chat
 -- ---------------------------------------------------------------------------
 -- A party member of unknown role (invited by hand, not through lfg bot) is whispered "co ?" once: a bot
@@ -707,6 +908,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		BuildBar()
 		BuildOverlays()
 		BuildToasts()
+		BuildAlts()
 		RefreshTexts()
 		for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
 			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM" }) do
@@ -721,10 +923,12 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			RefreshToasts()
 			RefreshRelease()
 			ProbeRoles()
+			TickAlts()
 		end)
 	elseif event == "CHAT_MSG_WHISPER" then
 		OnWhisper(arg1, arg2)
 	elseif event == "CHAT_MSG_SYSTEM" then
+		if OnSystem(arg1) then return end
 		-- "Kegarink Bot joins as tank": a bot name can hold a space since CoA Bots 1.5 (CoaBotSurname).
 		local name, role = arg1:match("^(.-) joins as (%a+)")
 		if name and ROLE_COORDS[role] then roleByName[name] = role end
@@ -747,10 +951,14 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 	if command == "lang" then
 		SetLanguage(string.lower(rest))
 		RefreshTexts()
+		AltsTexts()
+		RefreshAlts()
 		Print(L.LANG_SET)
 	elseif command == "channel" then
 		SquidBotsLiteDB.channel = rest
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
+	elseif command == "alts" then
+		ShowAlts()
 	elseif command == "roles" then
 		SquidBotsLiteDB.autoRoles = string.lower(rest) ~= "off"
 		Print(SquidBotsLiteDB.autoRoles and L.ROLES_ON or L.ROLES_OFF)

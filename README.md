@@ -29,7 +29,15 @@ Follow, Stay, Attack, Passive, Dungeon, Regroup and Release can each get a key: 
 
 The **Bots** button asks for a **tank**, a **healer**, **damage**, or all three. It types `lfg bot` in your Zone or Newcomers channel, exactly as you would. Free bots answer with an offer, shown as a toast above the bar with an **Invite** button.
 
-GMs can switch to `.playerbots coa` with `/sbl gm` and skip the channel.
+The same menu builds a **raid of 10 or 25 bots** in one click (`.playerbots coa raid`, CoA Bots 1.7 or later): tanks, healers and damage dealers, every bot with its role in the raid panel. Players can build one every 30 minutes, up to 5 raids of bots at a time on the realm; the server answers in chat.
+
+GMs can switch to `.playerbots coa` with `/sbl gm` and skip the channel. GM mode also adds **Regear level 60+ bots** to the menu.
+
+## My alts
+
+**Bots > My alts** (or `/sbl alts`) lists the other characters of your account and plays them as bots: **Log in** brings one online as a bot of yours, and it joins your group; **Summon** brings it next to you, since it logs in where it logged out; **Log out** sends it home. The list comes from `.playerbots bot list`, and the buttons type `.playerbots bot add` / `remove`, as you could yourself.
+
+With `CoA.CollectionsForBots = 1` on the server, alts keep their look: wardrobe, outfits, vanity and mounts.
 
 ## On your party frames
 
@@ -43,6 +51,7 @@ A bot you invited by hand, not through `lfg bot`, is asked `co ?` once to learn 
 /sbl                 show or hide the bar
 /sbl lang fr | en    French or English
 /sbl channel <name>  ask in a different channel (a name, not a number)
+/sbl alts            your other characters, played as bots
 /sbl roles on | off  ask bots of unknown role for it
 /sbl gm              GM mode
 /sbl reset           put the bar back in the middle
@@ -55,6 +64,14 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**1.7**
+- **My alts** panel (Bots menu, `/sbl alts`): log your other characters in or out as bots, and summon them.
+
+**1.6**
+- Bots menu: **Raid of 10 bots** and **Raid of 25 bots** (needs CoA Bots 1.7 on the server).
+- GM mode: **Regear level 60+ bots**.
+- Offers from `lfg bot` now last 2 minutes instead of 5.
 
 **1.5.2**
 - Fixed: a Lua error when a bot lay dead out of range or on a flight path ("bad argument #2 to 'insert'").
