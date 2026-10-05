@@ -6,4 +6,5 @@
 	<Binding name="SQUIDBOTSLITE_DUNGEON">SquidBotsLite_Order("dungeon")</Binding>
 	<Binding name="SQUIDBOTSLITE_SUMMON">SquidBotsLite_Order("summon")</Binding>
 	<Binding name="SQUIDBOTSLITE_RELEASE">SquidBotsLite_Order("release")</Binding>
+	<Binding name="SQUIDBOTSLITE_SPECS">SquidBotsLite_Specs()</Binding>
 </Bindings>

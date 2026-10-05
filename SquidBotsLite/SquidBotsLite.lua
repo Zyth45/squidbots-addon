@@ -40,7 +40,18 @@ local STRINGS = {
 		F_ARROW = "Arrow", F_QUEUE = "Single file",
 		ROLES_ON = "Automatic roles on: a bot of unknown role is asked \"co ?\" once, answer hidden.",
 		ROLES_OFF = "Automatic roles off.",
-		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
+		SPECS = "Specializations", SPEC_MENU = "Specialization", SPEC_OPEN = "All the group's specializations...",
+		MY_ROLE = "My role:", ROLE_TANK = "Tank", ROLE_HEAL = "Healer", ROLE_DPS = "Damage", SUPPORT = "support",
+		SPEC_PICK = "Spec", SPECS_REFRESH = "Refresh", BALANCE = "Balance the group",
+		TIP_BALANCE = "One tank and one healer, your own role counted, everyone else damage. A bot that already plays the role it gets keeps its specialization.",
+		SPECS_WAIT = "asking...", SPEC_UNKNOWN = "?", SPECS_NONE = "No bot in your group.", SPECS_NO_REPLY = "no answer",
+		SPECS_HELP = "Click a role to switch a bot to it (the specialization it last played in that role), or Spec to choose one. Rotation and position follow. An alt keeps your choice, with the talents you gave it for that specialization.",
+		TIP_BOT_ICON = "Click: orders and specialization.", SPEC_ALT_NOTE = "Your alt keeps it, with the talents you gave it.",
+		SPEC_NOW = "%s is now %s (%s).", SPEC_NO_ROLE = "%s has no specialization for the %s role.",
+		BALANCE_DONE = "Group: %s.", BALANCE_MISSING = "No bot in the group can play %s.",
+		BALANCE_WAIT = "Asking the bots for their specializations...", BALANCE_RAID = "In a raid, the raid command already sets the roles: pick specializations bot by bot.",
+		SPECS_NOT_BOT = "not a bot", SPEC_ASK = "Ask the bot", TIP_ROLE = "Switch to %s.", TIP_NO_ROLE = "No specialization of this role.",
+		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl spec, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
 		LANG_SET = "SquidBots Lite language: English.", CHANNEL_SET = "SquidBots Lite asks in: %s",
 	},
 	fr = {
@@ -78,7 +89,18 @@ local STRINGS = {
 		F_ARROW = "Flèche", F_QUEUE = "File indienne",
 		ROLES_ON = "Rôles automatiques activés : un bot au rôle inconnu reçoit « co ? » une fois, réponse masquée.",
 		ROLES_OFF = "Rôles automatiques désactivés.",
-		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
+		SPECS = "Spécialisations", SPEC_MENU = "Spécialisation", SPEC_OPEN = "Toutes les spécialisations du groupe...",
+		MY_ROLE = "Mon rôle :", ROLE_TANK = "Tank", ROLE_HEAL = "Soigneur", ROLE_DPS = "DPS", SUPPORT = "soutien",
+		SPEC_PICK = "Spé", SPECS_REFRESH = "Actualiser", BALANCE = "Équilibrer le groupe",
+		TIP_BALANCE = "Un tank et un soigneur, votre propre rôle compris, tous les autres en DPS. Un bot qui joue déjà le rôle qu'il reçoit garde sa spécialisation.",
+		SPECS_WAIT = "demande...", SPEC_UNKNOWN = "?", SPECS_NONE = "Aucun bot dans votre groupe.", SPECS_NO_REPLY = "pas de réponse",
+		SPECS_HELP = "Cliquez sur un rôle pour y passer un bot (la spécialisation qu'il a jouée en dernier dans ce rôle), ou sur Spé pour en choisir une. Rotation et placement suivent. Un alt garde votre choix, avec les talents que vous lui avez mis dans cette spécialisation.",
+		TIP_BOT_ICON = "Clic : ordres et spécialisation.", SPEC_ALT_NOTE = "Votre alt la garde, avec les talents que vous lui avez mis.",
+		SPEC_NOW = "%s joue maintenant %s (%s).", SPEC_NO_ROLE = "%s n'a aucune spécialisation de %s.",
+		BALANCE_DONE = "Groupe : %s.", BALANCE_MISSING = "Aucun bot du groupe ne peut jouer %s.",
+		BALANCE_WAIT = "Demande de leurs spécialisations aux bots...", BALANCE_RAID = "En raid, la commande de raid répartit déjà les rôles : choisissez les spécialisations bot par bot.",
+		SPECS_NOT_BOT = "pas un bot", SPEC_ASK = "Demander au bot", TIP_ROLE = "Passer en %s.", TIP_NO_ROLE = "Aucune spécialisation de ce rôle.",
+		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl spec, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
 		LANG_SET = "Langue de SquidBots Lite : français.", CHANNEL_SET = "SquidBots Lite demande dans : %s",
 	},
 }
@@ -109,6 +131,12 @@ local FORMATIONS = { { "near", "F_NEAR" }, { "line", "F_LINE" }, { "circle", "F_
 	{ "arrow", "F_ARROW" }, { "queue", "F_QUEUE" } }
 -- The Passive button shows the bots' current state: a charge arrow while they fight, Zzz while passive.
 local ICON_ACTIVE, ICON_PASSIVE = "Interface\\Icons\\Ability_Warrior_Charge", "Interface\\Icons\\Spell_Nature_Sleep"
+-- The panels: a dark plain background under the dialog border, since the dialog background let the floating
+-- names of the world show through. The role buttons use square icons, like the bar.
+local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
+local ROLE_BUTTON_ICONS = { tank = "Interface\\Icons\\Ability_Defend", heal = "Interface\\Icons\\Spell_Holy_FlashHeal",
+	dps = "Interface\\Icons\\Ability_MeleeDamage" }
 local BINDINGS = { { "follow", "FOLLOW" }, { "stay", "STAY" }, { "attack", "M_ATTACK" }, { "passive", "TOGGLE_PASSIVE" },
 	{ "dungeon", "DUNGEON" }, { "summon", "SUMMON" }, { "release", "RELEASE" } }
 
@@ -132,6 +160,7 @@ local function SetLanguage(lang)
 	for _, binding in ipairs(BINDINGS) do
 		_G["BINDING_NAME_SQUIDBOTSLITE_" .. string.upper(binding[1])] = L[binding[2]]
 	end
+	BINDING_NAME_SQUIDBOTSLITE_SPECS = L.SPECS
 end
 
 local function SendGroup(...)
@@ -210,7 +239,7 @@ local function ShowMenu(items)
 	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU")
 end
 
-local ShowAlts
+local ShowAlts, ShowSpecs
 local function RecruitMenu()
 	local items = {
 		{ text = L.RECRUIT, isTitle = true, notCheckable = true },
@@ -222,6 +251,7 @@ local function RecruitMenu()
 		{ text = L.RAID_10, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 10", "SAY") end },
 		{ text = L.RAID_25, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 25", "SAY") end },
 		{ text = L.ALTS, notCheckable = true, func = function() ShowAlts() end },
+		{ text = L.SPECS, notCheckable = true, func = function() ShowSpecs() end },
 		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 	}
@@ -290,6 +320,548 @@ local function ProfileMenu()
 	}
 end
 
+-- ---------------------------------------------------------------------------
+-- Specializations: a bot's specialization (its role, rotation, talents and position follow), one by one or
+-- the whole group balanced in a click
+-- ---------------------------------------------------------------------------
+-- "talents spec list" answers one line per specialization of the bot's class, "> " before the active one:
+-- "> Houndmaster - damage, ranged", "  Black Knight - tank, close", ", support" after a damage dealer that
+-- carries the group. "talents spec <name>" answers "Now Houndmaster - damage, ranged, running ...". Both work
+-- on a player's own bots (alts, recruits, class bots) without any GM right, and an alt keeps the choice: the
+-- server never overrides it. The lists come from the bots, so every class and the specs of a later release
+-- show up without a table here.
+-- Only members known to be bots are asked anything: one that answered like a bot ("co ?", a lfg offer, a
+-- "joins as" line, a list) or carries the "Bot" surname. A WotLK class (an alt of an old class) has no CoA
+-- specialization and is left alone. Nothing is switched blind: a role waits for the bot's list.
+local SPEC_WAIT, SPEC_HIDE, SPEC_REASK, REAPPLY_AFTER = 5, 8, 30, 1.5   -- seconds
+local ROLE_WORDS = { tank = "tank", healer = "heal", damage = "dps" }
+local ROLE_KEYS = { tank = "ROLE_TANK", heal = "ROLE_HEAL", dps = "ROLE_DPS" }
+local ROLES = { "tank", "heal", "dps" }
+local WOTLK_TOKENS = { WARRIOR = true, PALADIN = true, HUNTER = true, ROGUE = true, PRIEST = true, DEATHKNIGHT = true,
+	SHAMAN = true, MAGE = true, WARLOCK = true, DRUID = true }
+-- Set aside by the server (CoaExcludedSpecializations): nothing in the core lets Bloodmage Eternal tank.
+local EXCLUDED_SPECS = { Eternal = true }
+-- Orders the addon sends to one bot after a switch (the server resets its strategies), kept out of the chat.
+local REAPPLY_ORDERS = { ["co +passive"] = true, ["nc -coa auto pull"] = true, ["co -wait for attack,+avoid aoe"] = true, stay = true }
+local SPEC_ROWS = 4
+local knownBot = {}
+local specsByName, specAskedAt, specHideUntil, pendingRole, reapplyAt, specAskedOnce = {}, {}, {}, {}, {}, {}
+local specsFrame, specRows = nil, {}
+local balancePending
+
+-- A party member's unit id, or nil.
+local function UnitOf(name)
+	for i = 1, 4 do
+		if UnitName("party" .. i) == name then return "party" .. i end
+	end
+end
+
+local function IsCoaBot(name)
+	local unit = UnitOf(name)
+	if unit then
+		local _, token = UnitClass(unit)
+		if token and WOTLK_TOKENS[token] then return false end
+	end
+	return knownBot[name] or name:find(" Bot$") ~= nil
+end
+
+local function AskSpecs(name)
+	if not IsCoaBot(name) then return end
+	specAskedAt[name] = GetTime()
+	specHideUntil[name] = GetTime() + SPEC_HIDE
+	Whisper(name, "talents spec list")
+end
+
+local function SpecOf(name, specName)
+	local info = specsByName[name]
+	if not info or not specName then return end
+	for _, spec in ipairs(info.list) do
+		if spec.name == specName then return spec end
+	end
+end
+
+local function CurrentRole(name)
+	local info = specsByName[name]
+	local spec = info and SpecOf(name, info.current)
+	return spec and spec.role or roleByName[name]
+end
+
+-- The specializations of a role a bot can play, the ones set aside by the server left out.
+local function SpecsForRole(name, role)
+	local found = {}
+	local info = specsByName[name]
+	if info then
+		for _, spec in ipairs(info.list) do
+			if spec.role == role and not EXCLUDED_SPECS[spec.name] then table.insert(found, spec) end
+		end
+	end
+	return found
+end
+
+-- The specialization a bot last played in each role, kept between sessions: switching a tank back to damage
+-- gives it its own damage specialization again, not the first of the list.
+local function Remember(name, specName, role)
+	SquidBotsLiteDB.lastSpec = SquidBotsLiteDB.lastSpec or {}
+	SquidBotsLiteDB.lastSpec[name] = SquidBotsLiteDB.lastSpec[name] or {}
+	SquidBotsLiteDB.lastSpec[name][role] = specName
+end
+
+-- The switch shows at once: the server drops an answer identical to one it sent less than 2 s before, so a
+-- quick Tank > Damage > Tank would never hear the last "Now ...".
+local function PickSpec(name, specName)
+	local spec = SpecOf(name, specName)
+	if not spec then return end
+	specsByName[name].current = specName
+	roleByName[name] = spec.role
+	Remember(name, specName, spec.role)
+	specHideUntil[name] = GetTime() + SPEC_HIDE
+	reapplyAt[name] = GetTime() + REAPPLY_AFTER
+	Whisper(name, "talents spec " .. specName)
+end
+
+-- A role: nothing if the bot already plays it, else the specialization it last played in that role, else
+-- its first one. Without its list yet, the bot is asked and the role waits for the answer.
+local function PickRole(name, role)
+	if not specsByName[name] then
+		pendingRole[name] = role
+		AskSpecs(name)
+		return
+	end
+	if CurrentRole(name) == role then return end
+	local specs = SpecsForRole(name, role)
+	local last = SquidBotsLiteDB.lastSpec and SquidBotsLiteDB.lastSpec[name] and SquidBotsLiteDB.lastSpec[name][role]
+	for _, spec in ipairs(specs) do
+		if spec.name == last then
+			PickSpec(name, last)
+			return
+		end
+	end
+	if specs[1] then
+		PickSpec(name, specs[1].name)
+	else
+		Print(string.format(L.SPEC_NO_ROLE, name, L[ROLE_KEYS[role]]))
+	end
+end
+
+-- The server resets a bot's strategies on a switch: the bar's state is given back to that bot.
+local function Reapply(name)
+	specHideUntil[name] = GetTime() + SPEC_HIDE
+	if state.passive then
+		Whisper(name, "co +passive")
+		if CurrentRole(name) == "tank" then Whisper(name, "nc -coa auto pull") end
+	end
+	if state.order == "dungeon" then
+		Whisper(name, "co -wait for attack,+avoid aoe")
+	elseif state.order == "stay" then
+		Whisper(name, "stay")
+	end
+end
+
+local function PartyNames()
+	local names = {}
+	for i = 1, 4 do
+		local name = UnitName("party" .. i)
+		if name and name ~= UNKNOWNOBJECT then table.insert(names, name) end
+	end
+	return names
+end
+
+-- One tank and one healer (the player's own role and the known role of members without a list counted),
+-- everyone else damage. A role goes first to a bot that already plays it, then to the bot with the fewest
+-- other key roles to offer, so that the only bot able to heal is not made the tank. Members without a list
+-- (humans, silent bots) are never switched. In a raid the server's raid command sets the roles.
+local function BalanceGroup()
+	if GetNumRaidMembers() > 0 then
+		Print(L.BALANCE_RAID)
+		return
+	end
+	local members = PartyNames()
+	if #members == 0 then
+		Print(L.SPECS_NONE)
+		return
+	end
+	if not balancePending then
+		local asked = false
+		for _, name in ipairs(members) do
+			if not specsByName[name] and IsCoaBot(name) then
+				asked = true
+				AskSpecs(name)
+			end
+		end
+		if asked then
+			balancePending = GetTime()
+			Print(L.BALANCE_WAIT)
+			return
+		end
+	end
+	balancePending = nil
+	local bots, filled = {}, { [SquidBotsLiteDB.myRole or "dps"] = true }
+	for _, name in ipairs(members) do
+		if specsByName[name] then
+			table.insert(bots, name)
+		elseif roleByName[name] then
+			filled[roleByName[name]] = true
+		end
+	end
+	local assigned = {}
+	for _, role in ipairs({ "tank", "heal" }) do
+		if not filled[role] then
+			local best, bestScore
+			for _, name in ipairs(bots) do
+				if not assigned[name] and #SpecsForRole(name, role) > 0 then
+					local current = CurrentRole(name)
+					local score = current == role and -10 or 0
+					for _, other in ipairs({ "tank", "heal" }) do
+						if other ~= role then
+							if #SpecsForRole(name, other) > 0 then score = score + 1 end
+							if current == other then score = score + 5 end
+						end
+					end
+					if not bestScore or score < bestScore then best, bestScore = name, score end
+				end
+			end
+			if best then
+				assigned[best] = role
+			else
+				Print(string.format(L.BALANCE_MISSING, L[ROLE_KEYS[role]]))
+			end
+		end
+	end
+	local parts = {}
+	for _, name in ipairs(bots) do
+		local role = assigned[name] or "dps"
+		PickRole(name, role)
+		table.insert(parts, name .. " " .. L[ROLE_KEYS[role]])
+	end
+	if #parts > 0 then Print(string.format(L.BALANCE_DONE, table.concat(parts, ", "))) end
+end
+
+-- The parsed list of a "talents spec list" answer, or nil when the message is not one: every line must read
+-- "[>] Name - role, position[, support]".
+local function ParseSpecList(message)
+	local list, current = {}, nil
+	for line in (message .. "\n"):gmatch("([^\n]*)\n") do
+		if strtrim(line) ~= "" then
+			local mark, name, roleWord, rest = line:match("^%s*(>?)%s*(.-)%s+%-%s+(%a+),%s*%a+(.*)$")
+			if not name or not ROLE_WORDS[roleWord] or name == "" then return end
+			table.insert(list, { name = name, role = ROLE_WORDS[roleWord], support = rest:find("support", 1, true) ~= nil })
+			if mark == ">" then current = name end
+		end
+	end
+	if #list > 0 then return list, current end
+end
+
+local function ParseNow(message)
+	local picked, word = message:match("^Now (.-) %- (%a+),")
+	if picked and ROLE_WORDS[word] then return picked, ROLE_WORDS[word] end
+end
+
+-- An answer of a bot about its specializations: true when it was one.
+local function OnSpecReply(message, sender)
+	local picked, role = ParseNow(message)
+	if picked then
+		knownBot[sender] = true
+		local info = specsByName[sender]
+		if info then info.current = picked end
+		roleByName[sender] = role
+		Remember(sender, picked, role)
+		Print(string.format(L.SPEC_NOW, sender, picked, L[ROLE_KEYS[role]]))
+		return true
+	end
+	if not specAskedAt[sender] then return false end
+	local list, current = ParseSpecList(message)
+	if not list then return false end
+	knownBot[sender] = true
+	specAskedAt[sender] = nil
+	specsByName[sender] = { list = list, current = current }
+	local active = SpecOf(sender, current)
+	if active then
+		roleByName[sender] = active.role
+		Remember(sender, active.name, active.role)
+	end
+	if pendingRole[sender] then
+		local wanted = pendingRole[sender]
+		pendingRole[sender] = nil
+		PickRole(sender, wanted)
+	end
+	return true
+end
+
+-- Only the addon's own questions and orders, and the exact answers, stay out of the chat, for a few seconds
+-- after it asked; an error ("I have no specialization called ...", "I cannot switch to ...") still shows.
+local function HideSpecChat(_, event, message, name)
+	local untilTime = specHideUntil[name]
+	if not untilTime or GetTime() > untilTime then return end
+	if event == "CHAT_MSG_WHISPER_INFORM" then
+		return message:find("^talents spec ") ~= nil or REAPPLY_ORDERS[message] ~= nil
+	end
+	return ParseNow(message) ~= nil or ParseSpecList(message) ~= nil
+end
+-- A bot answers on the channel of the last order it got within a second, so the group channels too.
+for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
+	"CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER" }) do
+	ChatFrame_AddMessageEventFilter(e, HideSpecChat)
+end
+
+local function SpecMenu(name)
+	local items = { { text = L.SPEC_MENU, isTitle = true, notCheckable = true } }
+	local info = specsByName[name]
+	if info then
+		for _, role in ipairs(ROLES) do
+			table.insert(items, { text = L[ROLE_KEYS[role]], disabled = #SpecsForRole(name, role) == 0,
+				checked = CurrentRole(name) == role, func = function() PickRole(name, role) end })
+		end
+		table.insert(items, { text = name, isTitle = true, notCheckable = true })
+		if SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name] then
+			table.insert(items, { text = "|cffaaaaaa" .. L.SPEC_ALT_NOTE .. "|r", notCheckable = true, disabled = true })
+		end
+		for _, spec in ipairs(info.list) do
+			local label = spec.name .. " |cffaaaaaa(" .. L[ROLE_KEYS[spec.role]] .. (spec.support and ", " .. L.SUPPORT or "") .. ")|r"
+			table.insert(items, { text = label, checked = spec.name == info.current, disabled = EXCLUDED_SPECS[spec.name],
+				func = function() PickSpec(name, spec.name) end })
+		end
+	elseif IsCoaBot(name) then
+		table.insert(items, { text = specAskedAt[name] and L.SPECS_WAIT or L.SPEC_ASK, notCheckable = true,
+			disabled = specAskedAt[name] ~= nil, func = function() AskSpecs(name) end })
+	else
+		table.insert(items, { text = L.SPECS_NOT_BOT, notCheckable = true, disabled = true })
+	end
+	table.insert(items, { text = L.SPEC_OPEN, notCheckable = true, func = function() ShowSpecs() end })
+	return items
+end
+
+local function RefreshSpecs()
+	if not specsFrame or not specsFrame:IsShown() then return end
+	local members = PartyNames()
+	for i, row in ipairs(specRows) do
+		local name = members[i]
+		row.botName = name
+		if name then
+			local info = specsByName[name]
+			local spec = info and SpecOf(name, info.current)
+			row.name:SetText(name)
+			SetRoleIcon(row.role, CurrentRole(name))
+			if spec then
+				row.spec:SetText(spec.name)
+			elseif specAskedAt[name] then
+				row.spec:SetText(L.SPECS_WAIT)
+			elseif not IsCoaBot(name) then
+				row.spec:SetText(L.SPECS_NOT_BOT)
+			else
+				row.spec:SetText(info and L.SPEC_UNKNOWN or L.SPECS_NO_REPLY)
+			end
+			for _, role in ipairs(ROLES) do
+				local button = row[role]
+				button.can = info ~= nil and #SpecsForRole(name, role) > 0
+				button.icon:SetDesaturated(not button.can)
+				button:SetAlpha(button.can and 1 or 0.35)
+				if button.can and CurrentRole(name) == role then button.ring:Show() else button.ring:Hide() end
+			end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	for role, button in pairs(specsFrame.myRole) do
+		local mine = (SquidBotsLiteDB.myRole or "dps") == role
+		button:SetAlpha(mine and 1 or 0.6)
+		if mine then button.ring:Show() else button.ring:Hide() end
+	end
+	-- As tall as the rows shown: no empty space under one or two bots.
+	local shown = math.max(1, math.min(#members, SPEC_ROWS))
+	if specsFrame.rowsShown ~= shown then
+		specsFrame.rowsShown = shown
+		specsFrame:SetHeight(176 + shown * 26)
+		specsFrame.balance:ClearAllPoints()
+		specsFrame.balance:SetPoint("TOPLEFT", 16, -74 - shown * 26)
+	end
+	specsFrame.status:SetText(#members == 0 and L.SPECS_NONE or (balancePending and L.SPECS_WAIT) or "")
+end
+
+local function SpecsTexts()
+	if not specsFrame then return end
+	specsFrame.title:SetText("SquidBots Lite - " .. L.SPECS)
+	specsFrame.myRoleLabel:SetText(L.MY_ROLE)
+	specsFrame.balance:SetText(L.BALANCE)
+	specsFrame.refresh:SetText(L.SPECS_REFRESH)
+	specsFrame.help:SetText(L.SPECS_HELP)
+	for _, row in ipairs(specRows) do
+		row.pick:SetText(L.SPEC_PICK)
+	end
+end
+
+-- A small square button showing a role icon, with a tooltip.
+local function RoleButton(parent, role, size, tipFunc, onClick)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(size)
+	button:SetHeight(size)
+	button.icon = button:CreateTexture(nil, "ARTWORK")
+	button.icon:SetAllPoints()
+	button.icon:SetTexture(ROLE_BUTTON_ICONS[role])
+	button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	button.ring = button:CreateTexture(nil, "OVERLAY")
+	button.ring:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+	button.ring:SetBlendMode("ADD")
+	button.ring:SetWidth(size * 1.8)
+	button.ring:SetHeight(size * 1.8)
+	button.ring:SetPoint("CENTER")
+	button.ring:SetVertexColor(1, 0.82, 0)
+	button.ring:Hide()
+	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	button:SetScript("OnClick", onClick)
+	button:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(tipFunc(self))
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	return button
+end
+
+local function BuildSpecs()
+	specsFrame = CreateFrame("Frame", "SquidBotsLiteSpecs", UIParent)
+	specsFrame:SetWidth(400)
+	specsFrame:SetHeight(176 + SPEC_ROWS * 26)
+	specsFrame:SetPoint("CENTER")
+	specsFrame:SetBackdrop(PANEL_BACKDROP)
+	specsFrame:SetBackdropColor(0.04, 0.04, 0.05, 0.94)
+	specsFrame:SetFrameStrata("DIALOG")
+	specsFrame:SetMovable(true)
+	specsFrame:EnableMouse(true)
+	specsFrame:SetClampedToScreen(true)
+	specsFrame:RegisterForDrag("LeftButton")
+	specsFrame:SetScript("OnDragStart", specsFrame.StartMoving)
+	specsFrame:SetScript("OnDragStop", specsFrame.StopMovingOrSizing)
+	table.insert(UISpecialFrames, "SquidBotsLiteSpecs")
+	specsFrame.title = specsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	specsFrame.title:SetPoint("TOP", 0, -14)
+	local close = CreateFrame("Button", nil, specsFrame, "UIPanelCloseButton")
+	close:SetPoint("TOPRIGHT", -4, -4)
+	-- The player's own role, counted by "Balance the group".
+	specsFrame.myRoleLabel = specsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	specsFrame.myRoleLabel:SetPoint("TOPLEFT", 18, -40)
+	specsFrame.myRole = {}
+	for i, role in ipairs(ROLES) do
+		local button = RoleButton(specsFrame, role, 20, function() return L[ROLE_KEYS[role]] end, function()
+			SquidBotsLiteDB.myRole = role
+			RefreshSpecs()
+		end)
+		button:SetPoint("TOPLEFT", 100 + (i - 1) * 24, -36)
+		specsFrame.myRole[role] = button
+	end
+	for i = 1, SPEC_ROWS do
+		local row = CreateFrame("Frame", nil, specsFrame)
+		row:SetWidth(368)
+		row:SetHeight(24)
+		row:SetPoint("TOPLEFT", 16, -66 - (i - 1) * 26)
+		row.role = row:CreateTexture(nil, "ARTWORK")
+		row.role:SetWidth(16)
+		row.role:SetHeight(16)
+		row.role:SetPoint("LEFT", 2, 0)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		row.name:SetPoint("LEFT", 24, 0)
+		row.name:SetWidth(110)
+		row.name:SetJustifyH("LEFT")
+		row.spec = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		row.spec:SetPoint("LEFT", 136, 0)
+		row.spec:SetWidth(100)
+		row.spec:SetJustifyH("LEFT")
+		for j, role in ipairs(ROLES) do
+			local button = RoleButton(row, role, 18, function(self)
+				return self.can and string.format(L.TIP_ROLE, L[ROLE_KEYS[role]]) or L.TIP_NO_ROLE
+			end, function(self)
+				local name = self:GetParent().botName
+				if name and self.can then PickRole(name, role) end
+			end)
+			button:SetPoint("LEFT", 240 + (j - 1) * 22, 0)
+			row[role] = button
+		end
+		row.pick = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.pick:SetWidth(54)
+		row.pick:SetHeight(18)
+		row.pick:SetPoint("LEFT", 310, 0)
+		row.pick:SetScript("OnClick", function(self)
+			local name = self:GetParent().botName
+			if name then ShowMenu(SpecMenu(name)) end
+		end)
+		row:Hide()
+		specRows[i] = row
+	end
+	specsFrame.balance = CreateFrame("Button", nil, specsFrame, "UIPanelButtonTemplate")
+	specsFrame.balance:SetWidth(150)
+	specsFrame.balance:SetHeight(22)
+	specsFrame.balance:SetPoint("TOPLEFT", 16, -74 - SPEC_ROWS * 26)
+	specsFrame.balance:SetScript("OnClick", function()
+		if not balancePending then BalanceGroup() end
+	end)
+	specsFrame.balance:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(L.BALANCE)
+		GameTooltip:AddLine(L.TIP_BALANCE, 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	specsFrame.balance:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	specsFrame.refresh = CreateFrame("Button", nil, specsFrame, "UIPanelButtonTemplate")
+	specsFrame.refresh:SetWidth(90)
+	specsFrame.refresh:SetHeight(22)
+	specsFrame.refresh:SetPoint("LEFT", specsFrame.balance, "RIGHT", 8, 0)
+	specsFrame.refresh:SetScript("OnClick", function()
+		for _, name in ipairs(PartyNames()) do AskSpecs(name) end
+	end)
+	specsFrame.status = specsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	specsFrame.status:SetPoint("LEFT", specsFrame.refresh, "RIGHT", 8, 0)
+	specsFrame.status:SetWidth(110)
+	specsFrame.status:SetJustifyH("LEFT")
+	specsFrame.help = specsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	specsFrame.help:SetPoint("BOTTOMLEFT", 16, 18)
+	specsFrame.help:SetWidth(368)
+	specsFrame.help:SetJustifyH("LEFT")
+	specsFrame:Hide()
+	SpecsTexts()
+end
+
+ShowSpecs = function()
+	specsFrame:Show()
+	for _, name in ipairs(PartyNames()) do AskSpecs(name) end
+	RefreshSpecs()
+end
+
+-- Called with the other refreshes: a silent bot is marked, a bot that joins while the panel is open is asked,
+-- a pending "Balance the group" goes on once every bot answered (or after SPEC_WAIT), and a switched bot gets
+-- the bar's state back.
+local function TickSpecs()
+	local now = GetTime()
+	for name, at in pairs(specAskedAt) do
+		if now - at > SPEC_WAIT then
+			specAskedAt[name] = nil
+			pendingRole[name] = nil
+		end
+	end
+	for name, at in pairs(reapplyAt) do
+		if now >= at then
+			reapplyAt[name] = nil
+			Reapply(name)
+		end
+	end
+	if specsFrame and specsFrame:IsShown() then
+		for _, name in ipairs(PartyNames()) do
+			local info = specsByName[name]
+			if not info and not specAskedAt[name] and (not specAskedOnce[name] or now - specAskedOnce[name] > SPEC_REASK) then
+				specAskedOnce[name] = now
+				AskSpecs(name)
+			end
+		end
+	end
+	if balancePending then
+		local waiting = false
+		for _, name in ipairs(PartyNames()) do
+			if specAskedAt[name] then waiting = true end
+		end
+		if not waiting or now - balancePending > SPEC_WAIT then BalanceGroup() end
+	end
+	RefreshSpecs()
+end
+
 local function BotMenu(name)
 	local items = {
 		{ text = name, isTitle = true, notCheckable = true },
@@ -297,6 +869,7 @@ local function BotMenu(name)
 		{ text = L.M_STAY, notCheckable = true, func = function() Whisper(name, "stay") end },
 		{ text = L.M_ATTACK, notCheckable = true, func = function() Whisper(name, "attack") end },
 		{ text = L.M_SUMMON, notCheckable = true, func = function() Whisper(name, "summon") end },
+		{ text = L.SPEC_MENU, hasArrow = true, notCheckable = true, menuList = SpecMenu(name) },
 	}
 	if roleByName[name] == "tank" then
 		table.insert(items, { text = L.M_AUTOPULL_ON, notCheckable = true, func = function() Whisper(name, "nc +coa auto pull") end })
@@ -505,6 +1078,27 @@ local function BuildOverlays()
 				local name = UnitName(self.unit)
 				if name then ShowMenu(BotMenu(name)) end
 			end)
+			-- Nothing told that the icon opens the bot's menu.
+			overlay:SetScript("OnEnter", function(self)
+				local name = UnitName(self.unit)
+				if not name then return end
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetText(name)
+				local info = specsByName[name]
+				local role = CurrentRole(name)
+				if info and info.current then
+					GameTooltip:AddLine(info.current .. (role and (" - " .. L[ROLE_KEYS[role]]) or ""), 1, 1, 1)
+				elseif role then
+					GameTooltip:AddLine(L[ROLE_KEYS[role]], 1, 1, 1)
+				end
+				GameTooltip:AddLine(L.TIP_BOT_ICON, 0.6, 0.6, 0.6)
+				GameTooltip:Show()
+			end)
+			overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			-- Who plays what at a glance: the specialization name, small, right of the health bar.
+			overlay.spec = overlay:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+			local healthBar = _G["PartyMemberFrame" .. i .. "HealthBar"]
+			overlay.spec:SetPoint("LEFT", healthBar or frame, "RIGHT", 12, 0)
 			overlays[i] = overlay
 		end
 	end
@@ -522,6 +1116,8 @@ local function RefreshOverlays()
 				overlay.icon:SetTexCoord(0, 1, 0, 1)
 				overlay.icon:Show()
 			end
+			local info = specsByName[name]
+			overlay.spec:SetText(info and info.current or "")
 			local badge = badges[name]
 			if badge and badge.untilTime > now then
 				overlay.badge:SetText(badge.text)
@@ -696,9 +1292,8 @@ local function BuildAlts()
 	altsFrame:SetWidth(300)
 	altsFrame:SetHeight(120 + ALT_ROWS * 22)
 	altsFrame:SetPoint("CENTER")
-	altsFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-		edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24,
-		insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+	altsFrame:SetBackdrop(PANEL_BACKDROP)
+	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 0.94)
 	altsFrame:SetFrameStrata("DIALOG")
 	altsFrame:SetMovable(true)
 	altsFrame:EnableMouse(true)
@@ -833,6 +1428,7 @@ local function OnStrategies(message, sender)
 	end
 	roleByName[sender] = (list["coa tank"] or list["tank"] or list["bear"]) and "tank"
 		or (list["coa heal"] or list["heal"] or list["holy heal"]) and "heal" or "dps"
+	knownBot[sender] = true
 end
 
 local function HideProbe(_, _, message, name)
@@ -846,6 +1442,7 @@ for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_PA
 end
 
 local function OnWhisper(message, sender)
+	if OnSpecReply(message, sender) then return end
 	if InProbeWindow(sender) and message:find("^Strategies: ") then
 		OnStrategies(message, sender)
 		return
@@ -864,6 +1461,7 @@ local function OnWhisper(message, sender)
 	local role = (lower:find("heal") or lower:find("keep your tank alive")) and "heal"
 		or (lower:find("tank") and "tank" or "dps")
 	roleByName[sender] = role
+	knownBot[sender] = true
 	for i = #toasts, 1, -1 do
 		if toasts[i].name == sender then table.remove(toasts, i) end
 	end
@@ -874,6 +1472,7 @@ local function OnWhisper(message, sender)
 end
 
 local function OnGroupChat(message, sender)
+	if OnSpecReply(message, sender) then return end
 	if InProbeWindow(sender) and message:find("^Strategies: ") then
 		OnStrategies(message, sender)
 		return
@@ -909,6 +1508,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		BuildOverlays()
 		BuildToasts()
 		BuildAlts()
+		BuildSpecs()
 		RefreshTexts()
 		for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
 			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM" }) do
@@ -924,6 +1524,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			RefreshRelease()
 			ProbeRoles()
 			TickAlts()
+			TickSpecs()
 		end)
 	elseif event == "CHAT_MSG_WHISPER" then
 		OnWhisper(arg1, arg2)
@@ -931,13 +1532,20 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		if OnSystem(arg1) then return end
 		-- "Kegarink Bot joins as tank": a bot name can hold a space since CoA Bots 1.5 (CoaBotSurname).
 		local name, role = arg1:match("^(.-) joins as (%a+)")
-		if name and ROLE_COORDS[role] then roleByName[name] = role end
+		if name and ROLE_COORDS[role] then
+			roleByName[name] = role
+			knownBot[name] = true
+		end
 	elseif arg1 and arg2 then
 		OnGroupChat(arg1, arg2)
 	end
 end)
 
 -- Called by Bindings.xml: a key does what a left click on that bar button does, bar shown or not.
+function SquidBotsLite_Specs()
+	ShowSpecs()
+end
+
 function SquidBotsLite_Order(key)
 	local button = buttons[key]
 	if button then button.onClick(button, "LeftButton") end
@@ -953,12 +1561,15 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		RefreshTexts()
 		AltsTexts()
 		RefreshAlts()
+		SpecsTexts()
 		Print(L.LANG_SET)
 	elseif command == "channel" then
 		SquidBotsLiteDB.channel = rest
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "alts" then
 		ShowAlts()
+	elseif command == "spec" or command == "specs" then
+		ShowSpecs()
 	elseif command == "roles" then
 		SquidBotsLiteDB.autoRoles = string.lower(rest) ~= "off"
 		Print(SquidBotsLiteDB.autoRoles and L.ROLES_ON or L.ROLES_OFF)
