@@ -345,7 +345,7 @@ local EXCLUDED_SPECS = { Eternal = true }
 local REAPPLY_ORDERS = { ["co +passive"] = true, ["nc -coa auto pull"] = true, ["co -wait for attack,+avoid aoe"] = true, stay = true }
 local SPEC_ROWS = 4
 local knownBot = {}
-local specsByName, specAskedAt, specHideUntil, pendingRole, reapplyAt, specAskedOnce = {}, {}, {}, {}, {}, {}
+local specsByName, specAskedAt, specHideUntil, pendingRole, reapplyAt, specAskedOnce, specSilent = {}, {}, {}, {}, {}, {}, {}
 local specsFrame, specRows = nil, {}
 local balancePending
 
@@ -365,11 +365,15 @@ local function IsCoaBot(name)
 	return knownBot[name] or name:find(" Bot$") ~= nil
 end
 
+-- True when the question went out: a member not known as a bot yet is asked once it is (TickSpecs).
 local function AskSpecs(name)
-	if not IsCoaBot(name) then return end
+	if not IsCoaBot(name) then return false end
 	specAskedAt[name] = GetTime()
+	specAskedOnce[name] = GetTime()
+	specSilent[name] = nil
 	specHideUntil[name] = GetTime() + SPEC_HIDE
 	Whisper(name, "talents spec list")
+	return true
 end
 
 local function SpecOf(name, specName)
@@ -648,7 +652,7 @@ local function RefreshSpecs()
 			elseif not IsCoaBot(name) then
 				row.spec:SetText(L.SPECS_NOT_BOT)
 			else
-				row.spec:SetText(info and L.SPEC_UNKNOWN or L.SPECS_NO_REPLY)
+				row.spec:SetText((not info and specSilent[name]) and L.SPECS_NO_REPLY or L.SPEC_UNKNOWN)
 			end
 			for _, role in ipairs(ROLES) do
 				local button = row[role]
@@ -724,7 +728,7 @@ local function BuildSpecs()
 	specsFrame:SetHeight(176 + SPEC_ROWS * 26)
 	specsFrame:SetPoint("CENTER")
 	specsFrame:SetBackdrop(PANEL_BACKDROP)
-	specsFrame:SetBackdropColor(0.04, 0.04, 0.05, 0.94)
+	specsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
 	specsFrame:SetFrameStrata("DIALOG")
 	specsFrame:SetMovable(true)
 	specsFrame:EnableMouse(true)
@@ -835,6 +839,7 @@ local function TickSpecs()
 		if now - at > SPEC_WAIT then
 			specAskedAt[name] = nil
 			pendingRole[name] = nil
+			specSilent[name] = true
 		end
 	end
 	for name, at in pairs(reapplyAt) do
@@ -847,7 +852,6 @@ local function TickSpecs()
 		for _, name in ipairs(PartyNames()) do
 			local info = specsByName[name]
 			if not info and not specAskedAt[name] and (not specAskedOnce[name] or now - specAskedOnce[name] > SPEC_REASK) then
-				specAskedOnce[name] = now
 				AskSpecs(name)
 			end
 		end
@@ -1293,7 +1297,7 @@ local function BuildAlts()
 	altsFrame:SetHeight(120 + ALT_ROWS * 22)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
-	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 0.94)
+	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
 	altsFrame:SetFrameStrata("DIALOG")
 	altsFrame:SetMovable(true)
 	altsFrame:EnableMouse(true)
