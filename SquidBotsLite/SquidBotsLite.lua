@@ -1069,6 +1069,9 @@ local function BuildOverlays()
 			overlay:SetHeight(18)
 			overlay:SetPoint("TOPLEFT", frame, "TOPLEFT", -4, 4)
 			overlay:SetFrameLevel(frame:GetFrameLevel() + 5)
+			-- The party frame's own role icon peeked out under ours (#5439): ours shows the role, the native one is hidden.
+			local nativeRole = _G["PartyMemberFrame" .. i .. "RoleIcon"]
+			if nativeRole then nativeRole:SetAlpha(0) end
 			overlay.icon = overlay:CreateTexture(nil, "OVERLAY")
 			overlay.icon:SetAllPoints()
 			overlay.badge = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
