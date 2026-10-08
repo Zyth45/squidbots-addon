@@ -65,6 +65,15 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**1.9.1**
+- Fixed: the party frame's own role icon no longer peeks out under SquidBots' role icon (#5439).
+
+**1.9**
+- **Specialization** submenu in each bot's menu: Tank, Healer or Damage in one click, or pick a specialization from its list.
+- **Bots > Specializations** (`/sbl spec`, or a key binding): the whole group at a glance, and **Balance the group** (one tank, one healer, your own role counted, everyone else damage).
+- A bot gets back the specialization it last played in a role, and the bar's state after a switch.
+- Panels with a plain dark background.
+
 **1.8** (from now on, the same number as CoA Bots)
 - **My alts** panel (Bots menu, `/sbl alts`): log your other characters in or out as bots, and summon them.
 
