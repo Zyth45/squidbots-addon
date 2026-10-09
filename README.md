@@ -43,7 +43,11 @@ With `CoA.CollectionsForBots = 1` on the server, alts keep their look: wardrobe,
 
 Each bot gets a role icon on its frame. Click it for that bot alone: come to me, stay here, attack my target, stats, best gear, remove from group. A tank adds auto pull on or off; a healer adds **Heal only me** (for a duo) and **Heal the whole group**.
 
-A bot you invited by hand, not through `lfg bot`, is asked `co ?` once to learn its role; the question and its answer stay out of your chat. `/sbl roles off` turns that off (a human player in your group would get that one whisper too). The frames also show **Low mana**, **Pulling** and **Rez** without a word of chat.
+A bot you invited by hand, not through `lfg bot`, is asked `co ?` once to learn its role; the question and its answer stay out of your chat. Only members known as bots are asked (a bot answer, the "Bot" surname, an alt of yours), never a real player; `/sbl roles off` turns it off. The frames also show **Low mana**, **Pulling** and **Rez** without a word of chat.
+
+## Version check
+
+At login the server names its CoA Bots version. SquidBots Lite carries the same number: when the server is ahead, the addon says in chat that a new version is out.
 
 ## Commands
 
@@ -64,6 +68,10 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**1.9.2**
+- Automatic roles ask only members known as bots: real players of the group no longer get the `co ?` whisper (PTR report).
+- The addon says in chat when the server's CoA Bots is newer than itself.
 
 **1.9.1**
 - Fixed: the party frame's own role icon no longer peeks out under SquidBots' role icon (#5439).

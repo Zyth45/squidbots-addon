@@ -39,6 +39,7 @@ local STRINGS = {
 		FORMATION = "Formation", F_NEAR = "Close (default)", F_LINE = "Line", F_CIRCLE = "Circle", F_SHIELD = "Shield around me",
 		F_ARROW = "Arrow", F_QUEUE = "Single file",
 		ROLES_ON = "Automatic roles on: a bot of unknown role is asked \"co ?\" once, answer hidden.",
+		OUTDATED = "SquidBots Lite %s is older than CoA Bots %s on this server. New version: https://github.com/Zyth45/squidbots-addon/releases/latest",
 		ROLES_OFF = "Automatic roles off.",
 		SPECS = "Specializations", SPEC_MENU = "Specialization", SPEC_OPEN = "All the group's specializations...",
 		MY_ROLE = "My role:", ROLE_TANK = "Tank", ROLE_HEAL = "Healer", ROLE_DPS = "Damage", SUPPORT = "support",
@@ -88,6 +89,7 @@ local STRINGS = {
 		FORMATION = "Formation", F_NEAR = "Proche (par défaut)", F_LINE = "Ligne", F_CIRCLE = "Cercle", F_SHIELD = "Bouclier autour de moi",
 		F_ARROW = "Flèche", F_QUEUE = "File indienne",
 		ROLES_ON = "Rôles automatiques activés : un bot au rôle inconnu reçoit « co ? » une fois, réponse masquée.",
+		OUTDATED = "SquidBots Lite %s est plus ancien que CoA Bots %s sur ce serveur. Nouvelle version : https://github.com/Zyth45/squidbots-addon/releases/latest",
 		ROLES_OFF = "Rôles automatiques désactivés.",
 		SPECS = "Spécialisations", SPEC_MENU = "Spécialisation", SPEC_OPEN = "Toutes les spécialisations du groupe...",
 		MY_ROLE = "Mon rôle :", ROLE_TANK = "Tank", ROLE_HEAL = "Soigneur", ROLE_DPS = "DPS", SUPPORT = "soutien",
@@ -1403,14 +1405,20 @@ end)
 -- ---------------------------------------------------------------------------
 -- A party member of unknown role (invited by hand, not through lfg bot) is whispered "co ?" once: a bot
 -- answers with its combat strategies, "coa tank" or "coa heal" giving its role. Question and answer are
--- kept out of the chat. A human player gets that one whisper too; /sbl roles off stops it.
+-- kept out of the chat. Only members known as bots are asked (a bot answer, the "Bot" surname, an alt of
+-- this account): a real player of the group would see the whisper (PTR report). /sbl roles off stops it.
+local function LooksLikeBot(name)
+	return knownBot[name] or name:find(" Bot$") ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name])
+end
+
 local function ProbeRoles()
 	if SquidBotsLiteDB.autoRoles == false then return end
 	local now = GetTime()
 	for i = 1, 4 do
 		local unit = "party" .. i
 		local name = UnitName(unit)
-		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and not probedAt[name] and UnitIsConnected(unit) then
+		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and not probedAt[name] and UnitIsConnected(unit)
+			and LooksLikeBot(name) then
 			firstSeen[name] = firstSeen[name] or now
 			if now - firstSeen[name] >= PROBE_DELAY then
 				probedAt[name] = now
@@ -1499,6 +1507,38 @@ end
 -- ---------------------------------------------------------------------------
 -- Events and slash command
 -- ---------------------------------------------------------------------------
+-- At login the server says "CoA Bots v1.9.1 (mod-playerbots) ..." (Playerbots.cpp). The addon carries the
+-- same number since 1.8: a server ahead of it means a newer addon is out. Said once; an addon-only update
+-- (a server still on the older number) cannot be seen this way.
+local function VersionParts(text)
+	local parts = {}
+	for n in (text or ""):gmatch("%d+") do table.insert(parts, tonumber(n)) end
+	return parts
+end
+
+local function IsOlder(mine, theirs)
+	local a, b = VersionParts(mine), VersionParts(theirs)
+	for i = 1, math.max(#a, #b) do
+		local x, y = a[i] or 0, b[i] or 0
+		if x ~= y then return x < y end
+	end
+	return false
+end
+
+local versionWatch = CreateFrame("Frame")
+versionWatch:RegisterEvent("CHAT_MSG_SYSTEM")
+versionWatch:SetScript("OnEvent", function(self, _, message)
+	local plain = (message or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+	local server = plain:match("^CoA Bots v(%d[%d%.]*)")
+	if not server then return end
+	self:UnregisterEvent("CHAT_MSG_SYSTEM")
+	server = server:gsub("%.$", "")
+	local mine = GetAddOnMetadata("SquidBotsLite", "Version") or "0"
+	if L and IsOlder(mine:match("^[%d%.]+") or mine, server) then
+		Print(string.format(L.OUTDATED, mine, server))
+	end
+end)
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
