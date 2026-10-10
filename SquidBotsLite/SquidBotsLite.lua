@@ -13,7 +13,7 @@ local STRINGS = {
 		TOGGLE_PASSIVE = "Passive / Active",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
-		TIP_MOVE = "Shift-drag to move the bar.",
+		TIP_MOVE = "Shift-drag to move the bar, Ctrl + mouse wheel to resize it.",
 		TIP_PROFILES = "Right click: profiles (farm, strict follow, dungeon).",
 		PROFILES = "Profiles", P_FARM = "Farm (hunt, loot, eat)", P_STRICT = "Strict follow",
 		P_DUNGEON = "Dungeon mode", P_LEAVE_DUNGEON = "Leave dungeon mode",
@@ -52,7 +52,8 @@ local STRINGS = {
 		BALANCE_DONE = "Group: %s.", BALANCE_MISSING = "No bot in the group can play %s.",
 		BALANCE_WAIT = "Asking the bots for their specializations...", BALANCE_RAID = "In a raid, the raid command already sets the roles: pick specializations bot by bot.",
 		SPECS_NOT_BOT = "not a bot", SPEC_ASK = "Ask the bot", TIP_ROLE = "Switch to %s.", TIP_NO_ROLE = "No specialization of this role.",
-		HELP = "SquidBots Lite: /sbl (show/hide), /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl spec, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
+		HELP = "SquidBots Lite: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl spec, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
+		SCALE_SET = "SquidBots Lite bar size: %s (this character).", SCALE_BAD = "Bar size: a number from 0.5 to 2, for example /sbl scale 1.2",
 		LANG_SET = "SquidBots Lite language: English.", CHANNEL_SET = "SquidBots Lite asks in: %s",
 	},
 	fr = {
@@ -63,7 +64,7 @@ local STRINGS = {
 		TOGGLE_PASSIVE = "Passif / Actif",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
-		TIP_MOVE = "Maj + glisser pour déplacer la barre.",
+		TIP_MOVE = "Maj + glisser pour déplacer la barre, Ctrl + molette pour la redimensionner.",
 		TIP_PROFILES = "Clic droit : les profils (farm, suivi strict, donjon).",
 		PROFILES = "Profils", P_FARM = "Farm (chasse, butin, repas)", P_STRICT = "Suivi strict",
 		P_DUNGEON = "Mode donjon", P_LEAVE_DUNGEON = "Quitter le mode donjon",
@@ -102,7 +103,8 @@ local STRINGS = {
 		BALANCE_DONE = "Groupe : %s.", BALANCE_MISSING = "Aucun bot du groupe ne peut jouer %s.",
 		BALANCE_WAIT = "Demande de leurs spécialisations aux bots...", BALANCE_RAID = "En raid, la commande de raid répartit déjà les rôles : choisissez les spécialisations bot par bot.",
 		SPECS_NOT_BOT = "pas un bot", SPEC_ASK = "Demander au bot", TIP_ROLE = "Passer en %s.", TIP_NO_ROLE = "Aucune spécialisation de ce rôle.",
-		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl spec, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
+		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl spec, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
+		SCALE_SET = "Taille de la barre SquidBots Lite : %s (ce personnage).", SCALE_BAD = "Taille de la barre : un nombre de 0,5 à 2, par exemple /sbl scale 1.2",
 		LANG_SET = "Langue de SquidBots Lite : français.", CHANNEL_SET = "SquidBots Lite demande dans : %s",
 	},
 }
@@ -905,6 +907,32 @@ Highlight = function()
 	end
 end
 
+-- Size and place of the bar, and whether it shows, are kept per character (SquidBotsLiteCharDB): a healer
+-- and a tank of the same account rarely want the bar at the same spot.
+local SCALE_MIN, SCALE_MAX = 0.5, 2
+
+local function PlaceBar()
+	local p = SquidBotsLiteCharDB.point
+	bar:ClearAllPoints()
+	if p then
+		bar:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+	else
+		bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 150)
+	end
+end
+
+local function SetBarScale(scale, quiet)
+	scale = math.floor(math.max(SCALE_MIN, math.min(SCALE_MAX, scale)) * 100 + 0.5) / 100
+	SquidBotsLiteCharDB.scale = scale
+	if bar then bar:SetScale(scale) end
+	if not quiet then Print(string.format(L.SCALE_SET, scale)) end
+end
+
+local function SetBarShown(shown)
+	SquidBotsLiteCharDB.hidden = not shown
+	if shown then bar:Show() else bar:Hide() end
+end
+
 local function BarButton(key, icon, label, tip, onClick)
 	local button = CreateFrame("Button", nil, bar)
 	button:SetWidth(34)
@@ -933,7 +961,12 @@ local function BarButton(key, icon, label, tip, onClick)
 	button:SetScript("OnDragStop", function()
 		bar:StopMovingOrSizing()
 		local point, _, relativePoint, x, y = bar:GetPoint()
-		SquidBotsLiteDB.point = { point, relativePoint, x, y }
+		SquidBotsLiteCharDB.point = { point, relativePoint, x, y }
+	end)
+	-- Ctrl + mouse wheel over the bar: bigger or smaller, by steps of 0.05.
+	button:EnableMouseWheel(true)
+	button:SetScript("OnMouseWheel", function(_, delta)
+		if IsControlKeyDown() then SetBarScale((SquidBotsLiteCharDB.scale or 1) + 0.05 * delta, true) end
 	end)
 	button:SetScript("OnClick", function(self, mouse)
 		-- Right click anywhere on the bar: the profiles (farm, strict follow, dungeon...).
@@ -1010,12 +1043,8 @@ local function BuildBar()
 	bar:SetHeight(48)
 	bar:SetMovable(true)
 	bar:SetClampedToScreen(true)
-	if SquidBotsLiteDB.point then
-		local p = SquidBotsLiteDB.point
-		bar:SetPoint(p[1], UIParent, p[2], p[3], p[4])
-	else
-		bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 150)
-	end
+	bar:SetScale(SquidBotsLiteCharDB.scale or 1)
+	PlaceBar()
 	local defs = {
 		{ "follow", "Interface\\Icons\\Ability_Hunter_Pathfinding", "FOLLOW", "TIP_FOLLOW", function()
 			if SendOrder("follow") then SetOrder("follow") end
@@ -1049,7 +1078,7 @@ local function BuildBar()
 	buttons.release:Hide()
 	RefreshTexts()
 	Highlight()
-	if SquidBotsLiteDB.hidden then
+	if SquidBotsLiteCharDB.hidden then
 		bar:Hide()
 	end
 end
@@ -1478,7 +1507,7 @@ local function OnWhisper(message, sender)
 	end
 	table.insert(toasts, { name = sender, level = level, class = class, role = role, expires = GetTime() + OFFER_SECONDS })
 	while #toasts > MAX_TOASTS do table.remove(toasts, 1) end
-	if not bar:IsShown() then bar:Show(); SquidBotsLiteDB.hidden = false end
+	if not bar:IsShown() then SetBarShown(true) end
 	RefreshToasts()
 end
 
@@ -1545,6 +1574,10 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self, event, arg1, arg2)
 	if event == "ADDON_LOADED" and arg1 == "SquidBotsLite" then
 		SquidBotsLiteDB = SquidBotsLiteDB or {}
+		if not SquidBotsLiteCharDB then
+			-- First load on this character since 2.0: start from the account-wide place and state of 1.9.
+			SquidBotsLiteCharDB = { point = SquidBotsLiteDB.point, hidden = SquidBotsLiteDB.hidden, scale = 1 }
+		end
 		SetLanguage(SquidBotsLiteDB.lang)
 	elseif event == "PLAYER_LOGIN" then
 		BuildBar()
@@ -1621,17 +1654,25 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		SquidBotsLiteDB.gm = not SquidBotsLiteDB.gm
 		Print(SquidBotsLiteDB.gm and L.GM_ON or L.GM_OFF)
 	elseif command == "reset" then
-		SquidBotsLiteDB.point = nil
-		bar:ClearAllPoints()
-		bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 150)
-		bar:Show()
+		SquidBotsLiteCharDB.point = nil
+		PlaceBar()
+		SetBarShown(true)
+	elseif command == "show" then
+		SetBarShown(true)
+	elseif command == "hide" then
+		SetBarShown(false)
+	elseif command == "scale" or command == "size" then
+		local scale = tonumber((string.gsub(rest or "", ",", "."))) -- "1,2" as French players write it
+		if rest == "" then
+			Print(string.format(L.SCALE_SET, SquidBotsLiteCharDB.scale or 1))
+		elseif scale and scale >= SCALE_MIN and scale <= SCALE_MAX then
+			SetBarScale(scale)
+		else
+			Print(L.SCALE_BAD)
+		end
 	elseif command == "help" or command == "?" then
 		Print(L.HELP)
-	elseif bar:IsShown() then
-		bar:Hide()
-		SquidBotsLiteDB.hidden = true
 	else
-		bar:Show()
-		SquidBotsLiteDB.hidden = false
+		SetBarShown(not bar:IsShown())
 	end
 end

@@ -53,6 +53,8 @@ At login the server names its CoA Bots version. SquidBots Lite carries the same 
 
 ```
 /sbl                 show or hide the bar
+/sbl show | hide     show or hide it, said outright
+/sbl scale <0.5-2>   bar size (1 = normal; /sbl scale alone says the current one)
 /sbl lang fr | en    French or English
 /sbl channel <name>  ask in a different channel (a name, not a number)
 /sbl alts            your other characters, played as bots
@@ -61,6 +63,8 @@ At login the server names its CoA Bots version. SquidBots Lite carries the same 
 /sbl reset           put the bar back in the middle
 ```
 
+Ctrl + mouse wheel over the bar also resizes it. The bar's size, place and shown/hidden state are kept per character; the language, channel and other choices stay account-wide.
+
 ## Install
 
 It ships with CoA Bots, whose installer copies it into your client. To install it by hand, copy the `SquidBotsLite` folder into `Interface/AddOns`.
@@ -68,6 +72,12 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**2.0**
+- Same number as CoA Bots 2.0: a 1.9.x addon on a 2.0 server says a new version is out.
+- Bar size: `/sbl scale 0.5` to `2`, or Ctrl + mouse wheel over the bar (issue #1).
+- `/sbl show` and `/sbl hide`, beside `/sbl` which still switches.
+- Size, place and shown/hidden are now saved per character (`SquidBotsLiteCharDB`); each character starts from the account-wide place of 1.9.
 
 **1.9.2**
 - Automatic roles ask only members known as bots: real players of the group no longer get the `co ?` whisper (PTR report).
