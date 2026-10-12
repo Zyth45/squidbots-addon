@@ -1229,6 +1229,8 @@ Render = function()
 	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?"))
 	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
 	local gold = sheet.gold or info.gold
+	-- A wrong value saved before the fix ("Strategies: ...") is not shown.
+	if gold and not gold:find("^%d+[gsc]") then gold = nil end
 	sheet.goldText:SetText(gold and ("|cffffd100" .. T("GOLD") .. "|r " .. gold) or "")
 	local line = ""
 	if info.level then
