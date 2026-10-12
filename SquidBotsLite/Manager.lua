@@ -27,7 +27,7 @@ local STRINGS = {
 		NO_BANKER = "No banker next to the bot: the bank opens only when the bot stands by a banker.",
 		ABANDON = "Abandon this quest", ABANDON_ASK = "%s abandons %s?", QUEST_HINT = "Right-click a quest to abandon it.",
 		DROP_HINT = "Drop an item from your bags here to give it to the bot (a trade opens).",
-		GOLD = "Gold",
+		GOLD = "Gold", SPEC = "Spec", XP = "XP",
 	},
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
@@ -52,7 +52,7 @@ local STRINGS = {
 		NO_BANKER = "Pas de banquier à côté du bot : la banque ne s'ouvre que si le bot est devant un banquier.",
 		ABANDON = "Abandonner cette quête", ABANDON_ASK = "%s abandonne %s ?", QUEST_HINT = "Clic droit sur une quête pour l'abandonner.",
 		DROP_HINT = "Déposez ici un objet de vos sacs pour le donner au bot (un échange s'ouvre).",
-		GOLD = "Or",
+		GOLD = "Or", SPEC = "Spé", XP = "XP",
 	},
 }
 local function T(key)
@@ -199,6 +199,7 @@ local function Finish()
 	else
 		stats = done.lines
 		sheet.gold = GoldOf(done.lines) or sheet.gold
+		if SquidBotsLite_NoteStats and done.lines[1] then SquidBotsLite_NoteStats(done.name, done.lines[1]) end
 	end
 	local banker = done.kind == "bank" and done.lines[1] and done.lines[1]:find("banker", 1, true)
 	if banker then
@@ -785,6 +786,16 @@ Render = function()
 	if not sheet or not sheet:IsShown() then return end
 	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?"))
 	sheet.goldText:SetText(sheet.gold and ("|cffffd100" .. T("GOLD") .. "|r " .. sheet.gold) or "")
+	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current]
+	local spec = info and info.spec and ("|cffffd100" .. T("SPEC") .. "|r " .. info.spec) or ""
+	sheet.specText:SetText(spec)
+	if info and info.xp then
+		sheet.xp:SetValue(info.xp)
+		sheet.xp.text:SetText(string.format("%s %d%%%s", T("XP"), info.xp, (info.rest or 0) > 0 and (" (+" .. info.rest .. "%)") or ""))
+		sheet.xp:Show()
+	else
+		sheet.xp:Hide()
+	end
 	sheet.refresh:SetText(T("REFRESH"))
 	for _, def in ipairs(TABS) do
 		local key = def[1]
@@ -866,6 +877,20 @@ local function Build()
 	sheet.refresh:SetScript("OnClick", function() Load() end)
 	sheet.goldText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sheet.goldText:SetPoint("TOPLEFT", 18, -16)
+	sheet.specText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	sheet.specText:SetPoint("BOTTOMLEFT", 18, 44)
+	sheet.xp = CreateFrame("StatusBar", nil, sheet)
+	sheet.xp:SetWidth(200)
+	sheet.xp:SetHeight(10)
+	sheet.xp:SetPoint("BOTTOMRIGHT", -18, 44)
+	sheet.xp:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+	sheet.xp:SetStatusBarColor(0.58, 0.0, 0.55)
+	sheet.xp:SetMinMaxValues(0, 100)
+	local xpBg = sheet.xp:CreateTexture(nil, "BACKGROUND")
+	xpBg:SetAllPoints()
+	xpBg:SetTexture(0, 0, 0, 0.6)
+	sheet.xp.text = sheet.xp:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	sheet.xp.text:SetPoint("CENTER")
 	sheet.status = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sheet.status:SetPoint("BOTTOMLEFT", 18, 20)
 	sheet:Hide()

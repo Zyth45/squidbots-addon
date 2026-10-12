@@ -433,6 +433,9 @@ end
 -- The specialization a bot last played in each role, kept between sessions: switching a tank back to damage
 -- gives it its own damage specialization again, not the first of the list.
 local function Remember(name, specName, role)
+	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
+	SquidBotsLiteDB.altInfo[name] = SquidBotsLiteDB.altInfo[name] or {}
+	SquidBotsLiteDB.altInfo[name].spec, SquidBotsLiteDB.altInfo[name].role = specName, role
 	SquidBotsLiteDB.lastSpec = SquidBotsLiteDB.lastSpec or {}
 	SquidBotsLiteDB.lastSpec[name] = SquidBotsLiteDB.lastSpec[name] or {}
 	SquidBotsLiteDB.lastSpec[name][role] = specName
@@ -1336,7 +1339,30 @@ local function NoteAlt(unit)
 	if not level or level <= 0 then return end
 	local class, token = UnitClass(unit)
 	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
-	SquidBotsLiteDB.altInfo[name] = { level = level, class = class, token = token }
+	local info = SquidBotsLiteDB.altInfo[name] or {}
+	if info.level ~= level then info.xp, info.rest = nil, nil end
+	info.level, info.class, info.token = level, class, token
+	if unit == "player" then
+		local max = UnitXPMax("player")
+		if max and max > 0 and level < (MAX_PLAYER_LEVEL or 60) then
+			info.xp = math.floor(100 * UnitXP("player") / max)
+			info.rest = math.floor(100 * (GetXPExhaustion() or 0) / max)
+		else
+			info.xp = nil
+		end
+	end
+	SquidBotsLiteDB.altInfo[name] = info
+end
+
+-- "12g 3s 4c, ..., |cff00ff0045|cffffd333/|cff00ff0012%|cffffffff XP" (StatsAction): xp and rested, in %.
+function SquidBotsLite_NoteStats(name, message)
+	local plain = (message or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
+	local info = SquidBotsLiteDB.altInfo[name] or {}
+	local xp, rest = plain:match("(%d+)/(%d+)%% XP")
+	info.xp, info.rest = tonumber(xp), tonumber(rest)
+	info.gold = plain:match("^([^,]+)") or info.gold
+	SquidBotsLiteDB.altInfo[name] = info
 end
 
 local function NoteGroup()
@@ -1346,12 +1372,48 @@ end
 
 local function AltLine(name)
 	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
-	if not info then return "|cff808080" .. L.ALTS_UNKNOWN .. "|r" end
+	if not info or not info.level then return "|cff808080" .. L.ALTS_UNKNOWN .. "|r" end
 	local color = info.token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[info.token]
 	local class = info.class or ""
 	if color then class = string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, class) end
-	return string.format(L.ALTS_LEVEL, info.level, class)
+	local line = string.format(L.ALTS_LEVEL, info.level, class)
+	if info.spec then line = line .. " |cffaaaaaa- " .. info.spec .. "|r" end
+	return line
 end
+
+local function ShowXP(bar, name)
+	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
+	if info and info.xp then
+		bar:SetValue(info.xp)
+		bar.rest:SetWidth(math.max(1, bar:GetWidth() * math.min(100 - info.xp, info.rest or 0) / 100))
+		if (info.rest or 0) > 0 then bar.rest:Show() else bar.rest:Hide() end
+		bar:Show()
+	else
+		bar:Hide()
+	end
+end
+
+-- The online alts are asked "stats" now and then (at most once a minute each), for their xp: answer hidden.
+local altStatsAt = {}
+local function AskAltStats()
+	local now = GetTime()
+	for _, alt in ipairs(roster) do
+		if alt.online and (not altStatsAt[alt.name] or now - altStatsAt[alt.name] > 60) then
+			altStatsAt[alt.name] = now
+			Whisper(alt.name, "stats")
+		end
+	end
+end
+
+local function InStatsWindow(name)
+	return altStatsAt[name] and GetTime() - altStatsAt[name] < 5
+end
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", function(_, _, message, name)
+	if InStatsWindow(name) and (message:find(" XP", 1, true) or message:find("^%d+[gsc]")) then return true end
+end)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message, name)
+	if InStatsWindow(name) and message == "stats" then return true end
+end)
 
 local function RefreshAlts()
 	if not altsFrame then return end
@@ -1362,6 +1424,7 @@ local function RefreshAlts()
 		if alt then
 			row.name:SetText(alt.name)
 			row.info:SetText(AltLine(alt.name))
+			ShowXP(row.xp, alt.name)
 			row.dot:SetVertexColor(alt.online and 0.2 or 0.45, alt.online and 1 or 0.45, alt.online and 0.2 or 0.45)
 			row.toggle:SetText(alt.online and L.ALTS_REMOVE or L.ALTS_ADD)
 			row.toggle:Enable()
@@ -1560,7 +1623,7 @@ end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
-	altsFrame:SetWidth(372)
+	altsFrame:SetWidth(430)
 	altsFrame:SetHeight(138 + ALT_ROWS * ALT_ROW_H)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
@@ -1596,12 +1659,12 @@ local function BuildAlts()
 	altsFrame.accounts:SetScript("OnClick", AccountsMenu)
 	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	altsFrame.status:SetPoint("TOPLEFT", 18, -62)
-	altsFrame.status:SetWidth(330)
+	altsFrame.status:SetWidth(390)
 	altsFrame.status:SetJustifyH("LEFT")
 	altsFrame.status:SetJustifyH("LEFT")
 	for i = 1, ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
-		row:SetWidth(340)
+		row:SetWidth(398)
 		row:SetHeight(ALT_ROW_H - 2)
 		row:SetPoint("TOPLEFT", 16, -80 - (i - 1) * ALT_ROW_H)
 		row.dot = row:CreateTexture(nil, "ARTWORK")
@@ -1611,16 +1674,33 @@ local function BuildAlts()
 		row.dot:SetPoint("LEFT", 2, 0)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		row.name:SetPoint("TOPLEFT", 16, -3)
-		row.name:SetWidth(110)
+		row.name:SetWidth(166)
 		row.name:SetJustifyH("LEFT")
 		row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.info:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-		row.info:SetWidth(112)
+		row.info:SetWidth(168)
 		row.info:SetJustifyH("LEFT")
+		row.xp = CreateFrame("StatusBar", nil, row)
+		row.xp:SetWidth(150)
+		row.xp:SetHeight(4)
+		row.xp:SetPoint("TOPLEFT", row.info, "BOTTOMLEFT", 0, -2)
+		row.xp:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+		row.xp:SetStatusBarColor(0.58, 0.0, 0.55)
+		row.xp:SetMinMaxValues(0, 100)
+		row.xp.bg = row.xp:CreateTexture(nil, "BACKGROUND")
+		row.xp.bg:SetAllPoints()
+		row.xp.bg:SetTexture(0, 0, 0, 0.6)
+		-- Rested xp, in blue right after the xp gained, as on the game's own bar.
+		row.xp.rest = row.xp:CreateTexture(nil, "ARTWORK")
+		row.xp.rest:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+		row.xp.rest:SetVertexColor(0.0, 0.39, 0.88, 0.6)
+		row.xp.rest:SetHeight(4)
+		row.xp.rest:SetPoint("LEFT", row.xp:GetStatusBarTexture(), "RIGHT", 0, 0)
+		row.xp:Hide()
 		row.toggle = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
 		row.toggle:SetWidth(76)
 		row.toggle:SetHeight(18)
-		row.toggle:SetPoint("LEFT", 128, 0)
+		row.toggle:SetPoint("LEFT", 186, 0)
 		row.toggle:SetScript("OnClick", function(self)
 			local alt = self:GetParent().alt
 			if not alt then return end
@@ -1685,7 +1765,7 @@ local function BuildAlts()
 	end
 	altsFrame.help = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	altsFrame.help:SetPoint("BOTTOMLEFT", 16, 14)
-	altsFrame.help:SetWidth(340)
+	altsFrame.help:SetWidth(398)
 	altsFrame.help:SetJustifyH("LEFT")
 	altsFrame:Hide()
 	AltsTexts()
@@ -1731,6 +1811,7 @@ local function OnSystem(message)
 		rosterAskedAt, hideRosterUntil = nil, GetTime() + 1
 		roster = ParseRoster(text)
 		RefreshAlts()
+		AskAltStats()
 		return true
 	end
 end
@@ -1794,6 +1875,11 @@ end
 
 local function OnWhisper(message, sender)
 	if OnSpecReply(message, sender) then return end
+	if InStatsWindow(sender) and (message:find(" XP", 1, true) or message:find("^%d+[gsc]")) then
+		SquidBotsLite_NoteStats(sender, message)
+		RefreshAlts()
+		return
+	end
 	if InProbeWindow(sender) and message:find("^Strategies: ") then
 		OnStrategies(message, sender)
 		return
