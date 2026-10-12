@@ -33,7 +33,7 @@ local STRINGS = {
 		T_AUTOPICK_ASK = "%s takes again the talents of its specialization's build for its level?",
 		T_NONE = "No talent learnt yet.", T_NO_CMD = "No answer: this server's CoA Bots has no talent list yet (2.1 or later, CoA classes).",
 		T_HINT = "The talents this bot learnt, by specialization tree. Reset to the build: the community build of its spec.",
-		T_CAN = "Can be learnt now.", T_CANNOT = "Not yet: level, a prerequisite talent or points missing. Queued after its prerequisite, Save takes it in turn.",
+		T_REQUIRES = "Requires: %s", T_CAN = "Can be learnt now.", T_CANNOT = "Not yet: level, a prerequisite talent or points missing. Queued after its prerequisite, Save takes it in turn.",
 		T_CHOOSE = "Choose talents", T_SAVE = "Save (%d)", T_CANCEL = "Cancel", T_BACK = "Learnt talents",
 		T_POINTS = "Spec: %d spent, %d left  -  Class: %d spent, %d left",
 		T_LEFT = "Left after your choices: spec %d, class %d", T_CLASS = "class", T_SPEC = "spec",
@@ -70,7 +70,7 @@ local STRINGS = {
 		T_AUTOPICK_ASK = "%s reprend les talents du build de sa spé pour son niveau ?",
 		T_NONE = "Aucun talent appris pour l'instant.", T_NO_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la liste des talents (2.1 ou plus, classes CoA).",
 		T_HINT = "Les talents appris par ce bot, par arbre de spé. Remettre le build : le build de la communauté pour sa spé.",
-		T_CAN = "Peut être appris maintenant.", T_CANNOT = "Pas encore : il manque le niveau, un talent prérequis ou des points. Ajouté après son prérequis, Sauvegarder le prend à son tour.",
+		T_REQUIRES = "Prérequis : %s", T_CAN = "Peut être appris maintenant.", T_CANNOT = "Pas encore : il manque le niveau, un talent prérequis ou des points. Ajouté après son prérequis, Sauvegarder le prend à son tour.",
 		T_CHOOSE = "Choisir les talents", T_SAVE = "Sauvegarder (%d)", T_CANCEL = "Annuler", T_BACK = "Talents appris",
 		T_POINTS = "Spé : %d dépensés, %d restants  -  Classe : %d dépensés, %d restants",
 		T_LEFT = "Restants après vos choix : spé %d, classe %d", T_CLASS = "classe", T_SPEC = "spé",
@@ -238,7 +238,9 @@ local function ParseOptions(lines)
 		local id = tonumber(line:match("^Talent option: .-|Hspell:(%d+)|h"))
 		local entry, rank, max, cost, kind, level = line:match("entry (%d+) rank (%d+)/(%d+) cost (%d+) (%a+) level (%d+)")
 		if id and entry then
-			table.insert(list, { id = id, name = line:match("|h%[(.-)%]|h") or "?", entry = tonumber(entry),
+			local requires = {}
+			for req in line:gmatch("requires (%d+) rank %d+") do table.insert(requires, tonumber(req)) end
+			table.insert(list, { id = id, name = line:match("|h%[(.-)%]|h") or "?", entry = tonumber(entry), requires = requires,
 				rank = tonumber(rank), max = tonumber(max), cost = tonumber(cost), kind = kind, level = tonumber(level),
 				canLearn = line:find("(can learn)", 1, true) ~= nil })
 		end
@@ -760,6 +762,19 @@ local function PendingCost(kind)
 	return total
 end
 
+local function OptionById(id)
+	for _, o in ipairs(options) do if o.id == id then return o end end
+end
+
+-- The core asks only that the prerequisite entry be held at some rank. One the bot cannot take (not in its
+-- options) is left to the server to judge.
+local function MissingPrereq(o)
+	for _, id in ipairs(o.requires or {}) do
+		local req = OptionById(id)
+		if req and req.rank + Pending(req) == 0 then return req end
+	end
+end
+
 local function PendingCount()
 	local n = 0
 	for _, ranks in pairs(pending) do n = n + ranks end
@@ -771,6 +786,7 @@ local function CanAdd(o)
 	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
 	if info.level and info.level < o.level then return false end
 	if o.rank + Pending(o) >= o.max then return false end
+	if MissingPrereq(o) then return false end
 	if points then
 		local left = o.kind == "class" and points.classLeft or points.specLeft
 		if left and PendingCost(o.kind) + o.cost > left then return false end
@@ -788,7 +804,18 @@ local function Save()
 	saveQueue = {}
 	-- The spell id of the talent's first rank, not its entry: the server reads a bare number as a spell id
 	-- first (the core's link parser hands it back as is), so "learn <entry>" answered "Unknown talent".
-	for _, o in ipairs(options) do
+	local placed, ordered = {}, {}
+	local function Place(o)
+		if placed[o.id] then return end
+		placed[o.id] = true
+		for _, id in ipairs(o.requires or {}) do
+			local req = OptionById(id)
+			if req then Place(req) end
+		end
+		table.insert(ordered, o)
+	end
+	for _, o in ipairs(options) do Place(o) end
+	for _, o in ipairs(ordered) do
 		for _ = 1, Pending(o) do table.insert(saveQueue, o.id) end
 	end
 	if #saveQueue == 0 then return end
@@ -866,6 +893,12 @@ local function TalentRow(page, i)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetHyperlink("spell:" .. id)
 			if self.option then
+				for _, id in ipairs(self.option.requires or {}) do
+					local req = OptionById(id)
+					local held = req and req.rank + Pending(req) > 0
+					GameTooltip:AddLine(string.format(T("T_REQUIRES"), req and req.name or GetSpellInfo(id) or id),
+						held and 0.25 or 1, held and 1 or 0.3, held and 0.25 or 0.3)
+				end
 				if self.option.canLearn then GameTooltip:AddLine(T("T_CAN"), 0.25, 1, 0.25, true)
 				elseif self.option.rank < self.option.max then GameTooltip:AddLine(T("T_CANNOT"), 1, 0.5, 0.25, true) end
 			end
@@ -888,7 +921,20 @@ local function TalentRow(page, i)
 		RenderTalents(page)
 	end)
 	row.minus:SetScript("OnClick", function()
-		if row.option and Pending(row.option) > 0 then pending[row.option.entry] = Pending(row.option) - 1 end
+		local o = row.option
+		if o and Pending(o) > 0 then
+			pending[o.entry] = Pending(o) - 1
+			-- Taking back the last rank of a prerequisite takes back what was added on top of it.
+			if o.rank + Pending(o) == 0 then
+				local changed = true
+				while changed do
+					changed = false
+					for _, other in ipairs(options) do
+						if Pending(other) > 0 and MissingPrereq(other) then pending[other.entry], changed = nil, true end
+					end
+				end
+			end
+		end
 		RenderTalents(page)
 	end)
 	return row
