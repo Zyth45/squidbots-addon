@@ -24,7 +24,7 @@ local STRINGS = {
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
-		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?",
+		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no specialization",
 		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
 		TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
 		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
@@ -87,7 +87,7 @@ local STRINGS = {
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
-		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?",
+		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "aucune spé",
 		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
 		TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
 		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
@@ -437,6 +437,7 @@ local function Remember(name, specName, role)
 	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
 	SquidBotsLiteDB.altInfo[name] = SquidBotsLiteDB.altInfo[name] or {}
 	SquidBotsLiteDB.altInfo[name].spec, SquidBotsLiteDB.altInfo[name].role = specName, role
+	SquidBotsLiteDB.altInfo[name].noSpec = nil
 	SquidBotsLiteDB.lastSpec = SquidBotsLiteDB.lastSpec or {}
 	SquidBotsLiteDB.lastSpec[name] = SquidBotsLiteDB.lastSpec[name] or {}
 	SquidBotsLiteDB.lastSpec[name][role] = specName
@@ -610,6 +611,11 @@ local function OnSpecReply(message, sender)
 	knownBot[sender] = true
 	specAskedAt[sender] = nil
 	specsByName[sender] = { list = list, current = current }
+	-- A character rushed with .level has specializations to pick, none active: My alts says so.
+	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
+	SquidBotsLiteDB.altInfo[sender] = SquidBotsLiteDB.altInfo[sender] or {}
+	SquidBotsLiteDB.altInfo[sender].noSpec = current == nil or nil
+	if current == nil then SquidBotsLiteDB.altInfo[sender].spec = nil end
 	local active = SpecOf(sender, current)
 	if active then
 		roleByName[sender] = active.role
@@ -1380,7 +1386,8 @@ local function AltLine(name)
 	local class = info.class or ""
 	if color then class = string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, class) end
 	local line = string.format(L.ALTS_LEVEL, info.level, class)
-	if info.spec then line = line .. " |cffaaaaaa- " .. info.spec .. "|r" end
+	if info.spec then line = line .. " |cffaaaaaa- " .. info.spec .. "|r"
+	elseif info.noSpec then line = line .. " |cffff9933- " .. L.ALTS_NO_SPEC .. "|r" end
 	return line
 end
 
