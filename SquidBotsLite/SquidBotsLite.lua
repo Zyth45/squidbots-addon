@@ -390,7 +390,8 @@ local function IsCoaBot(name)
 		local _, token = UnitClass(unit)
 		if token and WOTLK_TOKENS[token] then return false end
 	end
-	return knownBot[name] or name:find(" Bot$") ~= nil
+	-- An alt of this account (seen offline in My alts, or logged in by the player) is a bot of theirs too.
+	return knownBot[name] or name:find(" Bot$") ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]) == true
 end
 
 -- True when the question went out: a member not known as a bot yet is asked once it is (TickSpecs).
