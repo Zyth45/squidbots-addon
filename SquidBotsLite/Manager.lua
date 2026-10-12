@@ -33,6 +33,7 @@ local STRINGS = {
 		T_AUTOPICK_ASK = "%s takes again the talents of its specialization's build for its level?",
 		T_NONE = "No talent learnt yet.", T_NO_CMD = "No answer: this server's CoA Bots has no talent list yet (2.1 or later, CoA classes).",
 		T_HINT = "The talents this bot learnt, by specialization tree. Reset to the build: the community build of its spec.",
+		T_CAN = "Can be learnt now.", T_CANNOT = "Not yet: level, a prerequisite talent or points missing. Queued after its prerequisite, Save takes it in turn.",
 		T_CHOOSE = "Choose talents", T_SAVE = "Save (%d)", T_CANCEL = "Cancel", T_BACK = "Learnt talents",
 		T_POINTS = "Spec: %d spent, %d left  -  Class: %d spent, %d left",
 		T_LEFT = "Left after your choices: spec %d, class %d", T_CLASS = "class", T_SPEC = "spec",
@@ -69,6 +70,7 @@ local STRINGS = {
 		T_AUTOPICK_ASK = "%s reprend les talents du build de sa spé pour son niveau ?",
 		T_NONE = "Aucun talent appris pour l'instant.", T_NO_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la liste des talents (2.1 ou plus, classes CoA).",
 		T_HINT = "Les talents appris par ce bot, par arbre de spé. Remettre le build : le build de la communauté pour sa spé.",
+		T_CAN = "Peut être appris maintenant.", T_CANNOT = "Pas encore : il manque le niveau, un talent prérequis ou des points. Ajouté après son prérequis, Sauvegarder le prend à son tour.",
 		T_CHOOSE = "Choisir les talents", T_SAVE = "Sauvegarder (%d)", T_CANCEL = "Annuler", T_BACK = "Talents appris",
 		T_POINTS = "Spé : %d dépensés, %d restants  -  Classe : %d dépensés, %d restants",
 		T_LEFT = "Restants après vos choix : spé %d, classe %d", T_CLASS = "classe", T_SPEC = "spé",
@@ -778,6 +780,10 @@ end
 
 -- Save: one "talents learn <entry>" a second per rank, in the order of the levels they need; the answers
 -- ("Talent learned: ...", "Cannot learn ...: <reason>") go to the chat, then both lists are asked again.
+-- A rank refused for a missing prerequisite ("Cannot learn X: requires Y") is tried again once the others are
+-- learnt, as long as a pass learnt something: the prerequisite may have come later in the queue.
+local saving, lastSent, retry, retryMsg, progress = false, nil, {}, {}, false
+
 local function Save()
 	saveQueue = {}
 	-- The spell id of the talent's first rank, not its entry: the server reads a bare number as a spell id
@@ -788,23 +794,40 @@ local function Save()
 	if #saveQueue == 0 then return end
 	Print(string.format(T("T_SAVING"), #saveQueue))
 	pending = {}
-	saveNext = 0
+	saveNext, saving, retry, retryMsg, progress = 0, true, {}, {}, false
 end
 
 local saveWatch = CreateFrame("Frame")
 saveWatch:RegisterEvent("CHAT_MSG_WHISPER")
 saveWatch:SetScript("OnEvent", function(_, _, message, sender)
 	if sender ~= current then return end
+	if saving and lastSent and message:find("^Cannot learn ") and message:find(": requires ") then
+		table.insert(retry, lastSent)
+		retryMsg[#retry] = message
+		return
+	end
+	if message:find("^Talent learned: ") then progress = true end
 	if message:find("^Talent learned: ") or message:find("^Cannot learn ") or message:find("^Talents can only be chosen")
 		or message:find("^Unknown talent: ") or message:find("^Talents set from the build") then
 		Print(sender .. ": " .. message)
 	end
 end)
 saveWatch:SetScript("OnUpdate", function()
-	if #saveQueue == 0 or GetTime() < saveNext then return end
-	saveNext = GetTime() + 1.2
-	Whisper("talents learn " .. table.remove(saveQueue, 1))
-	if #saveQueue == 0 then AfterChange() end
+	if not saving or GetTime() < saveNext then return end
+	if #saveQueue > 0 then
+		saveNext = GetTime() + 1.2
+		lastSent = table.remove(saveQueue, 1)
+		Whisper("talents learn " .. lastSent)
+		return
+	end
+	-- The queue is empty and the last answer had time to come: another pass for the refused ranks, or the end.
+	if #retry > 0 and progress then
+		saveQueue, retry, retryMsg, progress = retry, {}, {}, false
+		return
+	end
+	for _, message in ipairs(retryMsg) do Print(current .. ": " .. message) end
+	saving, lastSent, retry, retryMsg = false, nil, {}, {}
+	AfterChange()
 end)
 
 local function TalentRow(page, i)
@@ -842,6 +865,10 @@ local function TalentRow(page, i)
 		if id then
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetHyperlink("spell:" .. id)
+			if self.option then
+				if self.option.canLearn then GameTooltip:AddLine(T("T_CAN"), 0.25, 1, 0.25, true)
+				elseif self.option.rank < self.option.max then GameTooltip:AddLine(T("T_CANNOT"), 1, 0.5, 0.25, true) end
+			end
 			GameTooltip:Show()
 		end
 	end)
@@ -944,6 +971,8 @@ RenderTalents = function(page)
 		if item then
 			row.icon:SetTexture(select(3, GetSpellInfo(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 			row.name:SetText(item.name)
+			if choosing and not item.canLearn and item.rank < item.max then row.name:SetTextColor(0.55, 0.55, 0.55)
+			else row.name:SetTextColor(1, 1, 1) end
 			if choosing then
 				row.option = item
 				local add = Pending(item)
