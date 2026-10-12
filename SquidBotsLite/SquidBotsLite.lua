@@ -1395,13 +1395,19 @@ local function ShowXP(bar, name)
 end
 
 -- The online alts are asked "stats" now and then (at most once a minute each), for their xp: answer hidden.
-local altStatsAt = {}
+local altStatsAt, altSpecAsked = {}, {}
 local function AskAltStats()
 	local now = GetTime()
 	for _, alt in ipairs(roster) do
 		if alt.online and (not altStatsAt[alt.name] or now - altStatsAt[alt.name] > 60) then
 			altStatsAt[alt.name] = now
 			Whisper(alt.name, "stats")
+		end
+		-- Its specialization too, once a session, if it is in the group (the panel of specializations asks the same).
+		local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[alt.name]
+		if alt.online and not (info and info.spec) and not altSpecAsked[alt.name] then
+			altSpecAsked[alt.name] = true
+			AskSpecs(alt.name)
 		end
 	end
 end
@@ -2014,6 +2020,11 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		OnGroupChat(arg1, arg2)
 	end
 end)
+
+-- The bot sheet (Manager.lua) asks a bot its specialization the same way.
+function SquidBotsLite_AskSpecs(name)
+	return AskSpecs(name)
+end
 
 -- Called by Bindings.xml: a key does what a left click on that bar button does, bar shown or not.
 function SquidBotsLite_Specs()

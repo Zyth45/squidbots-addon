@@ -924,6 +924,8 @@ function SquidBotsLite_OpenSheet(name)
 	if not UnitOf(name) and tab == "gear" then tab = "bags" end
 	Load()
 	if not sheet.gold then Ask("stats", "stats") end
+	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
+	if not (info and info.spec) and SquidBotsLite_AskSpecs then SquidBotsLite_AskSpecs(name) end
 end
 
 function SquidBotsLite_SheetDebug()
