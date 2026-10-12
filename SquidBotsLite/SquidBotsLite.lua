@@ -269,8 +269,37 @@ end
 -- A menu closes on its own once the mouse has left it this many seconds (the game keeps it open otherwise).
 local MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteMenu", UIParent, "UIDropDownMenuTemplate")
+-- The game closes a menu only on a click in the world, not over an addon window, and its own hide delay does
+-- not apply to these menus: a menu of the addon closes a second after the mouse left it, or on a click on our panels.
+local menuWatch = CreateFrame("Frame")
+menuWatch:Hide()
+menuWatch:SetScript("OnUpdate", function(self)
+	local list1, list2 = _G.DropDownList1, _G.DropDownList2
+	if not list1 or not list1:IsShown() then self:Hide() return end
+	if MouseIsOver(list1) or (list2 and list2:IsShown() and MouseIsOver(list2)) then
+		self.left = nil
+	else
+		self.left = self.left or GetTime()
+		if GetTime() - self.left > MENU_HIDE_DELAY then
+			CloseDropDownMenus()
+			self:Hide()
+		end
+	end
+end)
+
+function SquidBotsLite_WatchMenu()
+	menuWatch.left = nil
+	menuWatch:Show()
+end
+
 local function ShowMenu(items)
+	-- A second click on the button that opened it closes it.
+	if _G.DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == menuFrame then
+		CloseDropDownMenus()
+		return
+	end
 	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	SquidBotsLite_WatchMenu()
 end
 
 local ShowAlts, ShowSpecs
@@ -1660,6 +1689,7 @@ local function BuildAlts()
 	altsFrame:SetFrameStrata("DIALOG")
 	altsFrame:SetMovable(true)
 	altsFrame:SetToplevel(true)
+	altsFrame:SetScript("OnMouseDown", function() CloseDropDownMenus() end)
 	altsFrame:EnableMouse(true)
 	altsFrame:SetClampedToScreen(true)
 	altsFrame:RegisterForDrag("LeftButton")

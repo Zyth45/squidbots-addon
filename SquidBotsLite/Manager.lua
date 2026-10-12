@@ -461,6 +461,7 @@ local function ItemMenu(item)
 			{ text = T("WITHDRAW"), notCheckable = true, func = function() Whisper("bank -" .. link); AfterChange() end },
 			{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
 		}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 		return
 	end
 	EasyMenu({
@@ -473,6 +474,7 @@ local function ItemMenu(item)
 		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); AfterChange() end },
 		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
 	}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -705,6 +707,7 @@ local function StratMenu(kind)
 		end
 	end
 	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 end
 
 local function BuildStrats(page)
@@ -1297,6 +1300,7 @@ local function Build()
 	sheet:SetFrameStrata("DIALOG")
 	sheet:SetMovable(true)
 	sheet:SetToplevel(true)
+	sheet:SetScript("OnMouseDown", function() CloseDropDownMenus() end)
 	-- Smaller on screen than its layout: a sheet sits next to My alts without hiding the game.
 	sheet:SetScale(0.95)
 	sheet:EnableMouse(true)
