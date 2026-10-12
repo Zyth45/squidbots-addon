@@ -31,7 +31,7 @@ local STRINGS = {
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
 		M_FOLLOW = "Follow me", M_STAY = "Stay here", M_ATTACK = "Attack my target", M_SUMMON = "Come to me",
 		M_AUTOPULL_ON = "Auto pull on", M_AUTOPULL_OFF = "Auto pull off", M_KICK = "Remove from group",
-		M_STATS = "Stats (bags, money, xp)", M_GEAR = "Best gear", M_HEAL_ME = "Heal only me", M_HEAL_ALL = "Heal the whole group",
+		M_SHEET = "Bot sheet (gear, bags, quests)", M_STATS = "Stats (bags, money, xp)", M_GEAR = "Best gear", M_HEAL_ME = "Heal only me", M_HEAL_ALL = "Heal the whole group",
 		SUMMON = "Regroup", TIP_SUMMON = "Bots teleport next to you. Handy when one is stuck.",
 		RELEASE = "Release", TIP_RELEASE = "Shown when a bot is dead: dead bots release their spirit and run back to their body.",
 		ROLE_ORDERS = "Orders by role", R_TANK_ATTACK = "Tank: attack my target", R_DPS_ATTACK = "Damage: attack my target",
@@ -82,7 +82,7 @@ local STRINGS = {
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
 		M_FOLLOW = "Me suivre", M_STAY = "Rester ici", M_ATTACK = "Attaquer ma cible", M_SUMMON = "Venir à moi",
 		M_AUTOPULL_ON = "Auto pull activé", M_AUTOPULL_OFF = "Auto pull désactivé", M_KICK = "Retirer du groupe",
-		M_STATS = "Stats (sacs, argent, xp)", M_GEAR = "Meilleur équipement", M_HEAL_ME = "Ne soigner que moi", M_HEAL_ALL = "Soigner tout le groupe",
+		M_SHEET = "Fiche du bot (équipement, sacs, quêtes)", M_STATS = "Stats (sacs, argent, xp)", M_GEAR = "Meilleur équipement", M_HEAL_ME = "Ne soigner que moi", M_HEAL_ALL = "Soigner tout le groupe",
 		SUMMON = "Rappel", TIP_SUMMON = "Les bots se téléportent près de vous. Pratique quand l'un d'eux est coincé.",
 		RELEASE = "Libérer", TIP_RELEASE = "Visible quand un bot est mort : les bots morts libèrent leur esprit et rejoignent leur corps.",
 		ROLE_ORDERS = "Ordres par rôle", R_TANK_ATTACK = "Tank : attaquer ma cible", R_DPS_ATTACK = "DPS : attaquer ma cible",
@@ -884,6 +884,10 @@ local function BotMenu(name)
 		table.insert(items, { text = L.M_HEAL_ME, notCheckable = true, func = function() Whisper(name, "focus heal +" .. me) end })
 		table.insert(items, { text = L.M_HEAL_ALL, notCheckable = true, func = function() Whisper(name, "focus heal clear") end })
 	end
+	-- Bot sheet: Manager.lua (beta).
+	if SquidBotsLite_OpenSheet then
+		table.insert(items, { text = L.M_SHEET, notCheckable = true, func = function() SquidBotsLite_OpenSheet(name) end })
+	end
 	table.insert(items, { text = L.M_STATS, notCheckable = true, func = function() Whisper(name, "stats") end })
 	table.insert(items, { text = L.M_GEAR, notCheckable = true, func = function() Whisper(name, "autogear") end })
 	table.insert(items, { text = L.M_KICK, notCheckable = true, func = function() UninviteUnit(name) end })
@@ -1384,6 +1388,11 @@ local function BuildAlts()
 			local alt = self:GetParent().alt
 			if alt then Whisper(alt.name, "summon") end
 		end)
+		-- A logged-in alt's name opens its bot sheet (Manager.lua, beta).
+		row:EnableMouse(true)
+		row:SetScript("OnMouseUp", function(self)
+			if self.alt and self.alt.online and SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(self.alt.name) end
+		end)
 		row:Hide()
 		altRows[i] = row
 	end
@@ -1644,6 +1653,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "alts" then
 		ShowAlts()
+	elseif command == "bot" and SquidBotsLite_OpenSheet then
+		SquidBotsLite_OpenSheet(rest)
 	elseif command == "spec" or command == "specs" then
 		ShowSpecs()
 	elseif command == "roles" then
