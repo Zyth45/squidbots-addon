@@ -1,6 +1,6 @@
 -- SquidBots Lite, bot sheet (beta): the gear, bags, quests and stats of one bot of the group, for players who
 -- keep a long-term party of alts. Everything goes through chat commands a player can whisper to their own
--- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t", "mount", "bank", "drop", "co ?", "nc ?"); the gear is read
+-- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t", "mount", "bank", "drop", "co ?", "nc ?", "talents ?"); the gear is read
 -- by the client's own inspect.
 
 local STRINGS = {
@@ -29,6 +29,10 @@ local STRINGS = {
 		DROP_HINT = "Drop an item from your bags here to give it to the bot (a trade opens).",
 		GOLD = "Gold", SPEC = "Spec", XP = "XP", ILVL = "Item level %d", LEVEL = "Level %d %s",
 		MODEL_HINT = "Drag to turn it.",
+		TALENTS = "Talents", T_SPENT = "Talent points spent: %d", T_AUTOPICK = "Reset to the build",
+		T_AUTOPICK_ASK = "%s takes again the talents of its specialization's build for its level?",
+		T_NONE = "No talent learnt yet.", T_NO_CMD = "No answer: this server's CoA Bots has no talent list yet (2.1 or later, CoA classes).",
+		T_HINT = "The talents this bot learnt, by specialization tree. Reset to the build: the community build of its spec.",
 	},
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
@@ -55,6 +59,10 @@ local STRINGS = {
 		DROP_HINT = "Déposez ici un objet de vos sacs pour le donner au bot (un échange s'ouvre).",
 		GOLD = "Or", SPEC = "Spé", XP = "XP", ILVL = "Niveau d'objet %d", LEVEL = "Niveau %d %s",
 		MODEL_HINT = "Faites glisser pour le tourner.",
+		TALENTS = "Talents", T_SPENT = "Points de talent dépensés : %d", T_AUTOPICK = "Remettre le build",
+		T_AUTOPICK_ASK = "%s reprend les talents du build de sa spé pour son niveau ?",
+		T_NONE = "Aucun talent appris pour l'instant.", T_NO_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la liste des talents (2.1 ou plus, classes CoA).",
+		T_HINT = "Les talents appris par ce bot, par arbre de spé. Remettre le build : le build de la communauté pour sa spé.",
 	},
 }
 local function T(key)
@@ -81,6 +89,7 @@ local NONCOMBAT_STRATS = { "follow", "stay", "grind", "loot", "gather", "food", 
 local sheet, current, tab
 local capture, hideFrom, lastAsked = nil, {}, {}
 local bags, quests, stats, mounts, bank = {}, {}, {}, {}, {}
+local talents, talentSpent, talentOffset = {}, nil, 0
 local strats = { co = {}, nc = {} }
 local bagMode = "bags"
 local queue = {}
@@ -182,6 +191,24 @@ local function GoldOf(lines)
 	return lines[1] and lines[1]:match("^([^,]+)")
 end
 
+local function ParseTalents(lines)
+	local list, spent = {}, nil
+	for _, line in ipairs(lines) do
+		local id = tonumber(line:match("^Talent: .-|Hspell:(%d+)|h"))
+		if id then
+			local rank, max = line:match("rank (%d+)/(%d+)")
+			table.insert(list, { id = id, name = line:match("|h%[(.-)%]|h") or "?", rank = tonumber(rank) or 1,
+				max = tonumber(max) or 1, tree = line:match("%(tree (.-)%)") or "" })
+		end
+		spent = tonumber(line:match("^Talent points: (%d+) spent")) or spent
+	end
+	table.sort(list, function(a, b)
+		if a.tree ~= b.tree then return a.tree < b.tree end
+		return a.name < b.name
+	end)
+	return list, spent
+end
+
 local function Finish()
 	local done = capture
 	capture = nil
@@ -196,6 +223,9 @@ local function Finish()
 		mountOffset = 0
 	elseif done.kind == "bank" then
 		bank = ParseBags(done.lines)
+	elseif done.kind == "talents" then
+		talents, talentSpent = ParseTalents(done.lines)
+		talentOffset = 0
 	elseif done.kind == "co" or done.kind == "nc" then
 		strats[done.kind] = ParseStrats(done.lines)
 	else
@@ -207,7 +237,7 @@ local function Finish()
 	if banker then
 		sheet.status:SetText(T("NO_BANKER"))
 	elseif #done.lines == 0 then
-		sheet.status:SetText(done.kind == "mounts" and T("NO_MOUNT_CMD") or T("NO_REPLY"))
+		sheet.status:SetText(done.kind == "mounts" and T("NO_MOUNT_CMD") or done.kind == "talents" and T("T_NO_CMD") or T("NO_REPLY"))
 	else
 		sheet.status:SetText("")
 	end
@@ -230,7 +260,7 @@ watch:SetScript("OnEvent", function(_, event, message, sender)
 				table.insert(capture.lines, message)
 			end
 			capture.last = GetTime()
-			if capture.kind == "mounts" and message:find("^Mounts: %d+") then Finish()
+			if (capture.kind == "mounts" and message:find("^Mounts: %d+")) or (capture.kind == "talents" and message:find("^Talents: %d+")) then Finish()
 			elseif (capture.kind == "co" or capture.kind == "nc") and message:find("^Strategies:") then Finish() end
 		end
 	elseif sheet and sheet:IsShown() and tab == "gear" then
@@ -317,6 +347,7 @@ local function AfterChange()
 		if current == name and sheet:IsShown() then
 			if tab == "bags" then Ask(bagMode, bagMode == "bank" and "bank" or "c")
 			elseif tab == "mounts" then Ask("mounts", "mount ?")
+			elseif tab == "talents" then Ask("talents", "talents ?")
 			elseif tab == "strats" then Ask("co", "co ?"); Ask("nc", "nc ?")
 			elseif tab == "gear" then Render() end
 		end
@@ -664,6 +695,104 @@ local function RenderStrats(page)
 	page.hint:SetText(T("STRAT_HINT"))
 end
 
+local TALENT_ROWS = 13
+local RenderTalents
+
+StaticPopupDialogs.SQUIDBOTSLITE_AUTOPICK = {
+	text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = 1, hideOnEscape = 1,
+	OnAccept = function() Whisper("talents autopick"); AfterChange() end,
+}
+
+local function BuildTalents(page)
+	page.rows = {}
+	for i = 1, TALENT_ROWS do
+		local row = CreateFrame("Button", nil, page)
+		row:SetWidth(410)
+		row:SetHeight(22)
+		row:SetPoint("TOPLEFT", 10, -(i - 1) * 24)
+		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(20)
+		row.icon:SetHeight(20)
+		row.icon:SetPoint("LEFT", 2, 0)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		row.name:SetPoint("LEFT", 28, 0)
+		row.name:SetWidth(200)
+		row.name:SetJustifyH("LEFT")
+		row.rank = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		row.rank:SetPoint("LEFT", 232, 0)
+		row.tree = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		row.tree:SetPoint("LEFT", 280, 0)
+		row.tree:SetWidth(126)
+		row.tree:SetJustifyH("LEFT")
+		row:SetScript("OnEnter", function(self)
+			if self.talent then
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetHyperlink("spell:" .. self.talent.id)
+				GameTooltip:Show()
+			end
+		end)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		row:SetScript("OnClick", function(self)
+			if self.talent and IsShiftKeyDown() then ChatEdit_InsertLink(GetSpellLink(self.talent.id) or self.talent.name) end
+		end)
+		row:EnableMouseWheel(true)
+		row:SetScript("OnMouseWheel", function(_, delta)
+			talentOffset = math.max(0, math.min(math.max(0, #talents - TALENT_ROWS), talentOffset - delta * 3))
+			RenderTalents(page)
+		end)
+		page.rows[i] = row
+	end
+	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
+	page.up:SetPoint("TOPRIGHT", -6, 0)
+	page.up:SetScript("OnClick", function() talentOffset = math.max(0, talentOffset - TALENT_ROWS); RenderTalents(page) end)
+	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
+	page.down:SetPoint("TOPRIGHT", -6, -(TALENT_ROWS * 24) + 16)
+	page.down:SetScript("OnClick", function()
+		if talentOffset + TALENT_ROWS < #talents then talentOffset = talentOffset + TALENT_ROWS end
+		RenderTalents(page)
+	end)
+	page.spent = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	page.spent:SetPoint("TOPLEFT", 12, -(TALENT_ROWS * 24) - 8)
+	page.autopick = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.autopick:SetWidth(150)
+	page.autopick:SetHeight(22)
+	page.autopick:SetPoint("TOPRIGHT", -10, -(TALENT_ROWS * 24) - 4)
+	page.autopick:SetScript("OnClick", function()
+		StaticPopupDialogs.SQUIDBOTSLITE_AUTOPICK.text = string.format(T("T_AUTOPICK_ASK"), current or "?")
+		StaticPopup_Show("SQUIDBOTSLITE_AUTOPICK")
+	end)
+	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.hint:SetPoint("TOPLEFT", 12, -(TALENT_ROWS * 24) - 32)
+	page.hint:SetWidth(420)
+	page.hint:SetJustifyH("LEFT")
+	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	page.note:SetPoint("TOP", 0, -120)
+	page.note:SetWidth(360)
+end
+
+RenderTalents = function(page)
+	page.note:SetText(#talents == 0 and capture == nil and (sheet.status:GetText() or "") == "" and T("T_NONE") or "")
+	page.spent:SetText(talentSpent and string.format(T("T_SPENT"), talentSpent) or "")
+	page.autopick:SetText(T("T_AUTOPICK"))
+	page.hint:SetText(T("T_HINT"))
+	for i, row in ipairs(page.rows) do
+		local talent = talents[talentOffset + i]
+		row.talent = talent
+		if talent then
+			row.icon:SetTexture(select(3, GetSpellInfo(talent.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			row.name:SetText(talent.name)
+			local full = talent.rank >= talent.max
+			row.rank:SetText((full and "|cff40ff40" or "|cffffd100") .. talent.rank .. "/" .. talent.max .. "|r")
+			row.tree:SetText(talent.tree)
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	if #talents > TALENT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
+end
+
 local RenderMounts
 
 local function BuildMounts(page)
@@ -747,7 +876,7 @@ RenderMounts = function(page)
 end
 
 local TABS = { { "gear", "GEAR", BuildGear }, { "bags", "BAGS", BuildBags }, { "quests", "QUESTS", BuildQuests },
-	{ "mounts", "MOUNTS", BuildMounts }, { "info", "INFO", BuildInfo } }
+	{ "talents", "TALENTS", BuildTalents }, { "mounts", "MOUNTS", BuildMounts }, { "info", "INFO", BuildInfo } }
 -- The Strategies tab (BuildStrats) is kept out for now: too easy to break a bot with it (decision 12/10).
 -- Put { "strats", "STRATS", BuildStrats } back in TABS to show it.
 
@@ -863,6 +992,7 @@ Render = function()
 	elseif tab == "bags" then RenderBags(pages.bags)
 	elseif tab == "quests" then RenderQuests(pages.quests)
 	elseif tab == "mounts" then RenderMounts(pages.mounts)
+	elseif tab == "talents" then RenderTalents(pages.talents)
 	elseif tab == "strats" then RenderStrats(pages.strats)
 	else RenderInfo(pages.info) end
 end
@@ -878,6 +1008,8 @@ local function Load()
 		Ask("quests", "quests all")
 	elseif tab == "mounts" then
 		Ask("mounts", "mount ?")
+	elseif tab == "talents" then
+		Ask("talents", "talents ?")
 	elseif tab == "strats" then
 		Ask("co", "co ?")
 		Ask("nc", "nc ?")
@@ -961,6 +1093,7 @@ function SquidBotsLite_OpenSheet(name)
 	if not sheet then Build() end
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
+		talents, talentSpent, talentOffset = {}, nil, 0
 		bagMode = "bags"
 		if sheet then sheet.gold = nil end
 	end
