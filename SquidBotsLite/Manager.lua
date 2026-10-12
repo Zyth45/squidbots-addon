@@ -15,6 +15,7 @@ local STRINGS = {
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
+		FOR_GROUND = "favourite on the ground", FOR_FLYING = "favourite in the air",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
 		MOUNT_HINT = "Click a mount: your bot rides it from now on. One ground and one flying favourite; a ground-and-flying mount is both. Automatic choice: the bot picks again.",
 		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
@@ -52,6 +53,7 @@ local STRINGS = {
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
+		FOR_GROUND = "préférée au sol", FOR_FLYING = "préférée en vol",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
 		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Une préférée au sol, une en vol ; une monture sol et vol compte pour les deux. Choix automatique : le bot choisit à nouveau.",
 		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
@@ -1133,13 +1135,27 @@ RenderMounts = function(page)
 	page.auto:SetText(T("AUTO_MOUNT"))
 	page.hint:SetText(T("MOUNT_HINT"))
 	local kinds = { ground = T("GROUND"), flying = T("FLYING"), both = T("BOTH") }
+	-- The server marks a favourite without saying for what. A ground-and-flying favourite next to a ground one
+	-- is the flying favourite (and the other way round): the list says which, so the old one does not look stuck.
+	local groundFav, flyingFav = false, false
+	for _, m in ipairs(mounts) do
+		if m.preferred and m.kind == "ground" then groundFav = true end
+		if m.preferred and m.kind == "flying" then flyingFav = true end
+	end
+	local function FavouriteFor(m)
+		if m.kind == "ground" then return T("FOR_GROUND") end
+		if m.kind == "flying" then return T("FOR_FLYING") end
+		if groundFav and not flyingFav then return T("FOR_FLYING") end
+		if flyingFav and not groundFav then return T("FOR_GROUND") end
+		return T("PREFERRED")
+	end
 	for i, row in ipairs(page.rows) do
 		local m = mounts[mountOffset + i]
 		row.mount = m
 		if m then
 			row.icon:SetTexture(select(3, GetSpellInfo(m.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 			row.name:SetText(m.name)
-			row.kind:SetText((kinds[m.kind] or m.kind or "") .. (m.preferred and ("  |cffffd100" .. T("PREFERRED") .. "|r") or ""))
+			row.kind:SetText((kinds[m.kind] or m.kind or "") .. (m.preferred and ("  |cffffd100" .. FavouriteFor(m) .. "|r") or ""))
 			if m.preferred then row.check:Show() else row.check:Hide() end
 			row:Show()
 		else
