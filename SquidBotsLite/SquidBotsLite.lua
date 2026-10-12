@@ -128,7 +128,7 @@ local OFFER_SECONDS = 120
 local MAX_TOASTS = 5
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
-local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 4, 38, 52
+local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 3, 37, 52
 local BAR_ORDER = { "follow", "stay", "attack", "passive", "dungeon", "summon", "alts", "recruit", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
@@ -997,20 +997,27 @@ end
 
 -- Spaces the buttons evenly by the widest caption, "Active" and "Passive" both counted so that the bar
 -- does not move when the Passive button flips.
+-- Spaces the buttons evenly, as close as two neighbouring captions allow: the step is the widest pair of
+-- neighbours (half of each caption either side of its icon), not the widest caption twice. "Active" and
+-- "Passive" are both counted, so the bar does not move when the button flips.
 local function LayoutBar()
 	local measure = buttons.follow.caption
 	local shown = measure:GetText()
-	local texts = { L.ACTIVE, L.PASSIVE }
-	for _, button in pairs(buttons) do
-		table.insert(texts, L[button.label])
-	end
-	local widest = 0
-	for _, text in ipairs(texts) do
+	local function Width(text)
 		measure:SetText(text)
-		widest = math.max(widest, measure:GetStringWidth() or 0)
+		return measure:GetStringWidth() or 0
+	end
+	local widths = {}
+	for i, key in ipairs(BAR_ORDER) do
+		local button = buttons[key]
+		widths[i] = key == "passive" and math.max(Width(L.ACTIVE), Width(L.PASSIVE)) or Width(L[button.label])
 	end
 	measure:SetText(shown)
-	local step = widest > 0 and math.max(MIN_STEP, math.ceil(widest) + CAPTION_GAP) or FALLBACK_STEP
+	local step = 0
+	for i = 1, #widths - 1 do
+		step = math.max(step, (widths[i] + widths[i + 1]) / 2)
+	end
+	step = step > 0 and math.max(MIN_STEP, math.ceil(step) + CAPTION_GAP) or FALLBACK_STEP
 	for i, key in ipairs(BAR_ORDER) do
 		buttons[key]:ClearAllPoints()
 		buttons[key]:SetPoint("TOPLEFT", 3 + (i - 1) * step, 0)

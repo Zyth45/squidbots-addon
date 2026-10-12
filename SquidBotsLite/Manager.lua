@@ -49,7 +49,7 @@ local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interfac
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
 -- The bot answers line by line; a listing is over once it stays quiet this long. The server drops a line it
 -- already sent in the last 2 s (AiPlayerbot.RepeatDelay), so a new request waits that long.
-local QUIET, GIVE_UP, REPEAT_DELAY = 1.2, 6, 2.2
+local QUIET, GIVE_UP, REPEAT_DELAY = 0.7, 6, 2.1
 local BAG_COLS, BAG_ROWS, QUEST_ROWS, MOUNT_ROWS = 8, 6, 14, 11
 -- Inventory slot ids of the 3.3.5 client, left column, right column, then weapons.
 local GEAR_LEFT = { 1, 2, 3, 15, 5, 4, 19, 9 }
