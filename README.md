@@ -35,9 +35,25 @@ GMs can switch to `.playerbots coa` with `/sbl gm` and skip the channel. GM mode
 
 ## My alts
 
-**Bots > My alts** (or `/sbl alts`) lists the other characters of your account and plays them as bots: **Log in** brings one online as a bot of yours, and it joins your group; **Summon** brings it next to you, since it logs in where it logged out; **Log out** sends it home. The list comes from `.playerbots bot list`, and the buttons type `.playerbots bot add` / `remove`, as you could yourself.
+The **Alts** button on the bar (or **Bots > My alts**, or `/sbl alts`) lists the other characters of your account, logged-in ones first, each with its level, class, specialization and an XP bar; hover a name for its gold and XP. **Log in** brings one online as a bot of yours, and it joins your group; **Summon** brings it next to you, since it logs in where it logged out; **Sheet** opens its bot sheet; **Log out** sends it home. The list comes from `.playerbots bot list`, and the buttons type `.playerbots bot add` / `remove`, as you could yourself.
+
+- **Teams**: save your group, or the logged-in alts, under a name, then log the whole team in or out in one click (one a second; a sixth member turns the party into a raid).
+- **Accounts**: link another account with its security key (`.playerbots account setKey` on that account, then Link an account here) and log all its characters in as bots.
 
 With `CoA.CollectionsForBots = 1` on the server, alts keep their look: wardrobe, outfits, vanity and mounts.
+
+## Bot sheet
+
+Opened from **Sheet** in My alts, a bot's role icon menu, or `/sbl bot <name>`:
+
+- **Gear**: the bot in 3D (drag to turn it), every piece with its tooltip, the average item level, Best gear; right-click a piece to take it off.
+- **Bags**: click an item for Give it to me (a trade opens with it), Equip, Use, Sell, Put in the bank; drop an item from your bags on the sheet to give it; Sell grey items; the **Bank** view when the bot stands by a banker. Trading with one of your bots opens its sheet on its bags (`/sbl sheettrade off` to stop).
+- **Quests**: its quest log with tooltips; right-click a quest to abandon it.
+- **Talents**: the talents and paid abilities it learnt, points spent and left; for your alts, **Choose talents** adds ranks with + and -, follows the prerequisites, and learns them on **Save**. Random bots keep their community build (Reset to the build).
+- **Mounts**: every mount it knows; click one to make it its favourite, ground or flying.
+- **Info**: its stats, and Follow, Stay, Summon, Open trade, Log out.
+
+Mounts and talents need CoA Bots 2.1 on the server. Everything goes through chat commands a player can send to their own bots (`c`, `t`, `e`, `ue`, `bank`, `quests all`, `drop`, `talents ?`, `talents options`, `talents learn`, `mount ?`, `mount <spell>`); `/sbl sheetdebug` shows them and the answers.
 
 ## On your party frames
 
@@ -58,6 +74,7 @@ At login the server names its CoA Bots version. SquidBots Lite carries the same 
 /sbl lang fr | en    French or English
 /sbl channel <name>  ask in a different channel (a name, not a number)
 /sbl alts            your other characters, played as bots
+/sbl bot <name>      the bot sheet of a bot of your group (or of your target)
 /sbl roles on | off  ask bots of unknown role for it
 /sbl gm              GM mode
 /sbl reset           put the bar back in the middle
@@ -72,6 +89,13 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**2.1**
+- **Alts** button on the bar; My alts shows each alt's level, class, specialization and XP, logged-in alts first, and scrolls for a raid of alts.
+- **Teams** of alts (log a saved group in or out at once) and linked **Accounts**.
+- **Bot sheet**: gear with the bot in 3D and its item level, bags and bank (give, equip, use, sell, drag and drop), quests (abandon), talents (see them, and choose your alts' talents rank by rank, prerequisites followed), favourite mount, stats.
+- Menus close a second after the mouse leaves them.
+- Thanks to Maky for the ideas.
 
 **2.0**
 - Same number as CoA Bots 2.0: a 1.9.x addon on a 2.0 server says a new version is out.
