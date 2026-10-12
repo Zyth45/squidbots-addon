@@ -32,8 +32,8 @@ local STRINGS = {
 		TALENTS = "Talents", T_SPENT = "Talent points spent: %d", T_AUTOPICK = "Reset to the build",
 		T_AUTOPICK_ASK = "%s takes again the talents of its specialization's build for its level?",
 		T_NONE = "No talent learnt yet.", T_NO_CMD = "No answer: this server's CoA Bots has no talent list yet (2.1 or later, CoA classes).",
-		T_HINT = "The talents this bot learnt, by specialization tree. Reset to the build: the community build of its spec.",
-		T_REQUIRES = "Requires: %s", T_CAN = "Can be learnt now.", T_CANNOT = "Not yet: level, a prerequisite talent or points missing. Queued after its prerequisite, Save takes it in turn.",
+		T_HINT = "The talents and paid abilities this bot learnt, by tree. An alt's talents are yours to choose; a random bot keeps the community build of its spec (Reset to the build).",
+		T_ABILITY = "ability", T_REQUIRES = "Requires: %s", T_CAN = "Can be learnt now.", T_CANNOT = "Not yet: level, a prerequisite talent or points missing. Queued after its prerequisite, Save takes it in turn.",
 		T_CHOOSE = "Choose talents", T_SAVE = "Save (%d)", T_CANCEL = "Cancel", T_BACK = "Learnt talents",
 		T_POINTS = "Spec: %d spent, %d left  -  Class: %d spent, %d left",
 		T_LEFT = "Left after your choices: spec %d, class %d", T_CLASS = "class", T_SPEC = "spec",
@@ -69,8 +69,8 @@ local STRINGS = {
 		TALENTS = "Talents", T_SPENT = "Points de talent dépensés : %d", T_AUTOPICK = "Remettre le build",
 		T_AUTOPICK_ASK = "%s reprend les talents du build de sa spé pour son niveau ?",
 		T_NONE = "Aucun talent appris pour l'instant.", T_NO_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la liste des talents (2.1 ou plus, classes CoA).",
-		T_HINT = "Les talents appris par ce bot, par arbre de spé. Remettre le build : le build de la communauté pour sa spé.",
-		T_REQUIRES = "Prérequis : %s", T_CAN = "Peut être appris maintenant.", T_CANNOT = "Pas encore : il manque le niveau, un talent prérequis ou des points. Ajouté après son prérequis, Sauvegarder le prend à son tour.",
+		T_HINT = "Les talents et capacités achetées de ce bot, par arbre. Ceux d'un alt sont à vous de choisir ; un bot aléatoire garde le build de la communauté pour sa spé (Remettre le build).",
+		T_ABILITY = "capacité", T_REQUIRES = "Prérequis : %s", T_CAN = "Peut être appris maintenant.", T_CANNOT = "Pas encore : il manque le niveau, un talent prérequis ou des points. Ajouté après son prérequis, Sauvegarder le prend à son tour.",
 		T_CHOOSE = "Choisir les talents", T_SAVE = "Sauvegarder (%d)", T_CANCEL = "Annuler", T_BACK = "Talents appris",
 		T_POINTS = "Spé : %d dépensés, %d restants  -  Classe : %d dépensés, %d restants",
 		T_LEFT = "Restants après vos choix : spé %d, classe %d", T_CLASS = "classe", T_SPEC = "spé",
@@ -216,7 +216,8 @@ local function ParseTalents(lines)
 		if id then
 			local rank, max = line:match("rank (%d+)/(%d+)")
 			table.insert(list, { id = id, name = line:match("|h%[(.-)%]|h") or "?", rank = tonumber(rank) or 1,
-				max = tonumber(max) or 1, tree = line:match("%(tree (.-)%)") or "" })
+				max = tonumber(max) or 1, tree = line:match("%(tree (.-)%)") or "",
+				ability = line:find("%d ability") ~= nil })
 		end
 		spent = tonumber(line:match("^Talent points: (%d+) spent")) or spent
 		local ss, sl = line:match("^Talent points: (%d+) spent, (%d+) left")
@@ -1007,7 +1008,9 @@ RenderTalents = function(page)
 	page.save:SetText(string.format(T("T_SAVE"), PendingCount()))
 	page.cancel:SetText(T("T_CANCEL"))
 	page.back:SetText(T("T_BACK"))
-	for _, b in ipairs({ page.choose, page.autopick }) do if choosing then b:Hide() else b:Show() end end
+	local isAlt = current and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[current]
+	if choosing or not isAlt then page.choose:Hide() else page.choose:Show() end
+	if choosing or isAlt then page.autopick:Hide() else page.autopick:Show() end
 	for _, b in ipairs({ page.save, page.cancel, page.back }) do if choosing then b:Show() else b:Hide() end end
 	if PendingCount() > 0 then page.save:Enable(); page.cancel:Enable() else page.save:Disable(); page.cancel:Disable() end
 	page.hint:SetText(T(choosing and "T_CHOOSE_HINT" or "T_HINT"))
@@ -1034,7 +1037,7 @@ RenderTalents = function(page)
 			else
 				row.talent = item
 				row.rank:SetText((item.rank >= item.max and "|cff40ff40" or "|cffffd100") .. item.rank .. "/" .. item.max .. "|r")
-				row.tree:SetText(item.tree)
+				row.tree:SetText(item.ability and (item.tree ~= "" and (item.tree .. ", " .. T("T_ABILITY")) or T("T_ABILITY")) or item.tree)
 				row.plus:Hide(); row.minus:Hide()
 			end
 			row:Show()
