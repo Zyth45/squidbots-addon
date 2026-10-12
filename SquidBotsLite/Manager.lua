@@ -1165,7 +1165,8 @@ local function RenderGear(page)
 			page.model:SetUnit(unit)
 			page.model.name, page.model.facing = current, 0
 			page.model:SetFacing(0)
-			page.model:SetPosition(-0.25, 0, -0.05)
+			-- A step further back and a little lower: a tall headdress or helm stays inside the frame.
+			page.model:SetPosition(-0.6, 0, -0.12)
 		end
 		page.model:Show()
 	else
