@@ -1,6 +1,6 @@
 -- SquidBots Lite, bot sheet (beta): the gear, bags, quests and stats of one bot of the group, for players who
 -- keep a long-term party of alts. Everything goes through chat commands a player can whisper to their own
--- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t"); the gear is read by the client's own inspect.
+-- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t", "mount"); the gear is read by the client's own inspect.
 
 local STRINGS = {
 	en = {
@@ -12,7 +12,11 @@ local STRINGS = {
 		GIVE = "Give it to me", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot at a vendor)", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
-		MOUNT_NOTE = "Preferred mount: not possible yet, the server has no command for it.",
+		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
+		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
+		MOUNT_HINT = "Click a mount: your bot rides it from now on. Automatic choice: the bot picks again.",
+		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
+		NO_MOUNTS = "This bot knows no mount.",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
 		NOT_A_MEMBER = "%s is not in your group.",
 	},
@@ -25,7 +29,11 @@ local STRINGS = {
 		GIVE = "Me le donner", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot chez un marchand)", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
-		MOUNT_NOTE = "Monture préférée : pas encore possible, le serveur n'a pas de commande pour ça.",
+		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
+		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
+		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Choix automatique : le bot choisit à nouveau.",
+		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
+		NO_MOUNTS = "Ce bot ne connaît aucune monture.",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
 	},
@@ -40,7 +48,7 @@ local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interfac
 -- The bot answers line by line; a listing is over once it stays quiet this long. The server drops a line it
 -- already sent in the last 2 s (AiPlayerbot.RepeatDelay), so a new request waits that long.
 local QUIET, GIVE_UP, REPEAT_DELAY = 1.2, 6, 2.2
-local BAG_COLS, BAG_ROWS, QUEST_ROWS = 8, 6, 14
+local BAG_COLS, BAG_ROWS, QUEST_ROWS, MOUNT_ROWS = 8, 6, 14, 11
 -- Inventory slot ids of the 3.3.5 client, left column, right column, then weapons.
 local GEAR_LEFT = { 1, 2, 3, 15, 5, 4, 19, 9 }
 local GEAR_RIGHT = { 10, 6, 7, 8, 11, 12, 13, 14 }
@@ -48,7 +56,8 @@ local GEAR_BOTTOM = { 16, 17, 18 }
 
 local sheet, current, tab
 local capture, hideFrom, lastAsked = nil, {}, {}
-local bags, quests, stats = {}, {}, {}
+local bags, quests, stats, mounts = {}, {}, {}, {}
+local mountOffset = 0
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -110,6 +119,19 @@ local function ParseQuests(lines)
 	return list
 end
 
+-- "Mount: |cffffffff|Hspell:ID|h[Name]|h|r ground (preferred)", then "Mounts: N" (CoA Bots 2.1).
+local function ParseMounts(lines)
+	local list = {}
+	for _, line in ipairs(lines) do
+		local id = tonumber(line:match("^Mount: .-|Hspell:(%d+)|h"))
+		if id then
+			table.insert(list, { id = id, name = line:match("|h%[(.-)%]|h") or "?",
+				kind = line:match("|h|r (%a+)") or line:match("%] (%a+)"), preferred = line:find("(preferred)", 1, true) ~= nil })
+		end
+	end
+	return list
+end
+
 local function Finish()
 	local done = capture
 	capture = nil
@@ -119,11 +141,14 @@ local function Finish()
 		bags = ParseBags(done.lines)
 	elseif done.kind == "quests" then
 		quests = ParseQuests(done.lines)
+	elseif done.kind == "mounts" then
+		mounts = ParseMounts(done.lines)
+		mountOffset = 0
 	else
 		stats = done.lines
 	end
 	if #done.lines == 0 then
-		sheet.status:SetText(T("NO_REPLY"))
+		sheet.status:SetText(done.kind == "mounts" and T("NO_MOUNT_CMD") or T("NO_REPLY"))
 	else
 		sheet.status:SetText("")
 	end
@@ -144,6 +169,7 @@ watch:SetScript("OnEvent", function(_, event, message, sender)
 				table.insert(capture.lines, message)
 			end
 			capture.last = GetTime()
+			if capture.kind == "mounts" and message:find("^Mounts: %d+") then Finish() end
 		end
 	elseif sheet and sheet:IsShown() and tab == "gear" then
 		Render()
@@ -202,7 +228,7 @@ local function AfterChange()
 		if wait < REPEAT_DELAY then return end
 		self:SetScript("OnUpdate", nil)
 		if current == name and sheet:IsShown() then
-			if tab == "bags" then Ask("bags", "c") elseif tab == "gear" then Render() end
+			if tab == "bags" then Ask("bags", "c") elseif tab == "mounts" then Ask("mounts", "mount ?") elseif tab == "gear" then Render() end
 		end
 	end)
 end
@@ -349,10 +375,6 @@ local function BuildInfo(page)
 	page.text:SetPoint("TOPLEFT", 14, 0)
 	page.text:SetWidth(360)
 	page.text:SetJustifyH("LEFT")
-	page.mount = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.mount:SetPoint("TOPLEFT", 14, -240)
-	page.mount:SetWidth(360)
-	page.mount:SetJustifyH("LEFT")
 	page.buttons = {}
 	local defs = {
 		{ "FOLLOW", function() Whisper("follow") end },
@@ -372,8 +394,90 @@ local function BuildInfo(page)
 	end
 end
 
+local RenderMounts
+
+local function BuildMounts(page)
+	page.rows = {}
+	for i = 1, MOUNT_ROWS do
+		local row = CreateFrame("Button", nil, page)
+		row:SetWidth(370)
+		row:SetHeight(22)
+		row:SetPoint("TOPLEFT", 10, -(i - 1) * 24)
+		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(20)
+		row.icon:SetHeight(20)
+		row.icon:SetPoint("LEFT", 2, 0)
+		row.check = row:CreateTexture(nil, "OVERLAY")
+		row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+		row.check:SetWidth(18)
+		row.check:SetHeight(18)
+		row.check:SetPoint("RIGHT", -4, 0)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		row.name:SetPoint("LEFT", 28, 0)
+		row.name:SetWidth(220)
+		row.name:SetJustifyH("LEFT")
+		row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		row.kind:SetPoint("LEFT", 252, 0)
+		row:SetScript("OnEnter", function(self)
+			if self.mount then
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetHyperlink("spell:" .. self.mount.id)
+				GameTooltip:Show()
+			end
+		end)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		row:SetScript("OnClick", function(self)
+			if self.mount then Whisper("mount " .. self.mount.id); AfterChange() end
+		end)
+		page.rows[i] = row
+	end
+	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
+	page.up:SetPoint("TOPRIGHT", -6, 0)
+	page.up:SetScript("OnClick", function() mountOffset = math.max(0, mountOffset - MOUNT_ROWS); RenderMounts(page) end)
+	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
+	page.down:SetPoint("TOPRIGHT", -6, -(MOUNT_ROWS * 24) + 16)
+	page.down:SetScript("OnClick", function()
+		if mountOffset + MOUNT_ROWS < #mounts then mountOffset = mountOffset + MOUNT_ROWS end
+		RenderMounts(page)
+	end)
+	page.auto = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.auto:SetWidth(150)
+	page.auto:SetHeight(22)
+	page.auto:SetPoint("TOPLEFT", 10, -(MOUNT_ROWS * 24) - 6)
+	page.auto:SetScript("OnClick", function() Whisper("mount clear"); AfterChange() end)
+	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.hint:SetPoint("TOPLEFT", page.auto, "TOPRIGHT", 8, 2)
+	page.hint:SetWidth(200)
+	page.hint:SetJustifyH("LEFT")
+	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	page.note:SetPoint("TOP", 0, -120)
+	page.note:SetWidth(340)
+end
+
+RenderMounts = function(page)
+	page.note:SetText(#mounts == 0 and capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
+	page.auto:SetText(T("AUTO_MOUNT"))
+	page.hint:SetText(T("MOUNT_HINT"))
+	local kinds = { ground = T("GROUND"), flying = T("FLYING"), both = T("BOTH") }
+	for i, row in ipairs(page.rows) do
+		local m = mounts[mountOffset + i]
+		row.mount = m
+		if m then
+			row.icon:SetTexture(select(3, GetSpellInfo(m.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			row.name:SetText(m.name)
+			row.kind:SetText((kinds[m.kind] or m.kind or "") .. (m.preferred and ("  |cffffd100" .. T("PREFERRED") .. "|r") or ""))
+			if m.preferred then row.check:Show() else row.check:Hide() end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	if #mounts > MOUNT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
+end
+
 local TABS = { { "gear", "GEAR", BuildGear }, { "bags", "BAGS", BuildBags }, { "quests", "QUESTS", BuildQuests },
-	{ "info", "INFO", BuildInfo } }
+	{ "mounts", "MOUNTS", BuildMounts }, { "info", "INFO", BuildInfo } }
 
 local function RenderGear(page)
 	local unit = current and UnitOf(current)
@@ -418,7 +522,6 @@ end
 
 local function RenderInfo(page)
 	page.text:SetText(table.concat(stats, "\n"))
-	page.mount:SetText(T("MOUNT_NOTE"))
 	for _, b in ipairs(page.buttons) do b:SetText(T(b.label)) end
 end
 
@@ -435,6 +538,7 @@ Render = function()
 	if tab == "gear" then RenderGear(pages.gear)
 	elseif tab == "bags" then RenderBags(pages.bags)
 	elseif tab == "quests" then RenderQuests(pages.quests)
+	elseif tab == "mounts" then RenderMounts(pages.mounts)
 	else RenderInfo(pages.info) end
 end
 
@@ -447,6 +551,8 @@ local function Load()
 		Ask("bags", "c")
 	elseif tab == "quests" then
 		Ask("quests", "quests all")
+	elseif tab == "mounts" then
+		Ask("mounts", "mount ?")
 	else
 		Ask("stats", "stats")
 	end
@@ -475,9 +581,9 @@ local function Build()
 	sheet.tabs = {}
 	for i, def in ipairs(TABS) do
 		local b = CreateFrame("Button", nil, sheet, "UIPanelButtonTemplate")
-		b:SetWidth(90)
+		b:SetWidth(74)
 		b:SetHeight(22)
-		b:SetPoint("TOPLEFT", 16 + (i - 1) * 96, -36)
+		b:SetPoint("TOPLEFT", 16 + (i - 1) * 78, -36)
 		b:SetScript("OnClick", function() tab = def[1]; Load() end)
 		sheet.tabs[def[1]] = b
 		local page = CreateFrame("Frame", nil, sheet)
@@ -503,7 +609,7 @@ function SquidBotsLite_OpenSheet(name)
 		if not name or not UnitOf(name) then Print(T("USAGE")) return end
 	end
 	if not sheet then Build() end
-	if current ~= name then bags, quests, stats = {}, {}, {} end
+	if current ~= name then bags, quests, stats, mounts = {}, {}, {}, {} end
 	current = name
 	tab = tab or "gear"
 	sheet:Show()
