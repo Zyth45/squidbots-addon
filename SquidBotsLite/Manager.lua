@@ -16,7 +16,7 @@ local STRINGS = {
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
-		MOUNT_HINT = "Click a mount: your bot rides it from now on. Automatic choice: the bot picks again.",
+		MOUNT_HINT = "Click a mount: your bot rides it from now on. One ground and one flying favourite; a ground-and-flying mount is both. Automatic choice: the bot picks again.",
 		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
 		NO_MOUNTS = "This bot knows no mount.",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
@@ -53,7 +53,7 @@ local STRINGS = {
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
-		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Choix automatique : le bot choisit à nouveau.",
+		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Une préférée au sol, une en vol ; une monture sol et vol compte pour les deux. Choix automatique : le bot choisit à nouveau.",
 		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
 		NO_MOUNTS = "Ce bot ne connaît aucune monture.",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
@@ -273,7 +273,8 @@ local function Finish()
 		quests = ParseQuests(done.lines)
 	elseif done.kind == "mounts" then
 		mounts = ParseMounts(done.lines)
-		mountOffset = 0
+		-- Same page after a choice (the list comes back in the same order); back to the top for another bot.
+		mountOffset = math.min(mountOffset, math.max(0, #mounts - MOUNT_ROWS))
 	elseif done.kind == "bank" then
 		bank = ParseBags(done.lines)
 	elseif done.kind == "talents" then
@@ -1097,6 +1098,11 @@ local function BuildMounts(page)
 		row:SetScript("OnClick", function(self)
 			if self.mount then Whisper("mount " .. self.mount.id); AfterChange() end
 		end)
+		row:EnableMouseWheel(true)
+		row:SetScript("OnMouseWheel", function(_, delta)
+			mountOffset = math.max(0, math.min(math.max(0, #mounts - MOUNT_ROWS), mountOffset - delta * 3))
+			RenderMounts(page)
+		end)
 		page.rows[i] = row
 	end
 	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
@@ -1115,7 +1121,7 @@ local function BuildMounts(page)
 	page.auto:SetScript("OnClick", function() Whisper("mount clear"); AfterChange() end)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	page.hint:SetPoint("TOPLEFT", page.auto, "TOPRIGHT", 8, 2)
-	page.hint:SetWidth(200)
+	page.hint:SetWidth(270)
 	page.hint:SetJustifyH("LEFT")
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
