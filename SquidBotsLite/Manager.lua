@@ -529,7 +529,8 @@ local function BuildGear(page)
 	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 162 + (i - 1) * 44, -330) end
 	-- The bot itself, as on the game's character sheet; drag to turn it. Needs the bot in the group and seen.
 	page.model = CreateFrame("PlayerModel", nil, page)
-	page.model:SetPoint("TOPLEFT", 56, -44)
+	-- Its frame starts right under the header line: room above a tall headdress or a helm's horns.
+	page.model:SetPoint("TOPLEFT", 56, -6)
 	page.model:SetPoint("BOTTOMRIGHT", page, "TOPRIGHT", -62, -272)
 	page.model:EnableMouse(true)
 	page.model.facing = 0
@@ -1175,7 +1176,7 @@ local function RenderGear(page)
 			page.model.name, page.model.facing = current, 0
 			page.model:SetFacing(0)
 			-- A step further back and a little lower: a tall headdress or helm stays inside the frame.
-			page.model:SetPosition(-0.6, 0, -0.07)
+			page.model:SetPosition(-0.6, 0, -0.16)
 		end
 		page.model:Show()
 	else
