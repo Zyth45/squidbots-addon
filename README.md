@@ -2,13 +2,13 @@
 
 A World of Warcraft 3.3.5 addon for [CoA Bots](https://github.com/Zyth45/mod-playerbots): your bots, without a window in the way.
 
-No window. A thin bar of buttons, the bots' roles drawn straight onto the party frames you already have, and offers arriving as small toasts.
+A thin bar of buttons, the bots' roles drawn straight onto the party frames you already have, and offers arriving as small toasts. And for those who play their own alts as bots: **My alts** and a **bot sheet** for every one of them (gear in 3D, bags, quests, talents, favourite mount).
 
 ![The SquidBots Lite bar in game](images/bar.png)
 
 ## The bar
 
-Six orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
+The **Alts** button opens [My alts](#my-alts); **Bots** asks for bots. Six orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
 
 The Active / Passive button shows where the bots stand: a charge arrow and *Active* while they fight, **Zzz** and *Passive* while they hold back. Passive also stops the tank pulling on its own; any order wakes them all.
 
@@ -42,9 +42,13 @@ The **Alts** button on the bar (or **Bots > My alts**, or `/sbl alts`) lists the
 
 With `CoA.CollectionsForBots = 1` on the server, alts keep their look: wardrobe, outfits, vanity and mounts.
 
+![My alts](images/my-alts.png)
+
 ## Bot sheet
 
 Opened from **Sheet** in My alts, a bot's role icon menu, or `/sbl bot <name>`:
+
+![The bot sheet: gear, with the bot in 3D](images/bot-sheet-gear.png)
 
 - **Gear**: the bot in 3D (drag to turn it), every piece with its tooltip, the average item level, Best gear; right-click a piece to take it off.
 - **Bags**: click an item for Give it to me (a trade opens with it), Equip, Use, Sell, Put in the bank; drop an item from your bags on the sheet to give it; Sell grey items; the **Bank** view when the bot stands by a banker. Trading with one of your bots opens its sheet on its bags (`/sbl sheettrade off` to stop).
@@ -52,6 +56,8 @@ Opened from **Sheet** in My alts, a bot's role icon menu, or `/sbl bot <name>`:
 - **Talents**: the talents and paid abilities it learnt, points spent and left; for your alts, **Choose talents** adds ranks with + and -, follows the prerequisites, and learns them on **Save**. Random bots keep their community build (Reset to the build).
 - **Mounts**: every mount it knows; click one to make it its favourite, ground or flying.
 - **Info**: its stats, and Follow, Stay, Summon, Open trade, Log out.
+
+<img src="images/bot-sheet-talents.png" alt="Talents" height="300"> <img src="images/bot-sheet-mounts.png" alt="Mounts" height="300">
 
 Mounts and talents need CoA Bots 2.1 on the server. Everything goes through chat commands a player can send to their own bots (`c`, `t`, `e`, `ue`, `bank`, `quests all`, `drop`, `talents ?`, `talents options`, `talents learn`, `mount ?`, `mount <spell>`); `/sbl sheetdebug` shows them and the answers.
 
