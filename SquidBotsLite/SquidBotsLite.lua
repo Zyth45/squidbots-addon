@@ -1369,6 +1369,8 @@ end
 local function NoteGroup()
 	NoteAlt("player")
 	for i = 1, 4 do NoteAlt("party" .. i) end
+	-- Five alts or more make a raid: party1-4 then hold only the player's own subgroup.
+	for i = 1, GetNumRaidMembers() do NoteAlt("raid" .. i) end
 end
 
 local function AltLine(name)
