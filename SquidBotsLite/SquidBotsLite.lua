@@ -24,6 +24,8 @@ local STRINGS = {
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
+		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level unknown: log it in once",
+		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
 		ALTS_HELP = "Your other characters, played as bots: a logged-in alt joins your group. They keep their look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
@@ -76,6 +78,8 @@ local STRINGS = {
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
+		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau inconnu : connectez-le une fois",
+		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
 		ALTS_HELP = "Vos autres personnages, joués en bots : un alt connecté rejoint votre groupe. Ils gardent leur apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
@@ -1259,7 +1263,11 @@ end
 -- ---------------------------------------------------------------------------
 -- My alts: the player's other characters, logged in as bots
 -- ---------------------------------------------------------------------------
-local ALT_ROWS = 12
+local ALT_ROWS = 10
+local ALT_ROW_H = 36
+-- "Bot list" names the alts only; their level and class are noted whenever they are seen (played, or in the
+-- group) and kept account-wide in SquidBotsLiteDB.altInfo.
+local SHEET_ICON = "Interface\\Icons\\Achievement_Character_Human_Male"
 local ROSTER_WAIT, AFTER_TOGGLE = 5, 3   -- seconds: answer to "bot list", new list after a log in / out
 local WOTLK_CLASSES = { Druid = true, Hunter = true, Mage = true, Paladin = true, Priest = true, Rogue = true,
 	Shaman = true, Warlock = true, Warrior = true, DeathKnight = true }
@@ -1303,13 +1311,39 @@ local function ParseRoster(text)
 	return list
 end
 
+local function NoteAlt(unit)
+	local name = UnitName(unit)
+	if not name or name == UNKNOWNOBJECT then return end
+	local level = UnitLevel(unit)
+	if not level or level <= 0 then return end
+	local class, token = UnitClass(unit)
+	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
+	SquidBotsLiteDB.altInfo[name] = { level = level, class = class, token = token }
+end
+
+local function NoteGroup()
+	NoteAlt("player")
+	for i = 1, 4 do NoteAlt("party" .. i) end
+end
+
+local function AltLine(name)
+	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
+	if not info then return "|cff808080" .. L.ALTS_UNKNOWN .. "|r" end
+	local color = info.token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[info.token]
+	local class = info.class or ""
+	if color then class = string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, class) end
+	return string.format(L.ALTS_LEVEL, info.level, class)
+end
+
 local function RefreshAlts()
 	if not altsFrame then return end
+	NoteGroup()
 	for i, row in ipairs(altRows) do
 		local alt = roster[i]
 		row.alt = alt
 		if alt then
 			row.name:SetText(alt.name)
+			row.info:SetText(AltLine(alt.name))
 			row.dot:SetVertexColor(alt.online and 0.2 or 0.45, alt.online and 1 or 0.45, alt.online and 0.2 or 0.45)
 			row.toggle:SetText(alt.online and L.ALTS_REMOVE or L.ALTS_ADD)
 			row.toggle:Enable()
@@ -1336,14 +1370,14 @@ local function AltsTexts()
 	altsFrame.help:SetText(L.ALTS_HELP)
 	for _, row in ipairs(altRows) do
 		row.summon:SetText(L.ALTS_SUMMON)
-		row.sheet:SetText(L.ALTS_SHEET)
+		row.sheet.label:SetText(L.ALTS_SHEET)
 	end
 end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
 	altsFrame:SetWidth(372)
-	altsFrame:SetHeight(120 + ALT_ROWS * 22)
+	altsFrame:SetHeight(120 + ALT_ROWS * ALT_ROW_H)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
 	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
@@ -1372,17 +1406,21 @@ local function BuildAlts()
 	for i = 1, ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
 		row:SetWidth(340)
-		row:SetHeight(20)
-		row:SetPoint("TOPLEFT", 16, -62 - (i - 1) * 22)
+		row:SetHeight(ALT_ROW_H - 2)
+		row:SetPoint("TOPLEFT", 16, -62 - (i - 1) * ALT_ROW_H)
 		row.dot = row:CreateTexture(nil, "ARTWORK")
 		row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
 		row.dot:SetWidth(8)
 		row.dot:SetHeight(8)
 		row.dot:SetPoint("LEFT", 2, 0)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		row.name:SetPoint("LEFT", 16, 0)
+		row.name:SetPoint("TOPLEFT", 16, -3)
 		row.name:SetWidth(110)
 		row.name:SetJustifyH("LEFT")
+		row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.info:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
+		row.info:SetWidth(112)
+		row.info:SetJustifyH("LEFT")
 		row.toggle = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
 		row.toggle:SetWidth(76)
 		row.toggle:SetHeight(18)
@@ -1403,18 +1441,50 @@ local function BuildAlts()
 			local alt = self:GetParent().alt
 			if alt then Whisper(alt.name, "summon") end
 		end)
-		row.sheet = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-		row.sheet:SetWidth(64)
-		row.sheet:SetHeight(18)
-		row.sheet:SetPoint("LEFT", row.summon, "RIGHT", 4, 0)
+		row.sheet = CreateFrame("Button", nil, row)
+		row.sheet:SetWidth(30)
+		row.sheet:SetHeight(30)
+		row.sheet:SetPoint("LEFT", row.summon, "RIGHT", 10, 0)
+		row.sheet.icon = row.sheet:CreateTexture(nil, "ARTWORK")
+		row.sheet.icon:SetAllPoints()
+		row.sheet.icon:SetTexture(SHEET_ICON)
+		row.sheet.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		row.sheet:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+		-- A gold ring that breathes until the player has opened a sheet once: the feature is new.
+		row.sheet.glow = row.sheet:CreateTexture(nil, "OVERLAY")
+		row.sheet.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		row.sheet.glow:SetBlendMode("ADD")
+		row.sheet.glow:SetWidth(56)
+		row.sheet.glow:SetHeight(56)
+		row.sheet.glow:SetPoint("CENTER")
+		row.sheet.glow:SetVertexColor(1, 0.82, 0)
+		row.sheet:SetScript("OnUpdate", function(self)
+			if SquidBotsLiteDB.sheetOpened then self.glow:Hide() return end
+			self.glow:SetAlpha(0.45 + 0.45 * math.sin(GetTime() * 4))
+		end)
+		row.sheet.label = row.sheet:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		row.sheet.label:SetPoint("LEFT", row.sheet, "RIGHT", 6, 0)
+		row.sheet:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(L.ALTS_SHEET)
+			GameTooltip:AddLine(L.TIP_SHEET, 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		row.sheet:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		row.sheet:SetScript("OnClick", function(self)
 			local alt = self:GetParent().alt
-			if alt and SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(alt.name) end
+			if alt and SquidBotsLite_OpenSheet then
+				SquidBotsLiteDB.sheetOpened = true
+				SquidBotsLite_OpenSheet(alt.name)
+			end
 		end)
 		-- A logged-in alt's name opens its bot sheet (Manager.lua, beta).
 		row:EnableMouse(true)
 		row:SetScript("OnMouseUp", function(self)
-			if self.alt and self.alt.online and SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(self.alt.name) end
+			if self.alt and self.alt.online and SquidBotsLite_OpenSheet then
+				SquidBotsLiteDB.sheetOpened = true
+				SquidBotsLite_OpenSheet(self.alt.name)
+			end
 		end)
 		row:Hide()
 		altRows[i] = row
