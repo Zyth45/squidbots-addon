@@ -827,11 +827,17 @@ local function Build()
 	sheet:SetBackdropColor(0.04, 0.04, 0.05, 1)
 	sheet:SetFrameStrata("DIALOG")
 	sheet:SetMovable(true)
+	sheet:SetToplevel(true)
+	-- Smaller on screen than its layout: a sheet sits next to My alts without hiding the game.
+	sheet:SetScale(0.85)
 	sheet:EnableMouse(true)
 	sheet:SetClampedToScreen(true)
 	sheet:RegisterForDrag("LeftButton")
 	sheet:SetScript("OnDragStart", sheet.StartMoving)
-	sheet:SetScript("OnDragStop", sheet.StopMovingOrSizing)
+	sheet:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		self.moved = true
+	end)
 	table.insert(UISpecialFrames, "SquidBotsLiteSheet")
 	sheet.title = sheet:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	sheet.title:SetPoint("TOP", 0, -14)
@@ -877,7 +883,17 @@ function SquidBotsLite_OpenSheet(name)
 	end
 	current = name
 	tab = tab or "gear"
+	local alts = _G.SquidBotsLiteAlts
+	if not sheet.moved then
+		sheet:ClearAllPoints()
+		if alts and alts:IsShown() then
+			sheet:SetPoint("TOPLEFT", alts, "TOPRIGHT", 4, 0)
+		else
+			sheet:SetPoint("CENTER", 120, 0)
+		end
+	end
 	sheet:Show()
+	sheet:Raise()
 	if not UnitOf(name) and tab == "gear" then tab = "bags" end
 	Load()
 	if not sheet.gold then Ask("stats", "stats") end

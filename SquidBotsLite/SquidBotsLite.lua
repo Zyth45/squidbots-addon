@@ -24,7 +24,7 @@ local STRINGS = {
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
-		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level unknown: log it in once",
+		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?",
 		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
 		TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
 		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
@@ -87,7 +87,7 @@ local STRINGS = {
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
-		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau inconnu : connectez-le une fois",
+		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?",
 		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
 		TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
 		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
@@ -1390,7 +1390,7 @@ local function AltsTexts()
 	altsFrame.help:SetText(L.ALTS_HELP)
 	for _, row in ipairs(altRows) do
 		row.summon:SetText(L.ALTS_SUMMON)
-		row.sheet.label:SetText(L.ALTS_SHEET)
+		row.sheet:SetText("   " .. L.ALTS_SHEET)
 	end
 end
 
@@ -1567,6 +1567,7 @@ local function BuildAlts()
 	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
 	altsFrame:SetFrameStrata("DIALOG")
 	altsFrame:SetMovable(true)
+	altsFrame:SetToplevel(true)
 	altsFrame:EnableMouse(true)
 	altsFrame:SetClampedToScreen(true)
 	altsFrame:RegisterForDrag("LeftButton")
@@ -1636,29 +1637,27 @@ local function BuildAlts()
 			local alt = self:GetParent().alt
 			if alt then Whisper(alt.name, "summon") end
 		end)
-		row.sheet = CreateFrame("Button", nil, row)
-		row.sheet:SetWidth(30)
-		row.sheet:SetHeight(30)
-		row.sheet:SetPoint("LEFT", row.summon, "RIGHT", 10, 0)
-		row.sheet.icon = row.sheet:CreateTexture(nil, "ARTWORK")
-		row.sheet.icon:SetAllPoints()
+		row.sheet = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.sheet:SetWidth(76)
+		row.sheet:SetHeight(18)
+		row.sheet:SetPoint("LEFT", row.summon, "RIGHT", 4, 0)
+		row.sheet.icon = row.sheet:CreateTexture(nil, "OVERLAY")
+		row.sheet.icon:SetWidth(14)
+		row.sheet.icon:SetHeight(14)
+		row.sheet.icon:SetPoint("LEFT", 6, 0)
 		row.sheet.icon:SetTexture(SHEET_ICON)
 		row.sheet.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-		row.sheet:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-		-- A gold ring that breathes until the player has opened a sheet once: the feature is new.
-		row.sheet.glow = row.sheet:CreateTexture(nil, "OVERLAY")
-		row.sheet.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		-- A gold glow that breathes until the player has opened a sheet once: the feature is new.
+		row.sheet.glow = row.sheet:CreateTexture(nil, "BACKGROUND")
+		row.sheet.glow:SetTexture("Interface\\Buttons\\UI-Panel-Button-Glow")
+		row.sheet.glow:SetTexCoord(0, 0.75, 0, 0.609375)
 		row.sheet.glow:SetBlendMode("ADD")
-		row.sheet.glow:SetWidth(56)
-		row.sheet.glow:SetHeight(56)
-		row.sheet.glow:SetPoint("CENTER")
-		row.sheet.glow:SetVertexColor(1, 0.82, 0)
+		row.sheet.glow:SetPoint("TOPLEFT", -10, 8)
+		row.sheet.glow:SetPoint("BOTTOMRIGHT", 10, -8)
 		row.sheet:SetScript("OnUpdate", function(self)
 			if SquidBotsLiteDB.sheetOpened then self.glow:Hide() return end
-			self.glow:SetAlpha(0.45 + 0.45 * math.sin(GetTime() * 4))
+			self.glow:SetAlpha(0.35 + 0.35 * math.sin(GetTime() * 4))
 		end)
-		row.sheet.label = row.sheet:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		row.sheet.label:SetPoint("LEFT", row.sheet, "RIGHT", 6, 0)
 		row.sheet:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetText(L.ALTS_SHEET)
