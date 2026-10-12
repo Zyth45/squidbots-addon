@@ -1376,9 +1376,10 @@ function SquidBotsLite_NoteStats(name, message)
 	local plain = (message or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 	SquidBotsLiteDB.altInfo = SquidBotsLiteDB.altInfo or {}
 	local info = SquidBotsLiteDB.altInfo[name] or {}
+	if not plain:find("^%d+[gsc]") then return end
 	local xp, rest = plain:match("(%d+)/(%d+)%% XP")
 	info.xp, info.rest = tonumber(xp), tonumber(rest)
-	info.gold = plain:match("^([^,]+)") or info.gold
+	if plain:find("^%d+[gsc]") then info.gold = plain:match("^([^,]+)") end
 	SquidBotsLiteDB.altInfo[name] = info
 end
 

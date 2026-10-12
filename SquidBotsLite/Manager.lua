@@ -204,9 +204,17 @@ local function ParseStrats(lines)
 	return list
 end
 
--- "12g 30s 5c, ..." : the first part of the stats line.
+-- The stats line, "12g 30s 5c, ...": the first line that starts with money. Another answer of the bot can come
+-- in the same window ("Strategies: ..." once showed as its gold).
+local function StatsLine(lines)
+	for _, line in ipairs(lines) do
+		if line:find("^%d+[gsc]") or line:find("^0,") then return line end
+	end
+end
+
 local function GoldOf(lines)
-	return lines[1] and lines[1]:match("^([^,]+)")
+	local line = StatsLine(lines)
+	return line and line:match("^([^,]+)")
 end
 
 local function ParseTalents(lines)
@@ -279,7 +287,8 @@ local function Finish()
 	else
 		stats = done.lines
 		sheet.gold = GoldOf(done.lines) or sheet.gold
-		if SquidBotsLite_NoteStats and done.lines[1] then SquidBotsLite_NoteStats(done.name, done.lines[1]) end
+		local line = StatsLine(done.lines)
+		if SquidBotsLite_NoteStats and line then SquidBotsLite_NoteStats(done.name, line) end
 	end
 	local banker = done.kind == "bank" and done.lines[1] and done.lines[1]:find("banker", 1, true)
 	if banker then
@@ -1166,7 +1175,7 @@ local function RenderGear(page)
 			page.model.name, page.model.facing = current, 0
 			page.model:SetFacing(0)
 			-- A step further back and a little lower: a tall headdress or helm stays inside the frame.
-			page.model:SetPosition(-0.6, 0, -0.12)
+			page.model:SetPosition(-0.6, 0, -0.07)
 		end
 		page.model:Show()
 	else
