@@ -9,7 +9,8 @@ local STRINGS = {
 		LOGOUT = "Log out", WAIT = "Asking the bot...", NO_REPLY = "No answer: is it one of your bots?",
 		NOT_IN_GROUP = "Invite it to your group to see its gear.", OUT_OF_RANGE = "Come closer to see its gear.",
 		EMPTY_BAGS = "Nothing in the bags.", NO_QUESTS = "No quest.",
-		GIVE = "Give it to me", SOULBOUND = "Soulbound: cannot be traded", TRADE_RANGE = "Trade: stand next to the bot (10 yards).", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot at a vendor)", LINK = "Link in chat",
+		GIVE = "Give it to me", SOULBOUND = "Soulbound: cannot be traded", TRADE_RANGE = "Trade: stand next to the bot (10 yards).", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot next to a vendor)", SELL_GREY = "Sell grey items",
+		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
@@ -26,7 +27,8 @@ local STRINGS = {
 		LOGOUT = "Déconnecter", WAIT = "Demande au bot...", NO_REPLY = "Pas de réponse : est-ce bien un de vos bots ?",
 		NOT_IN_GROUP = "Invitez-le dans votre groupe pour voir son équipement.", OUT_OF_RANGE = "Approchez-vous pour voir son équipement.",
 		EMPTY_BAGS = "Rien dans les sacs.", NO_QUESTS = "Aucune quête.",
-		GIVE = "Me le donner", SOULBOUND = "Lié : impossible à échanger", TRADE_RANGE = "Échange : placez-vous à côté du bot (10 mètres).", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot chez un marchand)", LINK = "Lien dans le chat",
+		GIVE = "Me le donner", SOULBOUND = "Lié : impossible à échanger", TRADE_RANGE = "Échange : placez-vous à côté du bot (10 mètres).", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot à côté d'un marchand)", SELL_GREY = "Vendre les gris",
+		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
@@ -223,6 +225,24 @@ giveWatch:SetScript("OnUpdate", function()
 	end
 end)
 
+local sellCheck
+-- One item: silence means no vendor. "gray" with nothing grey is silent too, so it is not checked.
+local function Sell(text, unchecked)
+	Whisper("s " .. text)
+	if not unchecked then sellCheck = { name = current, at = GetTime() + 3 } end
+end
+local sellWatch = CreateFrame("Frame")
+sellWatch:RegisterEvent("CHAT_MSG_WHISPER")
+sellWatch:SetScript("OnEvent", function(_, _, message, sender)
+	if sellCheck and sender == sellCheck.name and message:find("^Selling ") then sellCheck = nil end
+end)
+sellWatch:SetScript("OnUpdate", function()
+	if sellCheck and GetTime() >= sellCheck.at then
+		sellCheck = nil
+		Print(T("NO_VENDOR"))
+	end
+end)
+
 local function AfterChange()
 	-- The bags changed: ask again once the server lets the same lines through.
 	local name = current
@@ -245,7 +265,7 @@ local function ItemMenu(item)
 			or { text = T("GIVE"), notCheckable = true, func = function() Give(item.link); AfterChange() end },
 		{ text = T("EQUIP"), notCheckable = true, func = function() Whisper("e " .. item.link); AfterChange() end },
 		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. item.link); AfterChange() end },
-		{ text = T("SELL"), notCheckable = true, func = function() Whisper("s " .. item.link); AfterChange() end },
+		{ text = T("SELL"), notCheckable = true, func = function() Sell(item.link); AfterChange() end },
 		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(item.link) end },
 	}, menuFrame, "cursor", 0, 0, "MENU")
 end
@@ -347,6 +367,11 @@ local function BuildBags(page)
 		local unit = current and UnitOf(current)
 		if unit then InitiateTrade(unit) end
 	end)
+	page.grey = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.grey:SetWidth(130)
+	page.grey:SetHeight(22)
+	page.grey:SetPoint("LEFT", page.trade, "RIGHT", 8, 0)
+	page.grey:SetScript("OnClick", function() Sell("gray", true); AfterChange() end)
 end
 
 local function BuildQuests(page)
@@ -502,6 +527,7 @@ local function RenderBags(page)
 	page.note:SetText(#bags == 0 and capture == nil and T("EMPTY_BAGS") or "")
 	page.hint:SetText(T("ITEM_HINT") .. " " .. T("TRADE_HINT"))
 	page.trade:SetText(T("TRADE"))
+	page.grey:SetText(T("SELL_GREY"))
 	for i, b in ipairs(page.buttons) do
 		local item = bags[i]
 		b.item = item
