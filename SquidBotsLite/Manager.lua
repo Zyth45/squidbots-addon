@@ -780,8 +780,10 @@ end
 -- ("Talent learned: ...", "Cannot learn ...: <reason>") go to the chat, then both lists are asked again.
 local function Save()
 	saveQueue = {}
+	-- The spell id of the talent's first rank, not its entry: the server reads a bare number as a spell id
+	-- first (the core's link parser hands it back as is), so "learn <entry>" answered "Unknown talent".
 	for _, o in ipairs(options) do
-		for _ = 1, Pending(o) do table.insert(saveQueue, o.entry) end
+		for _ = 1, Pending(o) do table.insert(saveQueue, o.id) end
 	end
 	if #saveQueue == 0 then return end
 	Print(string.format(T("T_SAVING"), #saveQueue))
