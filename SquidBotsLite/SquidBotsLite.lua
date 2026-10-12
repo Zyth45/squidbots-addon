@@ -6,13 +6,14 @@ SquidBotsLiteDB = SquidBotsLiteDB or {}
 
 local STRINGS = {
 	en = {
-		FOLLOW = "Follow", STAY = "Stay", ATTACK = "Target", PASSIVE = "Passive", ACTIVE = "Active", DUNGEON = "Dungeon", RECRUIT = "Bots",
+		FOLLOW = "Follow", STAY = "Stay", ATTACK = "Target", PASSIVE = "Passive", ACTIVE = "Active", DUNGEON = "Dungeon", ALTS_BAR = "Alts", RECRUIT = "Bots",
 		TIP_FOLLOW = "Bots follow you.", TIP_STAY = "Bots stay where they are.", TIP_ATTACK = "Bots attack your target.",
 		TIP_ACTIVE = "Bots fight normally. Click to make them passive: no fights, and the tank stops pulling on its own.",
 		TIP_PASSIVE = "Bots are passive: no fights, no auto pull. Click, or give any order, to wake them.",
 		TOGGLE_PASSIVE = "Passive / Active",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
+		TIP_ALTS = "Your other characters: log them in as bots, summon them, open their sheet (gear, bags, quests, mounts).",
 		TIP_MOVE = "Shift-drag to move the bar, Ctrl + mouse wheel to resize it.",
 		TIP_PROFILES = "Right click: profiles (farm, strict follow, dungeon).",
 		PROFILES = "Profiles", P_FARM = "Farm (hunt, loot, eat)", P_STRICT = "Strict follow",
@@ -22,7 +23,7 @@ local STRINGS = {
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
-		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon",
+		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
 		ALTS_HELP = "Your other characters, played as bots: a logged-in alt joins your group. They keep their look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
@@ -57,13 +58,14 @@ local STRINGS = {
 		LANG_SET = "SquidBots Lite language: English.", CHANNEL_SET = "SquidBots Lite asks in: %s",
 	},
 	fr = {
-		FOLLOW = "Suivre", STAY = "Rester", ATTACK = "Cible", PASSIVE = "Passif", ACTIVE = "Actif", DUNGEON = "Donjon", RECRUIT = "Bots",
+		FOLLOW = "Suivre", STAY = "Rester", ATTACK = "Cible", PASSIVE = "Passif", ACTIVE = "Actif", DUNGEON = "Donjon", ALTS_BAR = "Alts", RECRUIT = "Bots",
 		TIP_FOLLOW = "Les bots vous suivent.", TIP_STAY = "Les bots restent sur place.", TIP_ATTACK = "Les bots attaquent votre cible.",
 		TIP_ACTIVE = "Les bots combattent normalement. Cliquez pour les rendre passifs : plus de combat, et le tank arrête de tirer seul.",
 		TIP_PASSIVE = "Les bots sont passifs : pas de combat, pas de pull auto. Cliquez, ou donnez n'importe quel ordre, pour les réveiller.",
 		TOGGLE_PASSIVE = "Passif / Actif",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
+		TIP_ALTS = "Vos autres personnages : connectez-les en bots, appelez-les, ouvrez leur fiche (équipement, sacs, quêtes, montures).",
 		TIP_MOVE = "Maj + glisser pour déplacer la barre, Ctrl + molette pour la redimensionner.",
 		TIP_PROFILES = "Clic droit : les profils (farm, suivi strict, donjon).",
 		PROFILES = "Profils", P_FARM = "Farm (chasse, butin, repas)", P_STRICT = "Suivi strict",
@@ -73,7 +75,7 @@ local STRINGS = {
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
-		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler",
+		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
 		ALTS_HELP = "Vos autres personnages, joués en bots : un alt connecté rejoint votre groupe. Ils gardent leur apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
@@ -127,7 +129,7 @@ local MAX_TOASTS = 5
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
 local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 4, 38, 52
-local BAR_ORDER = { "follow", "stay", "attack", "passive", "dungeon", "summon", "recruit", "release" }
+local BAR_ORDER = { "follow", "stay", "attack", "passive", "dungeon", "summon", "alts", "recruit", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
 local PROBE_DELAY, PROBE_WINDOW = 3, 10
@@ -142,7 +144,7 @@ local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "In
 local ROLE_BUTTON_ICONS = { tank = "Interface\\Icons\\Ability_Defend", heal = "Interface\\Icons\\Spell_Holy_FlashHeal",
 	dps = "Interface\\Icons\\Ability_MeleeDamage" }
 local BINDINGS = { { "follow", "FOLLOW" }, { "stay", "STAY" }, { "attack", "M_ATTACK" }, { "passive", "TOGGLE_PASSIVE" },
-	{ "dungeon", "DUNGEON" }, { "summon", "SUMMON" }, { "release", "RELEASE" } }
+	{ "dungeon", "DUNGEON" }, { "summon", "SUMMON" }, { "alts", "ALTS" }, { "release", "RELEASE" } }
 
 local roleByName, badges, toasts = {}, {}, {}
 local firstSeen, probedAt = {}, {}
@@ -1068,6 +1070,10 @@ local function BuildBar()
 		{ "summon", "Interface\\Icons\\Spell_Arcane_PortalDalaran", "SUMMON", "TIP_SUMMON", function()
 			SendGroup("summon")
 		end },
+		-- Alts: the My alts panel, where each logged-in alt also opens its bot sheet.
+		{ "alts", "Interface\\Icons\\INV_Misc_Head_Human_01", "ALTS_BAR", "TIP_ALTS", function()
+			ShowAlts()
+		end },
 		{ "recruit", "Interface\\Icons\\Spell_Frost_SummonWaterElemental", "RECRUIT", "TIP_RECRUIT", function()
 			ShowMenu(RecruitMenu())
 		end },
@@ -1301,6 +1307,7 @@ local function RefreshAlts()
 			row.toggle:SetText(alt.online and L.ALTS_REMOVE or L.ALTS_ADD)
 			row.toggle:Enable()
 			if alt.online then row.summon:Show() else row.summon:Hide() end
+			if alt.online and SquidBotsLite_OpenSheet then row.sheet:Show() else row.sheet:Hide() end
 			row:Show()
 		else
 			row:Hide()
@@ -1322,12 +1329,13 @@ local function AltsTexts()
 	altsFrame.help:SetText(L.ALTS_HELP)
 	for _, row in ipairs(altRows) do
 		row.summon:SetText(L.ALTS_SUMMON)
+		row.sheet:SetText(L.ALTS_SHEET)
 	end
 end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
-	altsFrame:SetWidth(300)
+	altsFrame:SetWidth(372)
 	altsFrame:SetHeight(120 + ALT_ROWS * 22)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
@@ -1352,11 +1360,11 @@ local function BuildAlts()
 	altsFrame.refresh:SetScript("OnClick", function() AskRoster() end)
 	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	altsFrame.status:SetPoint("LEFT", altsFrame.refresh, "RIGHT", 8, 0)
-	altsFrame.status:SetWidth(170)
+	altsFrame.status:SetWidth(240)
 	altsFrame.status:SetJustifyH("LEFT")
 	for i = 1, ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
-		row:SetWidth(268)
+		row:SetWidth(340)
 		row:SetHeight(20)
 		row:SetPoint("TOPLEFT", 16, -62 - (i - 1) * 22)
 		row.dot = row:CreateTexture(nil, "ARTWORK")
@@ -1388,6 +1396,14 @@ local function BuildAlts()
 			local alt = self:GetParent().alt
 			if alt then Whisper(alt.name, "summon") end
 		end)
+		row.sheet = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.sheet:SetWidth(64)
+		row.sheet:SetHeight(18)
+		row.sheet:SetPoint("LEFT", row.summon, "RIGHT", 4, 0)
+		row.sheet:SetScript("OnClick", function(self)
+			local alt = self:GetParent().alt
+			if alt and SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(alt.name) end
+		end)
 		-- A logged-in alt's name opens its bot sheet (Manager.lua, beta).
 		row:EnableMouse(true)
 		row:SetScript("OnMouseUp", function(self)
@@ -1398,7 +1414,7 @@ local function BuildAlts()
 	end
 	altsFrame.help = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	altsFrame.help:SetPoint("BOTTOMLEFT", 16, 14)
-	altsFrame.help:SetWidth(268)
+	altsFrame.help:SetWidth(340)
 	altsFrame.help:SetJustifyH("LEFT")
 	altsFrame:Hide()
 	AltsTexts()

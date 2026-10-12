@@ -9,7 +9,7 @@ local STRINGS = {
 		LOGOUT = "Log out", WAIT = "Asking the bot...", NO_REPLY = "No answer: is it one of your bots?",
 		NOT_IN_GROUP = "Invite it to your group to see its gear.", OUT_OF_RANGE = "Come closer to see its gear.",
 		EMPTY_BAGS = "Nothing in the bags.", NO_QUESTS = "No quest.",
-		GIVE = "Give it to me", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot at a vendor)", LINK = "Link in chat",
+		GIVE = "Give it to me", SOULBOUND = "Soulbound: cannot be traded", TRADE_RANGE = "Trade: stand next to the bot (10 yards).", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot at a vendor)", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
@@ -26,7 +26,7 @@ local STRINGS = {
 		LOGOUT = "Déconnecter", WAIT = "Demande au bot...", NO_REPLY = "Pas de réponse : est-ce bien un de vos bots ?",
 		NOT_IN_GROUP = "Invitez-le dans votre groupe pour voir son équipement.", OUT_OF_RANGE = "Approchez-vous pour voir son équipement.",
 		EMPTY_BAGS = "Rien dans les sacs.", NO_QUESTS = "Aucune quête.",
-		GIVE = "Me le donner", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot chez un marchand)", LINK = "Lien dans le chat",
+		GIVE = "Me le donner", SOULBOUND = "Lié : impossible à échanger", TRADE_RANGE = "Échange : placez-vous à côté du bot (10 mètres).", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot chez un marchand)", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
@@ -206,8 +206,13 @@ local menuFrame = CreateFrame("Frame", "SquidBotsLiteSheetMenu", UIParent, "UIDr
 -- "t [item]" opens a trade with the master first, and puts the item in only once the trade is open.
 local giveAt
 local function Give(link)
+	local unit = UnitOf(current)
+	if not unit or not CheckInteractDistance(unit, 2) then
+		Print(T("TRADE_RANGE"))
+		return
+	end
 	Whisper("t " .. link)
-	giveAt = { link = link, at = GetTime() + 1 }
+	giveAt = { link = link, at = GetTime() + 1.5 }
 end
 local giveWatch = CreateFrame("Frame")
 giveWatch:SetScript("OnUpdate", function()
@@ -236,7 +241,8 @@ end
 local function ItemMenu(item)
 	EasyMenu({
 		{ text = item.link, isTitle = true, notCheckable = true },
-		{ text = T("GIVE"), notCheckable = true, func = function() Give(item.link); AfterChange() end },
+		item.soulbound and { text = T("SOULBOUND"), notCheckable = true, disabled = true }
+			or { text = T("GIVE"), notCheckable = true, func = function() Give(item.link); AfterChange() end },
 		{ text = T("EQUIP"), notCheckable = true, func = function() Whisper("e " .. item.link); AfterChange() end },
 		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. item.link); AfterChange() end },
 		{ text = T("SELL"), notCheckable = true, func = function() Whisper("s " .. item.link); AfterChange() end },
