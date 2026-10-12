@@ -26,6 +26,15 @@ local STRINGS = {
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level unknown: log it in once",
 		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
+		TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
+		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
+		T_SAVED = "Team %s saved: %d characters.", T_STARTED = "Team %s: logging in %d characters, one a second.",
+		T_EMPTY = "Nobody to save: invite or log in your alts first.",
+		ACCOUNTS = "Accounts", A_SHOW = "Show my linked accounts", A_LINK = "Link an account...", A_KEY = "Set this account's key...",
+		A_LOGIN_ALL = "Log in all its characters", A_UNLINK = "Unlink", A_NAME = "Account name to link:",
+		A_KEYFOR = "Security key of %s (set on that account with Set this account's key):", A_MYKEY = "Key for this account (letters and digits):",
+		A_BAD = "Letters, digits and _ only.", A_NONE = "No linked account known yet: Show my linked accounts.",
+		A_HOWTO = "To play the characters of another account: log on that account once and set its key, then link it from here with that key.",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
 		ALTS_HELP = "Your other characters, played as bots: a logged-in alt joins your group. They keep their look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
@@ -80,6 +89,15 @@ local STRINGS = {
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau inconnu : connectez-le une fois",
 		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
+		TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
+		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
+		T_SAVED = "Équipe %s enregistrée : %d personnages.", T_STARTED = "Équipe %s : connexion de %d personnages, un par seconde.",
+		T_EMPTY = "Personne à enregistrer : invitez ou connectez d'abord vos alts.",
+		ACCOUNTS = "Comptes", A_SHOW = "Voir mes comptes liés", A_LINK = "Lier un compte...", A_KEY = "Définir la clé de ce compte...",
+		A_LOGIN_ALL = "Connecter tous ses personnages", A_UNLINK = "Délier", A_NAME = "Nom du compte à lier :",
+		A_KEYFOR = "Clé de sécurité de %s (définie sur ce compte avec Définir la clé de ce compte) :", A_MYKEY = "Clé de ce compte (lettres et chiffres) :",
+		A_BAD = "Lettres, chiffres et _ seulement.", A_NONE = "Aucun compte lié connu : Voir mes comptes liés.",
+		A_HOWTO = "Pour jouer les personnages d'un autre compte : connectez-vous une fois sur ce compte et définissez sa clé, puis liez-le d'ici avec cette clé.",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
 		ALTS_HELP = "Vos autres personnages, joués en bots : un alt connecté rejoint votre groupe. Ils gardent leur apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
@@ -1367,6 +1385,8 @@ local function AltsTexts()
 	if not altsFrame then return end
 	altsFrame.title:SetText("SquidBots Lite - " .. L.ALTS)
 	altsFrame.refresh:SetText(L.ALTS_REFRESH)
+	altsFrame.teams:SetText(L.TEAMS)
+	altsFrame.accounts:SetText(L.ACCOUNTS)
 	altsFrame.help:SetText(L.ALTS_HELP)
 	for _, row in ipairs(altRows) do
 		row.summon:SetText(L.ALTS_SUMMON)
@@ -1374,10 +1394,174 @@ local function AltsTexts()
 	end
 end
 
+-- Teams: named lists of characters kept account-wide (SquidBotsLiteDB.teams), logged in one a second with the same
+-- ".playerbots bot add" a player types; a sixth member turns the party into a raid on the server's side.
+local loginQueue, loginNext = {}, 0
+
+local function QueueBots(command, names)
+	for _, name in ipairs(names) do table.insert(loginQueue, command .. " " .. name) end
+end
+
+local function TeamNames(name)
+	local names = {}
+	for _, n in ipairs((SquidBotsLiteDB.teams or {})[name] or {}) do table.insert(names, n) end
+	return names
+end
+
+local function GroupNames()
+	local names, me = {}, UnitName("player")
+	local raid = GetNumRaidMembers()
+	for i = 1, (raid > 0 and raid or 4) do
+		local n = UnitName((raid > 0 and "raid" or "party") .. i)
+		if n and n ~= me and n ~= UNKNOWNOBJECT then table.insert(names, n) end
+	end
+	return names
+end
+
+local function OnlineAltNames()
+	local names = {}
+	for _, alt in ipairs(roster) do if alt.online then table.insert(names, alt.name) end end
+	return names
+end
+
+local pendingTeam
+StaticPopupDialogs.SQUIDBOTSLITE_TEAM = {
+	text = "%s", button1 = OKAY, button2 = CANCEL, hasEditBox = 1, maxLetters = 24, timeout = 0, whileDead = 1,
+	hideOnEscape = 1,
+	OnAccept = function(self)
+		local box = _G[self:GetName() .. "EditBox"]
+		local name = strtrim(box:GetText() or "")
+		if name == "" or not pendingTeam then return end
+		SquidBotsLiteDB.teams = SquidBotsLiteDB.teams or {}
+		SquidBotsLiteDB.teams[name] = pendingTeam
+		Print(string.format(L.T_SAVED, name, #pendingTeam))
+		pendingTeam = nil
+	end,
+	EditBoxOnEnterPressed = function(self)
+		StaticPopupDialogs.SQUIDBOTSLITE_TEAM.OnAccept(self:GetParent())
+		self:GetParent():Hide()
+	end,
+	EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+}
+
+local function SaveTeam(names)
+	if #names == 0 then Print(L.T_EMPTY) return end
+	pendingTeam = names
+	StaticPopupDialogs.SQUIDBOTSLITE_TEAM.text = L.T_NAME
+	StaticPopup_Show("SQUIDBOTSLITE_TEAM")
+end
+
+local function TeamsMenu()
+	local items = { { text = L.TEAMS, isTitle = true, notCheckable = true } }
+	local names = {}
+	for name in pairs(SquidBotsLiteDB.teams or {}) do table.insert(names, name) end
+	table.sort(names)
+	if #names == 0 then table.insert(items, { text = L.T_NONE, notCheckable = true, disabled = true }) end
+	for _, name in ipairs(names) do
+		local members = TeamNames(name)
+		table.insert(items, { text = name, hasArrow = true, notCheckable = true, menuList = {
+			{ text = table.concat(members, ", "), notCheckable = true, disabled = true },
+			{ text = string.format(L.T_LOGIN, #members), notCheckable = true, func = function()
+				QueueBots("add", members)
+				Print(string.format(L.T_STARTED, name, #members))
+			end },
+			{ text = L.T_LOGOUT, notCheckable = true, func = function() QueueBots("remove", members) end },
+			{ text = L.T_DELETE, notCheckable = true, func = function() SquidBotsLiteDB.teams[name] = nil end },
+		} })
+	end
+	table.insert(items, { text = L.T_SAVE_GROUP, notCheckable = true, func = function() SaveTeam(GroupNames()) end })
+	table.insert(items, { text = L.T_SAVE_ONLINE, notCheckable = true, func = function() SaveTeam(OnlineAltNames()) end })
+	ShowMenu(items)
+end
+
+-- Linked accounts: ".playerbots account setKey / link / linkedAccounts / unlink" and ".playerbots bot addaccount".
+-- The server puts the account name straight into its SQL: the addon sends only letters, digits and _.
+local function SafeName(text)
+	text = strtrim(text or "")
+	if text == "" or text:find("[^%w_]") then Print(L.A_BAD) return end
+	return text
+end
+
+local function AccountCommand(text)
+	SendChatMessage(".playerbots account " .. text, "SAY")
+end
+
+local linkStep = {}
+StaticPopupDialogs.SQUIDBOTSLITE_ACCOUNT = {
+	text = "%s", button1 = OKAY, button2 = CANCEL, hasEditBox = 1, maxLetters = 32, timeout = 0, whileDead = 1,
+	hideOnEscape = 1,
+	OnAccept = function(self)
+		local value = SafeName(_G[self:GetName() .. "EditBox"]:GetText())
+		if not value then return end
+		if linkStep.kind == "key" then
+			AccountCommand("setKey " .. value)
+		elseif linkStep.kind == "name" then
+			linkStep = { kind = "keyfor", account = value }
+			local nextAsk = function()
+				StaticPopupDialogs.SQUIDBOTSLITE_ACCOUNT.text = string.format(L.A_KEYFOR, value)
+				StaticPopup_Show("SQUIDBOTSLITE_ACCOUNT")
+			end
+			-- The same dialog cannot show again while it is closing: the next frame asks for the key.
+			local f = CreateFrame("Frame")
+			f:SetScript("OnUpdate", function(frame) frame:SetScript("OnUpdate", nil); nextAsk() end)
+			return
+		elseif linkStep.kind == "keyfor" then
+			AccountCommand("link " .. linkStep.account .. " " .. value)
+			SquidBotsLiteDB.linked = SquidBotsLiteDB.linked or {}
+			SquidBotsLiteDB.linked[linkStep.account] = true
+		end
+		linkStep = {}
+	end,
+	EditBoxOnEnterPressed = function(self)
+		local parent = self:GetParent()
+		StaticPopupDialogs.SQUIDBOTSLITE_ACCOUNT.OnAccept(parent)
+		parent:Hide()
+	end,
+	EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+}
+
+local function AskAccount(kind, text)
+	linkStep = { kind = kind }
+	StaticPopupDialogs.SQUIDBOTSLITE_ACCOUNT.text = text
+	StaticPopup_Show("SQUIDBOTSLITE_ACCOUNT")
+end
+
+local function AccountsMenu()
+	local items = { { text = L.ACCOUNTS, isTitle = true, notCheckable = true } }
+	local names = {}
+	for name in pairs(SquidBotsLiteDB.linked or {}) do table.insert(names, name) end
+	table.sort(names)
+	if #names == 0 then table.insert(items, { text = L.A_NONE, notCheckable = true, disabled = true }) end
+	for _, name in ipairs(names) do
+		table.insert(items, { text = name, hasArrow = true, notCheckable = true, menuList = {
+			{ text = L.A_LOGIN_ALL, notCheckable = true, func = function()
+				BotCommand("addaccount " .. name)
+				refreshAt = GetTime() + AFTER_TOGGLE + 2
+			end },
+			{ text = L.A_UNLINK, notCheckable = true, func = function()
+				AccountCommand("unlink " .. name)
+				SquidBotsLiteDB.linked[name] = nil
+			end },
+		} })
+	end
+	table.insert(items, { text = L.A_SHOW, notCheckable = true, func = function() AccountCommand("linkedAccounts") end })
+	table.insert(items, { text = L.A_LINK, notCheckable = true, func = function() AskAccount("name", L.A_NAME) end })
+	table.insert(items, { text = L.A_KEY, notCheckable = true, func = function() AskAccount("key", L.A_MYKEY) end })
+	table.insert(items, { text = L.A_HOWTO, notCheckable = true, disabled = true })
+	ShowMenu(items)
+end
+
+local function TickLogins()
+	if #loginQueue == 0 or GetTime() < loginNext then return end
+	loginNext = GetTime() + 1
+	BotCommand(table.remove(loginQueue, 1))
+	if #loginQueue == 0 and altsFrame and altsFrame:IsShown() then refreshAt = GetTime() + AFTER_TOGGLE end
+end
+
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
 	altsFrame:SetWidth(372)
-	altsFrame:SetHeight(120 + ALT_ROWS * ALT_ROW_H)
+	altsFrame:SetHeight(138 + ALT_ROWS * ALT_ROW_H)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
 	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
@@ -1399,15 +1583,26 @@ local function BuildAlts()
 	altsFrame.refresh:SetHeight(20)
 	altsFrame.refresh:SetPoint("TOPLEFT", 16, -36)
 	altsFrame.refresh:SetScript("OnClick", function() AskRoster() end)
+	altsFrame.teams = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
+	altsFrame.teams:SetWidth(90)
+	altsFrame.teams:SetHeight(20)
+	altsFrame.teams:SetPoint("LEFT", altsFrame.refresh, "RIGHT", 6, 0)
+	altsFrame.teams:SetScript("OnClick", TeamsMenu)
+	altsFrame.accounts = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
+	altsFrame.accounts:SetWidth(90)
+	altsFrame.accounts:SetHeight(20)
+	altsFrame.accounts:SetPoint("LEFT", altsFrame.teams, "RIGHT", 6, 0)
+	altsFrame.accounts:SetScript("OnClick", AccountsMenu)
 	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	altsFrame.status:SetPoint("LEFT", altsFrame.refresh, "RIGHT", 8, 0)
-	altsFrame.status:SetWidth(240)
+	altsFrame.status:SetPoint("TOPLEFT", 18, -62)
+	altsFrame.status:SetWidth(330)
+	altsFrame.status:SetJustifyH("LEFT")
 	altsFrame.status:SetJustifyH("LEFT")
 	for i = 1, ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
 		row:SetWidth(340)
 		row:SetHeight(ALT_ROW_H - 2)
-		row:SetPoint("TOPLEFT", 16, -62 - (i - 1) * ALT_ROW_H)
+		row:SetPoint("TOPLEFT", 16, -80 - (i - 1) * ALT_ROW_H)
 		row.dot = row:CreateTexture(nil, "ARTWORK")
 		row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
 		row.dot:SetWidth(8)
@@ -1503,7 +1698,10 @@ ShowAlts = function()
 end
 
 -- Called with the other refreshes: a new list after a log in / out, a word if the server stays silent.
+local readingLinks
+
 local function TickAlts()
+	TickLogins()
 	if not altsFrame:IsShown() then return end
 	local now = GetTime()
 	if refreshAt and now >= refreshAt then
@@ -1516,6 +1714,18 @@ end
 
 -- Only the roster the panel asked for is read, and kept out of the chat; a "bot list" typed by hand shows.
 local function OnSystem(message)
+	-- "add: Name - ok" / "addaccount: Name - ok": a character logged in by the player is one of their alts, also
+	-- those of a linked account, which "bot list" alone never shows offline.
+	local added = message:match("^add%a*: (.-) %- ok$")
+	if added then
+		SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
+		SquidBotsLiteDB.alts[added] = true
+	end
+	-- "Linked accounts:" then "- name" lines, or "No linked accounts."
+	if message == "No linked accounts." then SquidBotsLiteDB.linked = {} end
+	if message == "Linked accounts:" then SquidBotsLiteDB.linked, readingLinks = {}, GetTime() + 2 end
+	local linked = readingLinks and GetTime() < readingLinks and message:match("^%- (%S+)$")
+	if linked and linked ~= "Unknown" then SquidBotsLiteDB.linked[linked] = true end
 	local text = message:match("^Bot roster: ?(.*)$")
 	if text and rosterAskedAt then
 		-- The chat frames may see this message after this handler: they still hide it for a second.
@@ -1746,6 +1956,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "alts" then
 		ShowAlts()
+	elseif command == "sheettrade" and SquidBotsLite_SheetOnTrade then
+		SquidBotsLite_SheetOnTrade(string.lower(rest) ~= "off")
 	elseif command == "sheetdebug" and SquidBotsLite_SheetDebug then
 		SquidBotsLite_SheetDebug()
 	elseif command == "bot" and SquidBotsLite_OpenSheet then

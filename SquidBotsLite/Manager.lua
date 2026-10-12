@@ -1,6 +1,7 @@
 -- SquidBots Lite, bot sheet (beta): the gear, bags, quests and stats of one bot of the group, for players who
 -- keep a long-term party of alts. Everything goes through chat commands a player can whisper to their own
--- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t", "mount"); the gear is read by the client's own inspect.
+-- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t", "mount", "bank", "drop", "co ?", "nc ?"); the gear is read
+-- by the client's own inspect.
 
 local STRINGS = {
 	en = {
@@ -20,6 +21,13 @@ local STRINGS = {
 		NO_MOUNTS = "This bot knows no mount.",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
 		NOT_A_MEMBER = "%s is not in your group.",
+		STRATS = "Strategies", COMBAT = "In combat", NONCOMBAT = "Out of combat", ADD = "Add...",
+		STRAT_HINT = "Click a strategy to remove it; Add... to give one. The server resets them on a specialization switch.",
+		BANK = "Bank", BAGS_BTN = "Bags", DEPOSIT = "Put in the bank", WITHDRAW = "Take from the bank",
+		NO_BANKER = "No banker next to the bot: the bank opens only when the bot stands by a banker.",
+		ABANDON = "Abandon this quest", ABANDON_ASK = "%s abandons %s?", QUEST_HINT = "Right-click a quest to abandon it.",
+		DROP_HINT = "Drop an item from your bags here to give it to the bot (a trade opens).",
+		GOLD = "Gold",
 	},
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
@@ -38,6 +46,13 @@ local STRINGS = {
 		NO_MOUNTS = "Ce bot ne connaît aucune monture.",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
+		STRATS = "Stratégies", COMBAT = "En combat", NONCOMBAT = "Hors combat", ADD = "Ajouter...",
+		STRAT_HINT = "Cliquez une stratégie pour la retirer ; Ajouter... pour en donner une. Le serveur les remet à zéro à un changement de spé.",
+		BANK = "Banque", BAGS_BTN = "Sacs", DEPOSIT = "Mettre à la banque", WITHDRAW = "Reprendre de la banque",
+		NO_BANKER = "Pas de banquier à côté du bot : la banque ne s'ouvre que si le bot est devant un banquier.",
+		ABANDON = "Abandonner cette quête", ABANDON_ASK = "%s abandonne %s ?", QUEST_HINT = "Clic droit sur une quête pour l'abandonner.",
+		DROP_HINT = "Déposez ici un objet de vos sacs pour le donner au bot (un échange s'ouvre).",
+		GOLD = "Or",
 	},
 }
 local function T(key)
@@ -56,9 +71,17 @@ local GEAR_LEFT = { 1, 2, 3, 15, 5, 4, 19, 9 }
 local GEAR_RIGHT = { 10, 6, 7, 8, 11, 12, 13, 14 }
 local GEAR_BOTTOM = { 16, 17, 18 }
 
+local COMBAT_STRATS = { "avoid aoe", "behind", "threat", "dps aoe", "focus", "passive", "aggressive", "wait for attack",
+	"tank face", "mark rti", "pull back", "potions", "racials", "flee", "kite" }
+local NONCOMBAT_STRATS = { "follow", "stay", "grind", "loot", "gather", "food", "quest", "accept all quests", "rpg",
+	"travel", "mount", "buff", "maintenance", "ready check", "emote", "chat", "duel", "sit" }
+
 local sheet, current, tab
 local capture, hideFrom, lastAsked = nil, {}, {}
-local bags, quests, stats, mounts = {}, {}, {}, {}
+local bags, quests, stats, mounts, bank = {}, {}, {}, {}, {}
+local strats = { co = {}, nc = {} }
+local bagMode = "bags"
+local queue = {}
 local mountOffset = 0
 
 local function Print(text)
@@ -88,6 +111,11 @@ local Render
 
 local function Ask(kind, command)
 	if not current then return end
+	if capture then
+		for _, q in ipairs(queue) do if q.kind == kind then return end end
+		table.insert(queue, { kind = kind, command = command })
+		return
+	end
 	local key = current .. ":" .. kind
 	if lastAsked[key] and GetTime() - lastAsked[key] < REPEAT_DELAY then return end
 	lastAsked[key] = GetTime()
@@ -134,6 +162,24 @@ local function ParseMounts(lines)
 	return list
 end
 
+-- "Strategies: a, b, c" (Engine::ListStrategies).
+local function ParseStrats(lines)
+	local list = {}
+	for _, line in ipairs(lines) do
+		local body = line:match("^Strategies: ?(.*)$")
+		if body then
+			for name in body:gmatch("[^,]+") do table.insert(list, strtrim(name)) end
+		end
+	end
+	table.sort(list)
+	return list
+end
+
+-- "12g 30s 5c, ..." : the first part of the stats line.
+local function GoldOf(lines)
+	return lines[1] and lines[1]:match("^([^,]+)")
+end
+
 local function Finish()
 	local done = capture
 	capture = nil
@@ -146,15 +192,25 @@ local function Finish()
 	elseif done.kind == "mounts" then
 		mounts = ParseMounts(done.lines)
 		mountOffset = 0
+	elseif done.kind == "bank" then
+		bank = ParseBags(done.lines)
+	elseif done.kind == "co" or done.kind == "nc" then
+		strats[done.kind] = ParseStrats(done.lines)
 	else
 		stats = done.lines
+		sheet.gold = GoldOf(done.lines) or sheet.gold
 	end
-	if #done.lines == 0 then
+	local banker = done.kind == "bank" and done.lines[1] and done.lines[1]:find("banker", 1, true)
+	if banker then
+		sheet.status:SetText(T("NO_BANKER"))
+	elseif #done.lines == 0 then
 		sheet.status:SetText(done.kind == "mounts" and T("NO_MOUNT_CMD") or T("NO_REPLY"))
 	else
 		sheet.status:SetText("")
 	end
 	Render()
+	local nextOne = table.remove(queue, 1)
+	if nextOne then Ask(nextOne.kind, nextOne.command) end
 end
 
 local watch = CreateFrame("Frame")
@@ -165,13 +221,14 @@ watch:SetScript("OnEvent", function(_, event, message, sender)
 	if event == "CHAT_MSG_WHISPER" then
 		if capture and sender == capture.name then
 			-- The inventory starts with its own title: earlier chatter of the bot is not part of it.
-			if capture.kind == "bags" and message == "=== Inventory ===" then
+			if (capture.kind == "bags" and message == "=== Inventory ===") or (capture.kind == "bank" and message == "=== Bank ===") then
 				capture.lines = {}
 			else
 				table.insert(capture.lines, message)
 			end
 			capture.last = GetTime()
-			if capture.kind == "mounts" and message:find("^Mounts: %d+") then Finish() end
+			if capture.kind == "mounts" and message:find("^Mounts: %d+") then Finish()
+			elseif (capture.kind == "co" or capture.kind == "nc") and message:find("^Strategies:") then Finish() end
 		end
 	elseif sheet and sheet:IsShown() and tab == "gear" then
 		Render()
@@ -255,7 +312,10 @@ local function AfterChange()
 		if wait < REPEAT_DELAY then return end
 		self:SetScript("OnUpdate", nil)
 		if current == name and sheet:IsShown() then
-			if tab == "bags" then Ask("bags", "c") elseif tab == "mounts" then Ask("mounts", "mount ?") elseif tab == "gear" then Render() end
+			if tab == "bags" then Ask(bagMode, bagMode == "bank" and "bank" or "c")
+			elseif tab == "mounts" then Ask("mounts", "mount ?")
+			elseif tab == "strats" then Ask("co", "co ?"); Ask("nc", "nc ?")
+			elseif tab == "gear" then Render() end
 		end
 	end)
 end
@@ -269,8 +329,47 @@ local function SendableLink(item)
 	return "|c" .. (color or "ffffffff") .. "|Hitem:" .. item.id .. ":0:0:0:0:0:0:0:0|h[" .. (name or "?") .. "]|h|r"
 end
 
+-- An item dropped on the bags goes to the bot by trade: the trade opens, then the item on the cursor is put
+-- in its first slot (TRADE_SHOW). The bot takes what its master gives.
+local pendingDrop
+local function DropOnBags()
+	if not CursorHasItem() or not current then return end
+	local unit = UnitOf(current)
+	if not unit or not CheckInteractDistance(unit, 2) then
+		ClearCursor()
+		Print(T("TRADE_RANGE"))
+		return
+	end
+	pendingDrop = GetTime() + 5
+	InitiateTrade(unit)
+end
+
+local tradeWatch = CreateFrame("Frame")
+tradeWatch:RegisterEvent("TRADE_SHOW")
+tradeWatch:SetScript("OnEvent", function()
+	if pendingDrop and GetTime() < pendingDrop and CursorHasItem() then
+		ClickTradeButton(1)
+	end
+	pendingDrop = nil
+	-- A trade with one of the group's bots opens its sheet on the bags (/sbl sheettrade off to stop).
+	local partner = UnitName("NPC")
+	if partner and SquidBotsLiteDB.sheetOnTrade ~= false and SquidBotsLite_OpenSheet and UnitOf(partner)
+		and (partner:find(" Bot$") or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[partner])) then
+		tab = "bags"
+		SquidBotsLite_OpenSheet(partner)
+	end
+end)
+
 local function ItemMenu(item)
 	local link = SendableLink(item)
+	if bagMode == "bank" then
+		EasyMenu({
+			{ text = item.link, isTitle = true, notCheckable = true },
+			{ text = T("WITHDRAW"), notCheckable = true, func = function() Whisper("bank -" .. link); AfterChange() end },
+			{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
+		}, menuFrame, "cursor", 0, 0, "MENU")
+		return
+	end
 	EasyMenu({
 		{ text = item.link, isTitle = true, notCheckable = true },
 		item.soulbound and { text = T("SOULBOUND"), notCheckable = true, disabled = true }
@@ -278,6 +377,7 @@ local function ItemMenu(item)
 		{ text = T("EQUIP"), notCheckable = true, func = function() Whisper("e " .. link); AfterChange() end },
 		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. link); AfterChange() end },
 		{ text = T("SELL"), notCheckable = true, func = function() Sell(link); AfterChange() end },
+		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); AfterChange() end },
 		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
 	}, menuFrame, "cursor", 0, 0, "MENU")
 end
@@ -332,8 +432,8 @@ local function BuildGear(page)
 		page.slots[slot] = b
 	end
 	for i, slot in ipairs(GEAR_LEFT) do Slot(slot, 10, -(i - 1) * 40) end
-	for i, slot in ipairs(GEAR_RIGHT) do Slot(slot, 344, -(i - 1) * 40) end
-	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 134 + (i - 1) * 44, -296) end
+	for i, slot in ipairs(GEAR_RIGHT) do Slot(slot, 400, -(i - 1) * 40) end
+	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 162 + (i - 1) * 44, -296) end
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
 	page.note:SetWidth(240)
@@ -360,9 +460,11 @@ local function BuildBags(page)
 			end
 		end)
 		b:SetScript("OnClick", function(self)
+			if CursorHasItem() then DropOnBags() return end
 			if not self.item then return end
 			if IsShiftKeyDown() then ChatEdit_InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
 		end)
+		b:SetScript("OnReceiveDrag", DropOnBags)
 		page.buttons[i] = b
 	end
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -384,7 +486,36 @@ local function BuildBags(page)
 	page.grey:SetHeight(22)
 	page.grey:SetPoint("LEFT", page.trade, "RIGHT", 8, 0)
 	page.grey:SetScript("OnClick", function() Sell("gray", true); AfterChange() end)
+	page.bank = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.bank:SetWidth(110)
+	page.bank:SetHeight(22)
+	page.bank:SetPoint("LEFT", page.grey, "RIGHT", 8, 0)
+	page.bank:SetScript("OnClick", function()
+		bagMode = bagMode == "bank" and "bags" or "bank"
+		Ask(bagMode, bagMode == "bank" and "bank" or "c")
+		Render()
+	end)
+	page:EnableMouse(true)
+	page:SetScript("OnReceiveDrag", DropOnBags)
+	page:SetScript("OnMouseUp", function() if CursorHasItem() then DropOnBags() end end)
 end
+
+StaticPopupDialogs.SQUIDBOTSLITE_ABANDON = {
+	text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = 1, hideOnEscape = 1,
+	OnAccept = function(self)
+		Whisper("drop " .. self.data)
+		AfterChange()
+		local name = current
+		local again = CreateFrame("Frame")
+		local wait = 0
+		again:SetScript("OnUpdate", function(f, delta)
+			wait = wait + delta
+			if wait < REPEAT_DELAY then return end
+			f:SetScript("OnUpdate", nil)
+			if current == name and tab == "quests" then Ask("quests", "quests all") end
+		end)
+	end,
+}
 
 local function BuildQuests(page)
 	page.rows = {}
@@ -404,13 +535,28 @@ local function BuildQuests(page)
 			end
 		end)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		row:SetScript("OnClick", function(self)
-			if self.quest and self.quest.link and IsShiftKeyDown() then ChatEdit_InsertLink(self.quest.text) end
+		row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		row:SetScript("OnClick", function(self, mouse)
+			if not (self.quest and self.quest.link) then return end
+			if IsShiftKeyDown() then ChatEdit_InsertLink(self.quest.text)
+			elseif mouse == "RightButton" then
+				local title = self.quest.text:match("|h%[(.-)%]|h")
+				if title then
+					-- "drop" matches the title in the bot's log: no quest link to be refused by the client.
+					StaticPopupDialogs.SQUIDBOTSLITE_ABANDON.text = string.format(T("ABANDON_ASK"), current, title)
+					local dialog = StaticPopup_Show("SQUIDBOTSLITE_ABANDON")
+					if dialog then dialog.data = title end
+				end
+			end
 		end)
 		page.rows[i] = row
 	end
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
+	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.hint:SetPoint("TOPLEFT", 14, -(QUEST_ROWS * 20) - 4)
+	page.hint:SetWidth(400)
+	page.hint:SetJustifyH("LEFT")
 end
 
 local function BuildInfo(page)
@@ -435,6 +581,67 @@ local function BuildInfo(page)
 		b:SetScript("OnClick", def[2])
 		page.buttons[i] = b
 	end
+end
+
+local STRAT_ROWS = 13
+
+local function StratMenu(kind)
+	local have, items = {}, { { text = T(kind == "co" and "COMBAT" or "NONCOMBAT"), isTitle = true, notCheckable = true } }
+	for _, name in ipairs(strats[kind]) do have[name] = true end
+	for _, name in ipairs(kind == "co" and COMBAT_STRATS or NONCOMBAT_STRATS) do
+		if not have[name] then
+			table.insert(items, { text = name, notCheckable = true, func = function() Whisper(kind .. " +" .. name); AfterChange() end })
+		end
+	end
+	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU")
+end
+
+local function BuildStrats(page)
+	page.cols = {}
+	for c, kind in ipairs({ "co", "nc" }) do
+		local col = { kind = kind, rows = {} }
+		local x = 10 + (c - 1) * 220
+		col.title = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		col.title:SetPoint("TOPLEFT", x, 0)
+		for i = 1, STRAT_ROWS do
+			local row = CreateFrame("Button", nil, page)
+			row:SetWidth(200)
+			row:SetHeight(18)
+			row:SetPoint("TOPLEFT", x, -18 - (i - 1) * 19)
+			row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+			row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			row.text:SetAllPoints()
+			row.text:SetJustifyH("LEFT")
+			row:SetScript("OnClick", function(self)
+				if self.strat then Whisper(kind .. " -" .. self.strat); AfterChange() end
+			end)
+			col.rows[i] = row
+		end
+		col.add = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+		col.add:SetWidth(110)
+		col.add:SetHeight(20)
+		col.add:SetPoint("TOPLEFT", x, -18 - STRAT_ROWS * 19 - 4)
+		col.add:SetScript("OnClick", function() StratMenu(kind) end)
+		page.cols[c] = col
+	end
+	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.hint:SetPoint("TOPLEFT", 10, -18 - STRAT_ROWS * 19 - 30)
+	page.hint:SetWidth(430)
+	page.hint:SetJustifyH("LEFT")
+end
+
+local function RenderStrats(page)
+	for _, col in ipairs(page.cols) do
+		col.title:SetText(T(col.kind == "co" and "COMBAT" or "NONCOMBAT"))
+		col.add:SetText(T("ADD"))
+		local list = strats[col.kind]
+		for i, row in ipairs(col.rows) do
+			row.strat = list[i]
+			row.text:SetText(list[i] and ("|cffff6060x|r  " .. list[i]) or "")
+			if list[i] then row:Show() else row:Hide() end
+		end
+	end
+	page.hint:SetText(T("STRAT_HINT"))
 end
 
 local RenderMounts
@@ -520,7 +727,7 @@ RenderMounts = function(page)
 end
 
 local TABS = { { "gear", "GEAR", BuildGear }, { "bags", "BAGS", BuildBags }, { "quests", "QUESTS", BuildQuests },
-	{ "mounts", "MOUNTS", BuildMounts }, { "info", "INFO", BuildInfo } }
+	{ "mounts", "MOUNTS", BuildMounts }, { "strats", "STRATS", BuildStrats }, { "info", "INFO", BuildInfo } }
 
 local function RenderGear(page)
 	local unit = current and UnitOf(current)
@@ -536,12 +743,14 @@ local function RenderGear(page)
 end
 
 local function RenderBags(page)
-	page.note:SetText(#bags == 0 and capture == nil and T("EMPTY_BAGS") or "")
-	page.hint:SetText(T("ITEM_HINT") .. " " .. T("TRADE_HINT"))
+	local list = bagMode == "bank" and bank or bags
+	page.note:SetText(#list == 0 and capture == nil and T("EMPTY_BAGS") or "")
+	page.hint:SetText(T("ITEM_HINT") .. " " .. T("DROP_HINT"))
 	page.trade:SetText(T("TRADE"))
+	page.bank:SetText(bagMode == "bank" and T("BAGS_BTN") or T("BANK"))
 	page.grey:SetText(T("SELL_GREY"))
 	for i, b in ipairs(page.buttons) do
-		local item = bags[i]
+		local item = list[i]
 		b.item = item
 		if item then
 			b.icon:SetTexture((GetItemIcon and GetItemIcon(item.id)) or select(10, GetItemInfo(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -556,6 +765,7 @@ end
 
 local function RenderQuests(page)
 	page.note:SetText(#quests == 0 and capture == nil and T("NO_QUESTS") or "")
+	page.hint:SetText(T("QUEST_HINT"))
 	for i, row in ipairs(page.rows) do
 		local q = quests[i]
 		row.quest = q
@@ -572,6 +782,7 @@ end
 Render = function()
 	if not sheet or not sheet:IsShown() then return end
 	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?"))
+	sheet.goldText:SetText(sheet.gold and ("|cffffd100" .. T("GOLD") .. "|r " .. sheet.gold) or "")
 	sheet.refresh:SetText(T("REFRESH"))
 	for _, def in ipairs(TABS) do
 		local key = def[1]
@@ -583,6 +794,7 @@ Render = function()
 	elseif tab == "bags" then RenderBags(pages.bags)
 	elseif tab == "quests" then RenderQuests(pages.quests)
 	elseif tab == "mounts" then RenderMounts(pages.mounts)
+	elseif tab == "strats" then RenderStrats(pages.strats)
 	else RenderInfo(pages.info) end
 end
 
@@ -592,11 +804,14 @@ local function Load()
 		if unit and CanInspect(unit) then NotifyInspect(unit) end
 		Render()
 	elseif tab == "bags" then
-		Ask("bags", "c")
+		Ask(bagMode, bagMode == "bank" and "bank" or "c")
 	elseif tab == "quests" then
 		Ask("quests", "quests all")
 	elseif tab == "mounts" then
 		Ask("mounts", "mount ?")
+	elseif tab == "strats" then
+		Ask("co", "co ?")
+		Ask("nc", "nc ?")
 	else
 		Ask("stats", "stats")
 	end
@@ -605,7 +820,7 @@ end
 
 local function Build()
 	sheet = CreateFrame("Frame", "SquidBotsLiteSheet", UIParent)
-	sheet:SetWidth(420)
+	sheet:SetWidth(470)
 	sheet:SetHeight(470)
 	sheet:SetPoint("CENTER", 120, 0)
 	sheet:SetBackdrop(BACKDROP)
@@ -625,9 +840,9 @@ local function Build()
 	sheet.tabs = {}
 	for i, def in ipairs(TABS) do
 		local b = CreateFrame("Button", nil, sheet, "UIPanelButtonTemplate")
-		b:SetWidth(74)
+		b:SetWidth(70)
 		b:SetHeight(22)
-		b:SetPoint("TOPLEFT", 16 + (i - 1) * 78, -36)
+		b:SetPoint("TOPLEFT", 16 + (i - 1) * 73, -36)
 		b:SetScript("OnClick", function() tab = def[1]; Load() end)
 		sheet.tabs[def[1]] = b
 		local page = CreateFrame("Frame", nil, sheet)
@@ -641,6 +856,8 @@ local function Build()
 	sheet.refresh:SetHeight(22)
 	sheet.refresh:SetPoint("BOTTOMRIGHT", -16, 14)
 	sheet.refresh:SetScript("OnClick", function() Load() end)
+	sheet.goldText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	sheet.goldText:SetPoint("TOPLEFT", 18, -16)
 	sheet.status = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sheet.status:SetPoint("BOTTOMLEFT", 18, 20)
 	sheet:Hide()
@@ -653,15 +870,24 @@ function SquidBotsLite_OpenSheet(name)
 		if not name or not UnitOf(name) then Print(T("USAGE")) return end
 	end
 	if not sheet then Build() end
-	if current ~= name then bags, quests, stats, mounts = {}, {}, {}, {} end
+	if current ~= name then
+		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
+		bagMode = "bags"
+		if sheet then sheet.gold = nil end
+	end
 	current = name
 	tab = tab or "gear"
 	sheet:Show()
 	if not UnitOf(name) and tab == "gear" then tab = "bags" end
 	Load()
+	if not sheet.gold then Ask("stats", "stats") end
 end
 
 function SquidBotsLite_SheetDebug()
 	SquidBotsLiteDB.sheetDebug = not SquidBotsLiteDB.sheetDebug
 	Print("sheet debug " .. (SquidBotsLiteDB.sheetDebug and "on" or "off"))
+end
+
+function SquidBotsLite_SheetOnTrade(on)
+	SquidBotsLiteDB.sheetOnTrade = on
 end
