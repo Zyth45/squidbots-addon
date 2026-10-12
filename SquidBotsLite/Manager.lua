@@ -193,6 +193,8 @@ end)
 
 -- What the sheet asks and what the bot answers stay out of the chat.
 local function Hide(_, _, message, name)
+	-- /sbl sheetdebug shows the sheet's questions and the bot's answers, to see where an action stops.
+	if SquidBotsLiteDB and SquidBotsLiteDB.sheetDebug then return false end
 	if (capture and name == capture.name) or (hideFrom[name] and GetTime() < hideFrom[name]) then
 		return true
 	end
@@ -258,15 +260,25 @@ local function AfterChange()
 	end)
 end
 
+-- The bot links an item with 7 fields after its id ("item:ID:0:0:0:0:0:0:0"); the 3.3.5 client wants 9 and
+-- refuses to send a malformed link (a silent Lua error: no trade, no sale). The client's own link is used.
+local function SendableLink(item)
+	local _, link = GetItemInfo(item.id)
+	if link then return link end
+	local color, name = item.link:match("^|c(%x+)|H"), item.link:match("|h%[(.-)%]|h")
+	return "|c" .. (color or "ffffffff") .. "|Hitem:" .. item.id .. ":0:0:0:0:0:0:0:0|h[" .. (name or "?") .. "]|h|r"
+end
+
 local function ItemMenu(item)
+	local link = SendableLink(item)
 	EasyMenu({
 		{ text = item.link, isTitle = true, notCheckable = true },
 		item.soulbound and { text = T("SOULBOUND"), notCheckable = true, disabled = true }
-			or { text = T("GIVE"), notCheckable = true, func = function() Give(item.link); AfterChange() end },
-		{ text = T("EQUIP"), notCheckable = true, func = function() Whisper("e " .. item.link); AfterChange() end },
-		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. item.link); AfterChange() end },
-		{ text = T("SELL"), notCheckable = true, func = function() Sell(item.link); AfterChange() end },
-		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(item.link) end },
+			or { text = T("GIVE"), notCheckable = true, func = function() Give(link); AfterChange() end },
+		{ text = T("EQUIP"), notCheckable = true, func = function() Whisper("e " .. link); AfterChange() end },
+		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. link); AfterChange() end },
+		{ text = T("SELL"), notCheckable = true, func = function() Sell(link); AfterChange() end },
+		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
 	}, menuFrame, "cursor", 0, 0, "MENU")
 end
 
@@ -349,7 +361,7 @@ local function BuildBags(page)
 		end)
 		b:SetScript("OnClick", function(self)
 			if not self.item then return end
-			if IsShiftKeyDown() then ChatEdit_InsertLink(self.item.link) else ItemMenu(self.item) end
+			if IsShiftKeyDown() then ChatEdit_InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
 		end)
 		page.buttons[i] = b
 	end
@@ -647,4 +659,9 @@ function SquidBotsLite_OpenSheet(name)
 	sheet:Show()
 	if not UnitOf(name) and tab == "gear" then tab = "bags" end
 	Load()
+end
+
+function SquidBotsLite_SheetDebug()
+	SquidBotsLiteDB.sheetDebug = not SquidBotsLiteDB.sheetDebug
+	Print("sheet debug " .. (SquidBotsLiteDB.sheetDebug and "on" or "off"))
 end

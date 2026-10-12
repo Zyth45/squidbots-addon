@@ -1669,6 +1669,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "alts" then
 		ShowAlts()
+	elseif command == "sheetdebug" and SquidBotsLite_SheetDebug then
+		SquidBotsLite_SheetDebug()
 	elseif command == "bot" and SquidBotsLite_OpenSheet then
 		SquidBotsLite_OpenSheet(rest)
 	elseif command == "spec" or command == "specs" then
