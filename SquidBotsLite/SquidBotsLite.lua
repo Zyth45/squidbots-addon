@@ -266,9 +266,11 @@ local function Ask(roles)
 	Print(string.format(L.ASKED, name, message))
 end
 
+-- A menu closes on its own once the mouse has left it this many seconds (the game keeps it open otherwise).
+local MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteMenu", UIParent, "UIDropDownMenuTemplate")
 local function ShowMenu(items)
-	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU")
+	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 end
 
 local ShowAlts, ShowSpecs

@@ -339,6 +339,7 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", Hide)
 -- ---------------------------------------------------------------------------
 -- Actions on an item
 -- ---------------------------------------------------------------------------
+local MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteSheetMenu", UIParent, "UIDropDownMenuTemplate")
 
 -- "t [item]" opens a trade with the master first, and puts the item in only once the trade is open.
@@ -445,7 +446,7 @@ local function ItemMenu(item)
 			{ text = item.link, isTitle = true, notCheckable = true },
 			{ text = T("WITHDRAW"), notCheckable = true, func = function() Whisper("bank -" .. link); AfterChange() end },
 			{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
-		}, menuFrame, "cursor", 0, 0, "MENU")
+		}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 		return
 	end
 	EasyMenu({
@@ -457,7 +458,7 @@ local function ItemMenu(item)
 		{ text = T("SELL"), notCheckable = true, func = function() Sell(link); AfterChange() end },
 		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); AfterChange() end },
 		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
-	}, menuFrame, "cursor", 0, 0, "MENU")
+	}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 end
 
 -- ---------------------------------------------------------------------------
@@ -688,7 +689,7 @@ local function StratMenu(kind)
 			table.insert(items, { text = name, notCheckable = true, func = function() Whisper(kind .. " +" .. name); AfterChange() end })
 		end
 	end
-	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU")
+	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 end
 
 local function BuildStrats(page)
