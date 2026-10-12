@@ -33,6 +33,12 @@ local STRINGS = {
 		T_AUTOPICK_ASK = "%s takes again the talents of its specialization's build for its level?",
 		T_NONE = "No talent learnt yet.", T_NO_CMD = "No answer: this server's CoA Bots has no talent list yet (2.1 or later, CoA classes).",
 		T_HINT = "The talents this bot learnt, by specialization tree. Reset to the build: the community build of its spec.",
+		T_CHOOSE = "Choose talents", T_SAVE = "Save (%d)", T_CANCEL = "Cancel", T_BACK = "Learnt talents",
+		T_POINTS = "Spec: %d spent, %d left  -  Class: %d spent, %d left",
+		T_LEFT = "Left after your choices: spec %d, class %d", T_CLASS = "class", T_SPEC = "spec",
+		T_REQ = "level %d", T_COST = "cost %d",
+		T_CHOOSE_HINT = "+ adds a rank, - takes it back: nothing changes until Save. A saved rank cannot be taken back (Reset to the build can).",
+		T_NO_OPTIONS = "No talent to choose (CoA classes only, CoA Bots 2.1 or later).", T_SAVING = "Learning %d ranks...",
 	},
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
@@ -63,6 +69,12 @@ local STRINGS = {
 		T_AUTOPICK_ASK = "%s reprend les talents du build de sa spé pour son niveau ?",
 		T_NONE = "Aucun talent appris pour l'instant.", T_NO_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la liste des talents (2.1 ou plus, classes CoA).",
 		T_HINT = "Les talents appris par ce bot, par arbre de spé. Remettre le build : le build de la communauté pour sa spé.",
+		T_CHOOSE = "Choisir les talents", T_SAVE = "Sauvegarder (%d)", T_CANCEL = "Annuler", T_BACK = "Talents appris",
+		T_POINTS = "Spé : %d dépensés, %d restants  -  Classe : %d dépensés, %d restants",
+		T_LEFT = "Restants après vos choix : spé %d, classe %d", T_CLASS = "classe", T_SPEC = "spé",
+		T_REQ = "niveau %d", T_COST = "coût %d",
+		T_CHOOSE_HINT = "+ ajoute un rang, - le retire : rien ne change avant Sauvegarder. Un rang sauvegardé ne se retire plus (Remettre le build, si).",
+		T_NO_OPTIONS = "Aucun talent à choisir (classes CoA seulement, CoA Bots 2.1 ou plus).", T_SAVING = "Apprentissage de %d rangs...",
 	},
 }
 local function T(key)
@@ -90,6 +102,10 @@ local sheet, current, tab
 local capture, hideFrom, lastAsked = nil, {}, {}
 local bags, quests, stats, mounts, bank = {}, {}, {}, {}, {}
 local talents, talentSpent, talentOffset = {}, nil, 0
+-- Choosing talents: what the bot may take ("talents options"), the ranks the player adds before Save, and the
+-- points each tree has left ("Talent points: N spent, M left", "Class points: N spent, M left").
+local options, pending, points, choosing = {}, {}, nil, false
+local saveQueue, saveNext = {}, 0
 local strats = { co = {}, nc = {} }
 local bagMode = "bags"
 local queue = {}
@@ -201,12 +217,36 @@ local function ParseTalents(lines)
 				max = tonumber(max) or 1, tree = line:match("%(tree (.-)%)") or "" })
 		end
 		spent = tonumber(line:match("^Talent points: (%d+) spent")) or spent
+		local ss, sl = line:match("^Talent points: (%d+) spent, (%d+) left")
+		if ss then points = points or {}; points.specSpent, points.specLeft = tonumber(ss), tonumber(sl) end
+		local cs, cl = line:match("^Class points: (%d+) spent, (%d+) left")
+		if cs then points = points or {}; points.classSpent, points.classLeft = tonumber(cs), tonumber(cl) end
 	end
 	table.sort(list, function(a, b)
 		if a.tree ~= b.tree then return a.tree < b.tree end
 		return a.name < b.name
 	end)
 	return list, spent
+end
+
+-- "Talent option: <link> entry 123 rank 0/3 cost 1 spec level 10 (can learn)", then "Talent options: N".
+local function ParseOptions(lines)
+	local list = {}
+	for _, line in ipairs(lines) do
+		local id = tonumber(line:match("^Talent option: .-|Hspell:(%d+)|h"))
+		local entry, rank, max, cost, kind, level = line:match("entry (%d+) rank (%d+)/(%d+) cost (%d+) (%a+) level (%d+)")
+		if id and entry then
+			table.insert(list, { id = id, name = line:match("|h%[(.-)%]|h") or "?", entry = tonumber(entry),
+				rank = tonumber(rank), max = tonumber(max), cost = tonumber(cost), kind = kind, level = tonumber(level),
+				canLearn = line:find("(can learn)", 1, true) ~= nil })
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.kind ~= b.kind then return a.kind == "class" end
+		if a.level ~= b.level then return a.level < b.level end
+		return a.name < b.name
+	end)
+	return list
 end
 
 local function Finish()
@@ -226,6 +266,9 @@ local function Finish()
 	elseif done.kind == "talents" then
 		talents, talentSpent = ParseTalents(done.lines)
 		talentOffset = 0
+	elseif done.kind == "options" then
+		options = ParseOptions(done.lines)
+		talentOffset = 0
 	elseif done.kind == "co" or done.kind == "nc" then
 		strats[done.kind] = ParseStrats(done.lines)
 	else
@@ -237,7 +280,7 @@ local function Finish()
 	if banker then
 		sheet.status:SetText(T("NO_BANKER"))
 	elseif #done.lines == 0 then
-		sheet.status:SetText(done.kind == "mounts" and T("NO_MOUNT_CMD") or done.kind == "talents" and T("T_NO_CMD") or T("NO_REPLY"))
+		sheet.status:SetText(done.kind == "mounts" and T("NO_MOUNT_CMD") or (done.kind == "talents" or done.kind == "options") and T("T_NO_CMD") or T("NO_REPLY"))
 	else
 		sheet.status:SetText("")
 	end
@@ -260,7 +303,8 @@ watch:SetScript("OnEvent", function(_, event, message, sender)
 				table.insert(capture.lines, message)
 			end
 			capture.last = GetTime()
-			if (capture.kind == "mounts" and message:find("^Mounts: %d+")) or (capture.kind == "talents" and message:find("^Talents: %d+")) then Finish()
+			if (capture.kind == "mounts" and message:find("^Mounts: %d+")) or (capture.kind == "talents" and message:find("^Talents: %d+"))
+				or (capture.kind == "options" and message:find("^Talent options: %d+")) then Finish()
 			elseif (capture.kind == "co" or capture.kind == "nc") and message:find("^Strategies:") then Finish() end
 		end
 	elseif sheet and sheet:IsShown() and tab == "gear" then
@@ -347,7 +391,7 @@ local function AfterChange()
 		if current == name and sheet:IsShown() then
 			if tab == "bags" then Ask(bagMode, bagMode == "bank" and "bank" or "c")
 			elseif tab == "mounts" then Ask("mounts", "mount ?")
-			elseif tab == "talents" then Ask("talents", "talents ?")
+			elseif tab == "talents" then Ask("talents", "talents ?"); if choosing then Ask("options", "talents options") end
 			elseif tab == "strats" then Ask("co", "co ?"); Ask("nc", "nc ?")
 			elseif tab == "gear" then Render() end
 		end
@@ -703,68 +747,168 @@ StaticPopupDialogs.SQUIDBOTSLITE_AUTOPICK = {
 	OnAccept = function() Whisper("talents autopick"); AfterChange() end,
 }
 
+local function Pending(o) return pending[o.entry] or 0 end
+
+local function PendingCost(kind)
+	local total = 0
+	for _, o in ipairs(options) do
+		if o.kind == kind then total = total + Pending(o) * o.cost end
+	end
+	return total
+end
+
+local function PendingCount()
+	local n = 0
+	for _, ranks in pairs(pending) do n = n + ranks end
+	return n
+end
+
+-- A rank may be added when the bot's level allows it, the talent has a rank left and its tree has the points.
+local function CanAdd(o)
+	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
+	if info.level and info.level < o.level then return false end
+	if o.rank + Pending(o) >= o.max then return false end
+	if points then
+		local left = o.kind == "class" and points.classLeft or points.specLeft
+		if left and PendingCost(o.kind) + o.cost > left then return false end
+	end
+	return true
+end
+
+-- Save: one "talents learn <entry>" a second per rank, in the order of the levels they need; the answers
+-- ("Talent learned: ...", "Cannot learn ...: <reason>") go to the chat, then both lists are asked again.
+local function Save()
+	saveQueue = {}
+	for _, o in ipairs(options) do
+		for _ = 1, Pending(o) do table.insert(saveQueue, o.entry) end
+	end
+	if #saveQueue == 0 then return end
+	Print(string.format(T("T_SAVING"), #saveQueue))
+	pending = {}
+	saveNext = 0
+end
+
+local saveWatch = CreateFrame("Frame")
+saveWatch:RegisterEvent("CHAT_MSG_WHISPER")
+saveWatch:SetScript("OnEvent", function(_, _, message, sender)
+	if sender ~= current then return end
+	if message:find("^Talent learned: ") or message:find("^Cannot learn ") or message:find("^Talents can only be chosen")
+		or message:find("^Unknown talent: ") or message:find("^Talents set from the build") then
+		Print(sender .. ": " .. message)
+	end
+end)
+saveWatch:SetScript("OnUpdate", function()
+	if #saveQueue == 0 or GetTime() < saveNext then return end
+	saveNext = GetTime() + 1.2
+	Whisper("talents learn " .. table.remove(saveQueue, 1))
+	if #saveQueue == 0 then AfterChange() end
+end)
+
+local function TalentRow(page, i)
+	local row = CreateFrame("Button", nil, page)
+	row:SetWidth(410)
+	row:SetHeight(22)
+	row:SetPoint("TOPLEFT", 10, -(i - 1) * 24)
+	row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+	row.icon = row:CreateTexture(nil, "ARTWORK")
+	row.icon:SetWidth(20)
+	row.icon:SetHeight(20)
+	row.icon:SetPoint("LEFT", 2, 0)
+	row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	row.name:SetPoint("LEFT", 28, 0)
+	row.name:SetWidth(180)
+	row.name:SetJustifyH("LEFT")
+	row.rank = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	row.rank:SetPoint("LEFT", 212, 0)
+	row.tree = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	row.tree:SetPoint("LEFT", 258, 0)
+	row.tree:SetWidth(110)
+	row.tree:SetJustifyH("LEFT")
+	row.minus = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+	row.minus:SetWidth(20)
+	row.minus:SetHeight(18)
+	row.minus:SetPoint("RIGHT", -24, 0)
+	row.minus:SetText("-")
+	row.plus = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+	row.plus:SetWidth(20)
+	row.plus:SetHeight(18)
+	row.plus:SetPoint("RIGHT", 0, 0)
+	row.plus:SetText("+")
+	row:SetScript("OnEnter", function(self)
+		local id = self.talent and self.talent.id or self.option and self.option.id
+		if id then
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetHyperlink("spell:" .. id)
+			GameTooltip:Show()
+		end
+	end)
+	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	row:SetScript("OnClick", function(self)
+		local id = self.talent and self.talent.id or self.option and self.option.id
+		if id and IsShiftKeyDown() then ChatEdit_InsertLink(GetSpellLink(id) or "") end
+	end)
+	row:EnableMouseWheel(true)
+	row:SetScript("OnMouseWheel", function(_, delta)
+		local count = choosing and #options or #talents
+		talentOffset = math.max(0, math.min(math.max(0, count - TALENT_ROWS), talentOffset - delta * 3))
+		RenderTalents(page)
+	end)
+	row.plus:SetScript("OnClick", function()
+		if row.option and CanAdd(row.option) then pending[row.option.entry] = Pending(row.option) + 1 end
+		RenderTalents(page)
+	end)
+	row.minus:SetScript("OnClick", function()
+		if row.option and Pending(row.option) > 0 then pending[row.option.entry] = Pending(row.option) - 1 end
+		RenderTalents(page)
+	end)
+	return row
+end
+
 local function BuildTalents(page)
 	page.rows = {}
-	for i = 1, TALENT_ROWS do
-		local row = CreateFrame("Button", nil, page)
-		row:SetWidth(410)
-		row:SetHeight(22)
-		row:SetPoint("TOPLEFT", 10, -(i - 1) * 24)
-		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-		row.icon = row:CreateTexture(nil, "ARTWORK")
-		row.icon:SetWidth(20)
-		row.icon:SetHeight(20)
-		row.icon:SetPoint("LEFT", 2, 0)
-		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		row.name:SetPoint("LEFT", 28, 0)
-		row.name:SetWidth(200)
-		row.name:SetJustifyH("LEFT")
-		row.rank = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		row.rank:SetPoint("LEFT", 232, 0)
-		row.tree = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-		row.tree:SetPoint("LEFT", 280, 0)
-		row.tree:SetWidth(126)
-		row.tree:SetJustifyH("LEFT")
-		row:SetScript("OnEnter", function(self)
-			if self.talent then
-				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-				GameTooltip:SetHyperlink("spell:" .. self.talent.id)
-				GameTooltip:Show()
-			end
-		end)
-		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		row:SetScript("OnClick", function(self)
-			if self.talent and IsShiftKeyDown() then ChatEdit_InsertLink(GetSpellLink(self.talent.id) or self.talent.name) end
-		end)
-		row:EnableMouseWheel(true)
-		row:SetScript("OnMouseWheel", function(_, delta)
-			talentOffset = math.max(0, math.min(math.max(0, #talents - TALENT_ROWS), talentOffset - delta * 3))
-			RenderTalents(page)
-		end)
-		page.rows[i] = row
-	end
+	for i = 1, TALENT_ROWS do page.rows[i] = TalentRow(page, i) end
 	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
 	page.up:SetPoint("TOPRIGHT", -6, 0)
 	page.up:SetScript("OnClick", function() talentOffset = math.max(0, talentOffset - TALENT_ROWS); RenderTalents(page) end)
 	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
 	page.down:SetPoint("TOPRIGHT", -6, -(TALENT_ROWS * 24) + 16)
 	page.down:SetScript("OnClick", function()
-		if talentOffset + TALENT_ROWS < #talents then talentOffset = talentOffset + TALENT_ROWS end
+		local count = choosing and #options or #talents
+		if talentOffset + TALENT_ROWS < count then talentOffset = talentOffset + TALENT_ROWS end
 		RenderTalents(page)
 	end)
-	page.spent = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	page.spent:SetPoint("TOPLEFT", 12, -(TALENT_ROWS * 24) - 8)
-	page.autopick = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-	page.autopick:SetWidth(150)
-	page.autopick:SetHeight(22)
-	page.autopick:SetPoint("TOPRIGHT", -10, -(TALENT_ROWS * 24) - 4)
-	page.autopick:SetScript("OnClick", function()
+	page.spent = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	page.spent:SetPoint("TOPLEFT", 12, -(TALENT_ROWS * 24) - 4)
+	page.spent:SetWidth(430)
+	page.spent:SetJustifyH("LEFT")
+	-- Learnt view: Choose talents, Reset to the build. Choosing view: Save (N), Cancel, Learnt talents.
+	local function Button(width, x, onClick)
+		local b = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+		b:SetWidth(width)
+		b:SetHeight(22)
+		b:SetPoint("TOPLEFT", x, -(TALENT_ROWS * 24) - 22)
+		b:SetScript("OnClick", onClick)
+		return b
+	end
+	page.choose = Button(140, 10, function()
+		choosing, pending, talentOffset = true, {}, 0
+		Ask("options", "talents options")
+		RenderTalents(page)
+	end)
+	page.autopick = Button(140, 156, function()
 		StaticPopupDialogs.SQUIDBOTSLITE_AUTOPICK.text = string.format(T("T_AUTOPICK_ASK"), current or "?")
 		StaticPopup_Show("SQUIDBOTSLITE_AUTOPICK")
 	end)
+	page.save = Button(130, 10, function() Save(); RenderTalents(page) end)
+	page.cancel = Button(90, 146, function() pending = {}; RenderTalents(page) end)
+	page.back = Button(130, 242, function()
+		choosing, pending, talentOffset = false, {}, 0
+		Ask("talents", "talents ?")
+		RenderTalents(page)
+	end)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.hint:SetPoint("TOPLEFT", 12, -(TALENT_ROWS * 24) - 32)
-	page.hint:SetWidth(420)
+	page.hint:SetPoint("TOPLEFT", 12, -(TALENT_ROWS * 24) - 50)
+	page.hint:SetWidth(430)
 	page.hint:SetJustifyH("LEFT")
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
@@ -772,25 +916,55 @@ local function BuildTalents(page)
 end
 
 RenderTalents = function(page)
-	page.note:SetText(#talents == 0 and capture == nil and (sheet.status:GetText() or "") == "" and T("T_NONE") or "")
-	page.spent:SetText(talentSpent and string.format(T("T_SPENT"), talentSpent) or "")
+	local list = choosing and options or talents
+	local quiet = capture == nil and (sheet.status:GetText() or "") == ""
+	page.note:SetText(#list == 0 and quiet and T(choosing and "T_NO_OPTIONS" or "T_NONE") or "")
+	if choosing and points then
+		page.spent:SetText(string.format(T("T_LEFT"), (points.specLeft or 0) - PendingCost("spec"), (points.classLeft or 0) - PendingCost("class")))
+	elseif points then
+		page.spent:SetText(string.format(T("T_POINTS"), points.specSpent or 0, points.specLeft or 0, points.classSpent or 0, points.classLeft or 0))
+	else
+		page.spent:SetText(talentSpent and string.format(T("T_SPENT"), talentSpent) or "")
+	end
+	page.choose:SetText(T("T_CHOOSE"))
 	page.autopick:SetText(T("T_AUTOPICK"))
-	page.hint:SetText(T("T_HINT"))
+	page.save:SetText(string.format(T("T_SAVE"), PendingCount()))
+	page.cancel:SetText(T("T_CANCEL"))
+	page.back:SetText(T("T_BACK"))
+	for _, b in ipairs({ page.choose, page.autopick }) do if choosing then b:Hide() else b:Show() end end
+	for _, b in ipairs({ page.save, page.cancel, page.back }) do if choosing then b:Show() else b:Hide() end end
+	if PendingCount() > 0 then page.save:Enable(); page.cancel:Enable() else page.save:Disable(); page.cancel:Disable() end
+	page.hint:SetText(T(choosing and "T_CHOOSE_HINT" or "T_HINT"))
 	for i, row in ipairs(page.rows) do
-		local talent = talents[talentOffset + i]
-		row.talent = talent
-		if talent then
-			row.icon:SetTexture(select(3, GetSpellInfo(talent.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
-			row.name:SetText(talent.name)
-			local full = talent.rank >= talent.max
-			row.rank:SetText((full and "|cff40ff40" or "|cffffd100") .. talent.rank .. "/" .. talent.max .. "|r")
-			row.tree:SetText(talent.tree)
+		local item = list[talentOffset + i]
+		row.talent, row.option = nil, nil
+		if item then
+			row.icon:SetTexture(select(3, GetSpellInfo(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			row.name:SetText(item.name)
+			if choosing then
+				row.option = item
+				local add = Pending(item)
+				local rank = item.rank .. (add > 0 and ("|cff40ff40+" .. add .. "|r") or "") .. "/" .. item.max
+				row.rank:SetText((item.rank + add >= item.max and "|cff40ff40" or "|cffffd100") .. rank .. "|r")
+				local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
+				local req = string.format(T("T_REQ"), item.level)
+				if info.level and info.level < item.level then req = "|cffff4040" .. req .. "|r" end
+				row.tree:SetText(T(item.kind == "class" and "T_CLASS" or "T_SPEC") .. ", " .. string.format(T("T_COST"), item.cost) .. ", " .. req)
+				row.plus:Show(); row.minus:Show()
+				if CanAdd(item) then row.plus:Enable() else row.plus:Disable() end
+				if add > 0 then row.minus:Enable() else row.minus:Disable() end
+			else
+				row.talent = item
+				row.rank:SetText((item.rank >= item.max and "|cff40ff40" or "|cffffd100") .. item.rank .. "/" .. item.max .. "|r")
+				row.tree:SetText(item.tree)
+				row.plus:Hide(); row.minus:Hide()
+			end
 			row:Show()
 		else
 			row:Hide()
 		end
 	end
-	if #talents > TALENT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
+	if #list > TALENT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
 end
 
 local RenderMounts
@@ -1094,6 +1268,7 @@ function SquidBotsLite_OpenSheet(name)
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
 		talents, talentSpent, talentOffset = {}, nil, 0
+		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
 		bagMode = "bags"
 		if sheet then sheet.gold = nil end
 	end
