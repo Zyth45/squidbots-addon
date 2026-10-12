@@ -439,8 +439,8 @@ local function BuildGear(page)
 	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 162 + (i - 1) * 44, -296) end
 	-- The bot itself, as on the game's character sheet; drag to turn it. Needs the bot in the group and seen.
 	page.model = CreateFrame("PlayerModel", nil, page)
-	page.model:SetPoint("TOPLEFT", 56, 4)
-	page.model:SetPoint("BOTTOMRIGHT", page, "TOPRIGHT", -62, -232)
+	page.model:SetPoint("TOPLEFT", 56, -16)
+	page.model:SetPoint("BOTTOMRIGHT", page, "TOPRIGHT", -62, -238)
 	page.model:EnableMouse(true)
 	page.model.facing = 0
 	page.model:SetScript("OnMouseDown", function(self) self.dragX = GetCursorPosition() end)
@@ -453,7 +453,7 @@ local function BuildGear(page)
 		self:SetFacing(self.facing)
 	end)
 	page.ilvl = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	page.ilvl:SetPoint("TOP", 0, -232)
+	page.ilvl:SetPoint("TOP", 0, -240)
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
 	page.note:SetWidth(240)
@@ -463,7 +463,7 @@ local function BuildGear(page)
 	page.best = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.best:SetWidth(140)
 	page.best:SetHeight(22)
-	page.best:SetPoint("TOP", 0, -254)
+	page.best:SetPoint("TOP", 0, -260)
 	page.best:SetScript("OnClick", function() Whisper("autogear"); AfterChange() end)
 end
 
@@ -781,6 +781,7 @@ local function RenderGear(page)
 			page.model:SetUnit(unit)
 			page.model.name, page.model.facing = current, 0
 			page.model:SetFacing(0)
+			page.model:SetPosition(-0.25, 0, -0.05)
 		end
 		page.model:Show()
 	else
