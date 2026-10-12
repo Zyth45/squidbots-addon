@@ -27,7 +27,8 @@ local STRINGS = {
 		NO_BANKER = "No banker next to the bot: the bank opens only when the bot stands by a banker.",
 		ABANDON = "Abandon this quest", ABANDON_ASK = "%s abandons %s?", QUEST_HINT = "Right-click a quest to abandon it.",
 		DROP_HINT = "Drop an item from your bags here to give it to the bot (a trade opens).",
-		GOLD = "Gold", SPEC = "Spec", XP = "XP",
+		GOLD = "Gold", SPEC = "Spec", XP = "XP", ILVL = "Item level %d", LEVEL = "Level %d %s",
+		MODEL_HINT = "Drag to turn it.",
 	},
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
@@ -52,7 +53,8 @@ local STRINGS = {
 		NO_BANKER = "Pas de banquier à côté du bot : la banque ne s'ouvre que si le bot est devant un banquier.",
 		ABANDON = "Abandonner cette quête", ABANDON_ASK = "%s abandonne %s ?", QUEST_HINT = "Clic droit sur une quête pour l'abandonner.",
 		DROP_HINT = "Déposez ici un objet de vos sacs pour le donner au bot (un échange s'ouvre).",
-		GOLD = "Or", SPEC = "Spé", XP = "XP",
+		GOLD = "Or", SPEC = "Spé", XP = "XP", ILVL = "Niveau d'objet %d", LEVEL = "Niveau %d %s",
+		MODEL_HINT = "Faites glisser pour le tourner.",
 	},
 }
 local function T(key)
@@ -435,16 +437,33 @@ local function BuildGear(page)
 	for i, slot in ipairs(GEAR_LEFT) do Slot(slot, 10, -(i - 1) * 40) end
 	for i, slot in ipairs(GEAR_RIGHT) do Slot(slot, 400, -(i - 1) * 40) end
 	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 162 + (i - 1) * 44, -296) end
+	-- The bot itself, as on the game's character sheet; drag to turn it. Needs the bot in the group and seen.
+	page.model = CreateFrame("PlayerModel", nil, page)
+	page.model:SetPoint("TOPLEFT", 56, 4)
+	page.model:SetPoint("BOTTOMRIGHT", page, "TOPRIGHT", -62, -232)
+	page.model:EnableMouse(true)
+	page.model.facing = 0
+	page.model:SetScript("OnMouseDown", function(self) self.dragX = GetCursorPosition() end)
+	page.model:SetScript("OnMouseUp", function(self) self.dragX = nil end)
+	page.model:SetScript("OnUpdate", function(self)
+		if not self.dragX then return end
+		local x = GetCursorPosition()
+		self.facing = self.facing + (x - self.dragX) * 0.02
+		self.dragX = x
+		self:SetFacing(self.facing)
+	end)
+	page.ilvl = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	page.ilvl:SetPoint("TOP", 0, -232)
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
 	page.note:SetWidth(240)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.hint:SetPoint("TOP", 0, -20)
-	page.hint:SetWidth(240)
+	page.hint:SetPoint("TOP", 0, -346)
+	page.hint:SetWidth(320)
 	page.best = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.best:SetWidth(140)
 	page.best:SetHeight(22)
-	page.best:SetPoint("TOP", 0, -250)
+	page.best:SetPoint("TOP", 0, -254)
 	page.best:SetScript("OnClick", function() Whisper("autogear"); AfterChange() end)
 end
 
@@ -732,17 +751,45 @@ local TABS = { { "gear", "GEAR", BuildGear }, { "bags", "BAGS", BuildBags }, { "
 -- The Strategies tab (BuildStrats) is kept out for now: too easy to break a bot with it (decision 12/10).
 -- Put { "strats", "STRATS", BuildStrats } back in TABS to show it.
 
+-- Average item level of what the bot wears (shirt and tabard left out), from the client's item cache.
+local function AverageItemLevel(unit)
+	local total, count = 0, 0
+	for slot = 1, 18 do
+		if slot ~= 4 then
+			local link = GetInventoryItemLink(unit, slot)
+			local level = link and select(4, GetItemInfo(link))
+			if level and level > 0 then total, count = total + level, count + 1 end
+		end
+	end
+	if count > 0 then return math.floor(total / count + 0.5) end
+end
+
 local function RenderGear(page)
 	local unit = current and UnitOf(current)
 	local inRange = unit and CheckInteractDistance(unit, 1)
 	page.note:SetText(not unit and T("NOT_IN_GROUP") or (not inRange and T("OUT_OF_RANGE")) or "")
-	page.hint:SetText(T("GEAR_HINT"))
+	page.hint:SetText(T("GEAR_HINT") .. " " .. T("MODEL_HINT"))
 	page.best:SetText(T("BEST_GEAR"))
 	for slot, b in pairs(page.slots) do
 		local texture = unit and GetInventoryItemTexture(unit, slot)
 		b.icon:SetTexture(texture)
 		if texture then b.icon:Show() else b.icon:Hide() end
 	end
+	-- The model is set once per bot (setting it again would turn it back to the front).
+	if unit and UnitIsVisible(unit) then
+		if page.model.name ~= current then
+			page.model:SetUnit(unit)
+			page.model.name, page.model.facing = current, 0
+			page.model:SetFacing(0)
+		end
+		page.model:Show()
+	else
+		page.model:ClearModel()
+		page.model.name = nil
+		page.model:Hide()
+	end
+	local ilvl = unit and AverageItemLevel(unit)
+	page.ilvl:SetText(ilvl and string.format(T("ILVL"), ilvl) or "")
 end
 
 local function RenderBags(page)
@@ -785,11 +832,19 @@ end
 Render = function()
 	if not sheet or not sheet:IsShown() then return end
 	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?"))
-	sheet.goldText:SetText(sheet.gold and ("|cffffd100" .. T("GOLD") .. "|r " .. sheet.gold) or "")
-	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current]
-	local spec = info and info.spec and ("|cffffd100" .. T("SPEC") .. "|r " .. info.spec) or ""
-	sheet.specText:SetText(spec)
-	if info and info.xp then
+	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
+	local gold = sheet.gold or info.gold
+	sheet.goldText:SetText(gold and ("|cffffd100" .. T("GOLD") .. "|r " .. gold) or "")
+	local line = ""
+	if info.level then
+		local class = info.class or ""
+		local color = info.token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[info.token]
+		if color then class = string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, class) end
+		line = string.format(T("LEVEL"), info.level, class)
+	end
+	if info.spec then line = line .. "  |cffaaaaaa- " .. info.spec .. "|r" end
+	sheet.specText:SetText(line)
+	if info.xp then
 		sheet.xp:SetValue(info.xp)
 		sheet.xp.text:SetText(string.format("%s %d%%%s", T("XP"), info.xp, (info.rest or 0) > 0 and (" (+" .. info.rest .. "%)") or ""))
 		sheet.xp:Show()
@@ -834,7 +889,7 @@ end
 local function Build()
 	sheet = CreateFrame("Frame", "SquidBotsLiteSheet", UIParent)
 	sheet:SetWidth(470)
-	sheet:SetHeight(520)
+	sheet:SetHeight(540)
 	sheet:SetPoint("CENTER", 120, 0)
 	sheet:SetBackdrop(BACKDROP)
 	sheet:SetBackdropColor(0.04, 0.04, 0.05, 1)
@@ -865,7 +920,7 @@ local function Build()
 		b:SetScript("OnClick", function() tab = def[1]; Load() end)
 		sheet.tabs[def[1]] = b
 		local page = CreateFrame("Frame", nil, sheet)
-		page:SetPoint("TOPLEFT", 8, -70)
+		page:SetPoint("TOPLEFT", 8, -86)
 		page:SetPoint("BOTTOMRIGHT", -8, 40)
 		def[3](page)
 		pages[def[1]] = page
@@ -876,13 +931,13 @@ local function Build()
 	sheet.refresh:SetPoint("BOTTOMRIGHT", -16, 14)
 	sheet.refresh:SetScript("OnClick", function() Load() end)
 	sheet.goldText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	sheet.goldText:SetPoint("TOPLEFT", 18, -16)
-	sheet.specText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	sheet.specText:SetPoint("BOTTOMLEFT", 18, 44)
+	sheet.goldText:SetPoint("TOPRIGHT", -20, -64)
+	sheet.specText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	sheet.specText:SetPoint("TOPLEFT", 20, -64)
 	sheet.xp = CreateFrame("StatusBar", nil, sheet)
-	sheet.xp:SetWidth(200)
-	sheet.xp:SetHeight(10)
-	sheet.xp:SetPoint("BOTTOMRIGHT", -18, 44)
+	sheet.xp:SetHeight(12)
+	sheet.xp:SetPoint("BOTTOMLEFT", 20, 44)
+	sheet.xp:SetPoint("BOTTOMRIGHT", -20, 44)
 	sheet.xp:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 	sheet.xp:SetStatusBarColor(0.58, 0.0, 0.55)
 	sheet.xp:SetMinMaxValues(0, 100)
