@@ -727,7 +727,9 @@ RenderMounts = function(page)
 end
 
 local TABS = { { "gear", "GEAR", BuildGear }, { "bags", "BAGS", BuildBags }, { "quests", "QUESTS", BuildQuests },
-	{ "mounts", "MOUNTS", BuildMounts }, { "strats", "STRATS", BuildStrats }, { "info", "INFO", BuildInfo } }
+	{ "mounts", "MOUNTS", BuildMounts }, { "info", "INFO", BuildInfo } }
+-- The Strategies tab (BuildStrats) is kept out for now: too easy to break a bot with it (decision 12/10).
+-- Put { "strats", "STRATS", BuildStrats } back in TABS to show it.
 
 local function RenderGear(page)
 	local unit = current and UnitOf(current)
