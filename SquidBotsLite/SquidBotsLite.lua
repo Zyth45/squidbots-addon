@@ -24,7 +24,7 @@ local STRINGS = {
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
-		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no specialization",
+		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
 		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
 		TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
 		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
@@ -87,7 +87,7 @@ local STRINGS = {
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
-		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "aucune spé",
+		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
 		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
 		TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
 		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
@@ -1387,7 +1387,7 @@ local function AltLine(name)
 	if color then class = string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, class) end
 	local line = string.format(L.ALTS_LEVEL, info.level, class)
 	if info.spec then line = line .. " |cffaaaaaa- " .. info.spec .. "|r"
-	elseif info.noSpec then line = line .. " |cffff9933- " .. L.ALTS_NO_SPEC .. "|r" end
+	elseif info.noSpec and (info.level or 0) >= 10 then line = line .. " |cffff9933- " .. L.ALTS_NO_SPEC .. "|r" end
 	return line
 end
 
@@ -1695,6 +1695,7 @@ local function BuildAlts()
 		row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.info:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
 		row.info:SetWidth(168)
+		row.info:SetHeight(12)
 		row.info:SetJustifyH("LEFT")
 		row.xp = CreateFrame("StatusBar", nil, row)
 		row.xp:SetWidth(150)
