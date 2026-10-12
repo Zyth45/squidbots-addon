@@ -467,11 +467,11 @@ local function BuildGear(page)
 	end
 	for i, slot in ipairs(GEAR_LEFT) do Slot(slot, 10, -(i - 1) * 40) end
 	for i, slot in ipairs(GEAR_RIGHT) do Slot(slot, 400, -(i - 1) * 40) end
-	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 162 + (i - 1) * 44, -296) end
+	for i, slot in ipairs(GEAR_BOTTOM) do Slot(slot, 162 + (i - 1) * 44, -330) end
 	-- The bot itself, as on the game's character sheet; drag to turn it. Needs the bot in the group and seen.
 	page.model = CreateFrame("PlayerModel", nil, page)
-	page.model:SetPoint("TOPLEFT", 56, -16)
-	page.model:SetPoint("BOTTOMRIGHT", page, "TOPRIGHT", -62, -238)
+	page.model:SetPoint("TOPLEFT", 56, -44)
+	page.model:SetPoint("BOTTOMRIGHT", page, "TOPRIGHT", -62, -272)
 	page.model:EnableMouse(true)
 	page.model.facing = 0
 	page.model:SetScript("OnMouseDown", function(self) self.dragX = GetCursorPosition() end)
@@ -484,17 +484,17 @@ local function BuildGear(page)
 		self:SetFacing(self.facing)
 	end)
 	page.ilvl = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	page.ilvl:SetPoint("TOP", 0, -240)
+	page.ilvl:SetPoint("TOP", 0, -276)
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
 	page.note:SetWidth(240)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.hint:SetPoint("TOP", 0, -346)
+	page.hint:SetPoint("TOP", 0, -374)
 	page.hint:SetWidth(320)
 	page.best = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.best:SetWidth(140)
 	page.best:SetHeight(22)
-	page.best:SetPoint("TOP", 0, -260)
+	page.best:SetPoint("TOP", 0, -296)
 	page.best:SetScript("OnClick", function() Whisper("autogear"); AfterChange() end)
 end
 
