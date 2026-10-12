@@ -1434,8 +1434,11 @@ end)
 local function RefreshAlts()
 	if not altsFrame then return end
 	NoteGroup()
+	-- 25 alts for a raid: the list scrolls (wheel or bar), ALT_ROWS at a time.
+	FauxScrollFrame_Update(altsFrame.scroll, #roster, ALT_ROWS, ALT_ROW_H)
+	local offset = FauxScrollFrame_GetOffset(altsFrame.scroll)
 	for i, row in ipairs(altRows) do
-		local alt = roster[i]
+		local alt = roster[i + offset]
 		row.alt = alt
 		if alt then
 			row.name:SetText(alt.name)
@@ -1453,8 +1456,6 @@ local function RefreshAlts()
 	end
 	if #roster == 0 then
 		altsFrame.status:SetText(L.ALTS_EMPTY)
-	elseif #roster > ALT_ROWS then
-		altsFrame.status:SetText(string.format(L.ALTS_MORE, #roster - ALT_ROWS))
 	else
 		altsFrame.status:SetText("")
 	end
@@ -1639,7 +1640,7 @@ end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
-	altsFrame:SetWidth(430)
+	altsFrame:SetWidth(452)
 	altsFrame:SetHeight(138 + ALT_ROWS * ALT_ROW_H)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
@@ -1779,6 +1780,21 @@ local function BuildAlts()
 		end)
 		row:Hide()
 		altRows[i] = row
+	end
+	altsFrame.scroll = CreateFrame("ScrollFrame", "SquidBotsLiteAltsScroll", altsFrame, "FauxScrollFrameTemplate")
+	altsFrame.scroll:SetPoint("TOPLEFT", 16, -80)
+	altsFrame.scroll:SetPoint("BOTTOMRIGHT", -32, 60)
+	altsFrame.scroll:SetScript("OnVerticalScroll", function(self, offset)
+		FauxScrollFrame_OnVerticalScroll(self, offset, ALT_ROW_H, RefreshAlts)
+	end)
+	-- Under the rows, so that their buttons still take the clicks; the rows pass the wheel on to it.
+	altsFrame.scroll:SetFrameLevel(altsFrame:GetFrameLevel())
+	for _, row in ipairs(altRows) do
+		row:EnableMouseWheel(true)
+		row:SetScript("OnMouseWheel", function(_, delta)
+			local bar = _G.SquidBotsLiteAltsScrollScrollBar
+			bar:SetValue(bar:GetValue() - delta * ALT_ROW_H)
+		end)
 	end
 	altsFrame.help = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	altsFrame.help:SetPoint("BOTTOMLEFT", 16, 14)
