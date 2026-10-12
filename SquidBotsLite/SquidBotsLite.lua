@@ -37,7 +37,9 @@ local STRINGS = {
 		A_HOWTO = "To play the characters of another account: log on that account once and set its key, then link it from here with that key.",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
-		ALTS_HELP = "Your other characters, played as bots: a logged-in alt joins your group. They keep their look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
+		ALTS_HELP = "Log an alt in: it joins your group as your bot. Hover a name for more.",
+		ALTS_LOOK = "Keeps its look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
+		ALTS_TIP_CLICK = "Click: open its bot sheet.", ALTS_GOLD = "Gold: %s", ALTS_XP = "XP: %d%% (rested %d%%)",
 		INVITE = "Invite", ASKED = "Asked in %s: %s", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
 		NOT_IN_GROUP = "You are not in a group with bots.",
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
@@ -100,7 +102,9 @@ local STRINGS = {
 		A_HOWTO = "Pour jouer les personnages d'un autre compte : connectez-vous une fois sur ce compte et définissez sa clé, puis liez-le d'ici avec cette clé.",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
-		ALTS_HELP = "Vos autres personnages, joués en bots : un alt connecté rejoint votre groupe. Ils gardent leur apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
+		ALTS_HELP = "Connectez un alt : il rejoint votre groupe comme bot. Survolez un nom pour en savoir plus.",
+		ALTS_LOOK = "Garde son apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
+		ALTS_TIP_CLICK = "Clic : ouvrir sa fiche.", ALTS_GOLD = "Or : %s", ALTS_XP = "XP : %d%% (reposé %d%%)",
 		INVITE = "Inviter", ASKED = "Demandé dans %s : %s", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
 		NOT_IN_GROUP = "Vous n'êtes pas en groupe avec des bots.",
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
@@ -1336,6 +1340,10 @@ local function ParseRoster(text)
 			end
 		end
 	end
+	table.sort(list, function(a, b)
+		if a.online ~= b.online then return a.online end
+		return a.name < b.name
+	end)
 	return list
 end
 
@@ -1435,6 +1443,7 @@ local function RefreshAlts()
 	if not altsFrame then return end
 	NoteGroup()
 	-- 25 alts for a raid: the list scrolls (wheel or bar), ALT_ROWS at a time.
+	altsFrame:SetHeight(138 + math.max(3, math.min(#roster, ALT_ROWS)) * ALT_ROW_H)
 	FauxScrollFrame_Update(altsFrame.scroll, #roster, ALT_ROWS, ALT_ROW_H)
 	local offset = FauxScrollFrame_GetOffset(altsFrame.scroll)
 	for i, row in ipairs(altRows) do
@@ -1772,6 +1781,20 @@ local function BuildAlts()
 		end)
 		-- A logged-in alt's name opens its bot sheet (Manager.lua, beta).
 		row:EnableMouse(true)
+		row:SetScript("OnEnter", function(self)
+			local alt = self.alt
+			if not alt then return end
+			local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[alt.name] or {}
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(alt.name)
+			GameTooltip:AddLine(AltLine(alt.name), 1, 1, 1)
+			if info.xp then GameTooltip:AddLine(string.format(L.ALTS_XP, info.xp, info.rest or 0), 0.8, 0.5, 1) end
+			if info.gold then GameTooltip:AddLine(string.format(L.ALTS_GOLD, info.gold), 1, 0.82, 0) end
+			GameTooltip:AddLine(L.ALTS_LOOK, 0.6, 0.6, 0.6, true)
+			if alt.online and SquidBotsLite_OpenSheet then GameTooltip:AddLine(L.ALTS_TIP_CLICK, 0.4, 0.8, 1) end
+			GameTooltip:Show()
+		end)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		row:SetScript("OnMouseUp", function(self)
 			if self.alt and self.alt.online and SquidBotsLite_OpenSheet then
 				SquidBotsLiteDB.sheetOpened = true
