@@ -45,6 +45,9 @@ local STRINGS = {
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
 		M_FOLLOW = "Follow me", M_STAY = "Stay here", M_ATTACK = "Attack my target", M_SUMMON = "Come to me",
 		M_AUTOPULL_ON = "Auto pull on", M_AUTOPULL_OFF = "Auto pull off", M_KICK = "Remove from group",
+		M_TAKE_LEAD = "Give me the lead", M_MAKE_LEADER = "Make it the leader",
+		M_MARK_ON = "Mark its target (skull)", M_MARK_OFF = "Stop marking",
+		ALTS_LINKED = "linked account", ALTS_FROM_LINKED = "From a linked account: logged in with it, it stays listed here.",
 		M_SHEET = "Bot sheet (gear, bags, quests)", M_STATS = "Stats (bags, money, xp)", M_GEAR = "Best gear", M_HEAL_ME = "Heal only me", M_HEAL_ALL = "Heal the whole group",
 		SUMMON = "Regroup", TIP_SUMMON = "Bots teleport next to you. Handy when one is stuck.",
 		RELEASE = "Release", TIP_RELEASE = "Shown when a bot is dead: dead bots release their spirit and run back to their body.",
@@ -110,6 +113,9 @@ local STRINGS = {
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
 		M_FOLLOW = "Me suivre", M_STAY = "Rester ici", M_ATTACK = "Attaquer ma cible", M_SUMMON = "Venir à moi",
 		M_AUTOPULL_ON = "Auto pull activé", M_AUTOPULL_OFF = "Auto pull désactivé", M_KICK = "Retirer du groupe",
+		M_TAKE_LEAD = "Me rendre le lead", M_MAKE_LEADER = "Le nommer chef",
+		M_MARK_ON = "Marquer sa cible (tête de mort)", M_MARK_OFF = "Arrêter de marquer",
+		ALTS_LINKED = "compte lié", ALTS_FROM_LINKED = "D'un compte lié : connecté une fois d'ici, il reste dans la liste.",
 		M_SHEET = "Fiche du bot (équipement, sacs, quêtes)", M_STATS = "Stats (sacs, argent, xp)", M_GEAR = "Meilleur équipement", M_HEAL_ME = "Ne soigner que moi", M_HEAL_ALL = "Soigner tout le groupe",
 		SUMMON = "Rappel", TIP_SUMMON = "Les bots se téléportent près de vous. Pratique quand l'un d'eux est coincé.",
 		RELEASE = "Libérer", TIP_RELEASE = "Visible quand un bot est mort : les bots morts libèrent leur esprit et rejoignent leur corps.",
@@ -417,6 +423,21 @@ local function UnitOf(name)
 	for i = 1, 4 do
 		if UnitName("party" .. i) == name then return "party" .. i end
 	end
+end
+
+-- The group's leader: in a raid the roster says it (rank 2), in a party UnitIsPartyLeader.
+local function IsGroupLeader(name)
+	local raid = GetNumRaidMembers()
+	if raid > 0 then
+		for i = 1, raid do
+			local member, rank = GetRaidRosterInfo(i)
+			if member == name then return rank == 2 end
+		end
+		return false
+	end
+	if name == UnitName("player") then return IsPartyLeader() == 1 or IsPartyLeader() == true end
+	local unit = UnitOf(name)
+	return unit and UnitIsPartyLeader(unit) and true or false
 end
 
 local function IsCoaBot(name)
@@ -944,9 +965,21 @@ local function BotMenu(name)
 		{ text = L.M_SUMMON, notCheckable = true, func = function() Whisper(name, "summon") end },
 		{ text = L.SPEC_MENU, hasArrow = true, notCheckable = true, menuList = SpecMenu(name) },
 	}
+	-- "give leader": a bot that leads the group (the player's old main, played as a bot now) hands the lead back.
+	if IsGroupLeader(name) then
+		table.insert(items, { text = L.M_TAKE_LEAD, notCheckable = true, func = function() Whisper(name, "give leader") end })
+	elseif IsGroupLeader(UnitName("player")) then
+		table.insert(items, { text = L.M_MAKE_LEADER, notCheckable = true, func = function() PromoteToLeader(name) end })
+	end
 	if roleByName[name] == "tank" then
 		table.insert(items, { text = L.M_AUTOPULL_ON, notCheckable = true, func = function() Whisper(name, "nc +coa auto pull") end })
 		table.insert(items, { text = L.M_AUTOPULL_OFF, notCheckable = true, func = function() Whisper(name, "nc -coa auto pull") end })
+		-- "mark rti" puts the "rti" icon (skull) on the target it fights.
+		table.insert(items, { text = L.M_MARK_ON, notCheckable = true, func = function()
+			Whisper(name, "rti skull")
+			Whisper(name, "co +mark rti")
+		end })
+		table.insert(items, { text = L.M_MARK_OFF, notCheckable = true, func = function() Whisper(name, "co -mark rti") end })
 	elseif roleByName[name] == "heal" then
 		-- "focus heal" makes the healer heal ONLY the listed players: meant for a duo, undone by "clear".
 		local me = UnitName("player")
@@ -1351,7 +1384,7 @@ end
 -- for the WotLK classes (blank for a CoA class), and a CoA name may hold a space. The random bots of the
 -- group come last with a +, so a + counts only for a name once seen offline (an alt) or out of the group.
 local function ParseRoster(text)
-	local list, inParty = {}, {}
+	local list, inParty, seen = {}, {}, {}
 	for i = 1, 4 do
 		local name = UnitName("party" .. i)
 		if name then inParty[name] = true end
@@ -1364,12 +1397,22 @@ local function ParseRoster(text)
 			local head, last = rest:match("^(.-)%s+(%S+)$")
 			local name = (last and WOTLK_CLASSES[last]) and head or rest
 			if name ~= "" then
-				if sign == "-" then SquidBotsLiteDB.alts[name] = true end
+				if sign == "-" then
+					SquidBotsLiteDB.alts[name] = true
+					-- Seen offline in "bot list": a character of this account, not of a linked one.
+					if SquidBotsLiteDB.linkedAlts then SquidBotsLiteDB.linkedAlts[name] = nil end
+				end
 				if sign == "-" or SquidBotsLiteDB.alts[name] or not inParty[name] then
-					table.insert(list, { name = name, online = sign == "+" })
+					table.insert(list, { name = name, online = sign == "+", linked = SquidBotsLiteDB.linkedAlts and SquidBotsLiteDB.linkedAlts[name] })
+					seen[name] = true
 				end
 			end
 		end
+	end
+	-- "bot list" names only this account's characters: those of a linked account logged in from here are kept
+	-- (SquidBotsLiteDB.linkedAlts), offline when the server does not list them.
+	for name in pairs(SquidBotsLiteDB.linkedAlts or {}) do
+		if not seen[name] then table.insert(list, { name = name, online = false, linked = true }) end
 	end
 	table.sort(list, function(a, b)
 		if a.online ~= b.online then return a.online end
@@ -1482,7 +1525,7 @@ local function RefreshAlts()
 		local alt = roster[i + offset]
 		row.alt = alt
 		if alt then
-			row.name:SetText(alt.name)
+			row.name:SetText(alt.linked and (alt.name .. " |cff8888aa(" .. L.ALTS_LINKED .. ")|r") or alt.name)
 			row.info:SetText(AltLine(alt.name))
 			ShowXP(row.xp, alt.name)
 			row.dot:SetVertexColor(alt.online and 0.2 or 0.45, alt.online and 1 or 0.45, alt.online and 0.2 or 0.45)
@@ -1823,6 +1866,7 @@ local function BuildAlts()
 			GameTooltip:AddLine(AltLine(alt.name), 1, 1, 1)
 			if info.xp then GameTooltip:AddLine(string.format(L.ALTS_XP, info.xp, info.rest or 0), 0.8, 0.5, 1) end
 			if info.gold then GameTooltip:AddLine(string.format(L.ALTS_GOLD, info.gold), 1, 0.82, 0) end
+			if alt.linked then GameTooltip:AddLine(L.ALTS_FROM_LINKED, 0.55, 0.55, 0.85, true) end
 			GameTooltip:AddLine(L.ALTS_LOOK, 0.6, 0.6, 0.6, true)
 			if alt.online and SquidBotsLite_OpenSheet then GameTooltip:AddLine(L.ALTS_TIP_CLICK, 0.4, 0.8, 1) end
 			GameTooltip:Show()
@@ -1888,6 +1932,13 @@ local function OnSystem(message)
 	if added then
 		SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
 		SquidBotsLiteDB.alts[added] = true
+		-- Not in the last roster as one of this account's: a character of a linked account.
+		local own = false
+		for _, alt in ipairs(roster) do if alt.name == added and not alt.linked then own = true end end
+		if not own then
+			SquidBotsLiteDB.linkedAlts = SquidBotsLiteDB.linkedAlts or {}
+			SquidBotsLiteDB.linkedAlts[added] = true
+		end
 	end
 	-- "Linked accounts:" then "- name" lines, or "No linked accounts."
 	if message == "No linked accounts." then SquidBotsLiteDB.linked = {} end
