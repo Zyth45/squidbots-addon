@@ -96,6 +96,13 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**2.2**
+- A bot's menu: **Give me the lead** (the bot leads) or **Make it the leader** (you lead); a tank can **mark its target** with a skull (`rti skull`, `co +mark rti`).
+- **Learn from my target (trainer)**: the whole group, or one bot, learns all a class or profession trainer teaches it (`trainer learn`).
+- **Gathering**: skill-ups only (CoA Bots 2.2 default) or everything, for the whole group (Bots > Gathering) or one bot (`nc +gather all` / `nc -gather all`).
+- Characters of linked accounts stay in My alts once logged in from here.
+- Thanks to Maky for the ideas.
+
 **2.1**
 - **Alts** button on the bar; My alts shows each alt's level, class, specialization and XP, logged-in alts first, and scrolls for a raid of alts.
 - **Teams** of alts (log a saved group in or out at once) and linked **Accounts**.
