@@ -24,6 +24,7 @@ local STRINGS = {
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		TRAIN = "Learn from my target (trainer)", M_TRAIN = "Learn from my target (trainer)",
+		M_GATHER_ALL = "Gather everything (grey too)", M_GATHER_SKILLUP = "Gather only what gives skill",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
@@ -94,6 +95,7 @@ local STRINGS = {
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		TRAIN = "Apprendre de ma cible (entraîneur)", M_TRAIN = "Apprendre de ma cible (entraîneur)",
+		M_GATHER_ALL = "Tout récolter (gris compris)", M_GATHER_SKILLUP = "Récolter seulement ce qui fait monter",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
@@ -977,6 +979,9 @@ local function BotMenu(name)
 		{ text = L.M_SUMMON, notCheckable = true, func = function() Whisper(name, "summon") end },
 		{ text = L.SPEC_MENU, hasArrow = true, notCheckable = true, menuList = SpecMenu(name) },
 		{ text = L.M_TRAIN, notCheckable = true, func = function() if TargetIsNpc() then Whisper(name, "trainer learn") end end },
+		-- CoA Bots 2.2 skips what is grey for the bot's gathering skill; "gather all" gathers it anyway.
+		{ text = L.M_GATHER_ALL, notCheckable = true, func = function() Whisper(name, "nc +gather all") end },
+		{ text = L.M_GATHER_SKILLUP, notCheckable = true, func = function() Whisper(name, "nc -gather all") end },
 	}
 	-- "give leader": a bot that leads the group (the player's old main, played as a bot now) hands the lead back.
 	if IsGroupLeader(name) then
