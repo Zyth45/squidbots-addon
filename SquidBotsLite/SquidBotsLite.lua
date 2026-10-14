@@ -11,6 +11,9 @@ local STRINGS = {
 		TIP_ACTIVE = "Bots fight normally. Click to make them passive: no fights, and the tank stops pulling on its own.",
 		TIP_PASSIVE = "Bots are passive: no fights, no auto pull. Click, or give any order, to wake them.",
 		TOGGLE_PASSIVE = "Passive / Active",
+		PULL_ON = "Auto pull", PULL_OFF = "No pull", TOGGLE_PULL = "Tank auto pull on / off",
+		TIP_PULL_ON = "The tank pulls on its own. Click so it waits: it only fights what you or the group attack.",
+		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
 		TIP_ALTS = "Your other characters: log them in as bots, summon them, open their sheet (gear, bags, quests, mounts).",
@@ -83,6 +86,9 @@ local STRINGS = {
 		TIP_ACTIVE = "Les bots combattent normalement. Cliquez pour les rendre passifs : plus de combat, et le tank arrête de tirer seul.",
 		TIP_PASSIVE = "Les bots sont passifs : pas de combat, pas de pull auto. Cliquez, ou donnez n'importe quel ordre, pour les réveiller.",
 		TOGGLE_PASSIVE = "Passif / Actif",
+		PULL_ON = "Pull auto", PULL_OFF = "Pas de pull", TOGGLE_PULL = "Pull auto du tank oui / non",
+		TIP_PULL_ON = "Le tank tire tout seul. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
+		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
 		TIP_ALTS = "Vos autres personnages : connectez-les en bots, appelez-les, ouvrez leur fiche (équipement, sacs, quêtes, montures).",
@@ -169,7 +175,7 @@ local MAX_TOASTS = 5
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
 local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 3, 37, 52
-local BAR_ORDER = { "follow", "stay", "attack", "passive", "dungeon", "summon", "alts", "recruit", "release" }
+local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "recruit", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
 local PROBE_DELAY, PROBE_WINDOW = 3, 10
@@ -177,18 +183,20 @@ local FORMATIONS = { { "near", "F_NEAR" }, { "line", "F_LINE" }, { "circle", "F_
 	{ "arrow", "F_ARROW" }, { "queue", "F_QUEUE" } }
 -- The Passive button shows the bots' current state: a charge arrow while they fight, Zzz while passive.
 local ICON_ACTIVE, ICON_PASSIVE = "Interface\\Icons\\Ability_Warrior_Charge", "Interface\\Icons\\Spell_Nature_Sleep"
+-- The tank's auto pull (on by default for a CoA tank): an arrow while it pulls, a shield while it waits.
+local ICON_PULL_ON, ICON_PULL_OFF = "Interface\\Icons\\Ability_Marksmanship", "Interface\\Icons\\INV_Shield_06"
 -- The panels: a dark plain background under the dialog border, since the dialog background let the floating
 -- names of the world show through. The role buttons use square icons, like the bar.
 local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
 local ROLE_BUTTON_ICONS = { tank = "Interface\\Icons\\Ability_Defend", heal = "Interface\\Icons\\Spell_Holy_FlashHeal",
 	dps = "Interface\\Icons\\Ability_MeleeDamage" }
-local BINDINGS = { { "follow", "FOLLOW" }, { "stay", "STAY" }, { "attack", "M_ATTACK" }, { "passive", "TOGGLE_PASSIVE" },
+local BINDINGS = { { "follow", "FOLLOW" }, { "stay", "STAY" }, { "attack", "M_ATTACK" }, { "passive", "TOGGLE_PASSIVE" }, { "pull", "TOGGLE_PULL" },
 	{ "dungeon", "DUNGEON" }, { "summon", "SUMMON" }, { "alts", "ALTS" }, { "release", "RELEASE" } }
 
 local roleByName, badges, toasts = {}, {}, {}
 local firstSeen, probedAt = {}, {}
-local state = { order = "follow", passive = false }
+local state = { order = "follow", passive = false, autoPull = true }
 local bar, buttons, overlays, toastFrames = nil, {}, {}, {}
 
 local function Print(text)
@@ -364,7 +372,15 @@ local function SetPassive(on)
 	if on then
 		return SendGroup("co +passive", "@tank nc -coa auto pull")
 	end
-	return SendGroup("co -passive", "@tank nc +coa auto pull")
+	return SendGroup("co -passive", state.autoPull and "@tank nc +coa auto pull" or "@tank nc -coa auto pull")
+end
+
+-- The Auto pull button: passive bots keep it off until they wake, then the choice applies.
+local function SetAutoPull(on)
+	if not state.passive and not SendGroup(on and "@tank nc +coa auto pull" or "@tank nc -coa auto pull") then return false end
+	state.autoPull = on
+	Highlight()
+	return true
 end
 
 -- For every group order: follow, stay and tank attack already end "passive" on the bots, and "attack"
@@ -562,6 +578,8 @@ local function Reapply(name)
 	if state.passive then
 		Whisper(name, "co +passive")
 		if CurrentRole(name) == "tank" then Whisper(name, "nc -coa auto pull") end
+	elseif not state.autoPull and CurrentRole(name) == "tank" then
+		Whisper(name, "nc -coa auto pull")
 	end
 	if state.order == "dungeon" then
 		Whisper(name, "co -wait for attack,+avoid aoe")
@@ -1025,7 +1043,7 @@ end
 -- ---------------------------------------------------------------------------
 Highlight = function()
 	for key, button in pairs(buttons) do
-		local active = key == state.order or (key == "passive" and state.passive)
+		local active = key == state.order or (key == "passive" and state.passive) or (key == "pull" and not state.autoPull)
 		button.ring:SetVertexColor(active and 1 or 0.35, active and 0.82 or 0.35, active and 0 or 0.35)
 	end
 	local passive = buttons.passive
@@ -1034,6 +1052,13 @@ Highlight = function()
 		passive.label = state.passive and "PASSIVE" or "ACTIVE"
 		passive.tip = state.passive and "TIP_PASSIVE" or "TIP_ACTIVE"
 		passive.caption:SetText(L[passive.label])
+	end
+	local pull = buttons.pull
+	if pull then
+		pull.icon:SetTexture(state.autoPull and ICON_PULL_ON or ICON_PULL_OFF)
+		pull.label = state.autoPull and "PULL_ON" or "PULL_OFF"
+		pull.tip = state.autoPull and "TIP_PULL_ON" or "TIP_PULL_OFF"
+		pull.caption:SetText(L[pull.label])
 	end
 end
 
@@ -1134,7 +1159,8 @@ local function LayoutBar()
 	local widths = {}
 	for i, key in ipairs(BAR_ORDER) do
 		local button = buttons[key]
-		widths[i] = key == "passive" and math.max(Width(L.ACTIVE), Width(L.PASSIVE)) or Width(L[button.label])
+		widths[i] = key == "passive" and math.max(Width(L.ACTIVE), Width(L.PASSIVE))
+			or key == "pull" and math.max(Width(L.PULL_ON), Width(L.PULL_OFF)) or Width(L[button.label])
 	end
 	measure:SetText(shown)
 	local step = 0
@@ -1194,6 +1220,9 @@ local function BuildBar()
 		end },
 		{ "passive", ICON_ACTIVE, "ACTIVE", "TIP_ACTIVE", function()
 			if SetPassive(not state.passive) then state.passive = not state.passive; Highlight() end
+		end },
+		{ "pull", ICON_PULL_ON, "PULL_ON", "TIP_PULL_ON", function()
+			SetAutoPull(not state.autoPull)
 		end },
 		{ "dungeon", "Interface\\Icons\\Achievement_Dungeon_ClassicDungeonMaster", "DUNGEON", "TIP_DUNGEON", function()
 			if SendOrder("co -wait for attack,+avoid aoe", "follow") then SetOrder("dungeon") end
@@ -2022,9 +2051,13 @@ local function OnStrategies(message, sender)
 	for strategy in message:sub(13):gmatch("[^,]+") do
 		list[strtrim(strategy)] = true
 	end
+	local was = roleByName[sender]
 	roleByName[sender] = (list["coa tank"] or list["tank"] or list["bear"]) and "tank"
 		or (list["coa heal"] or list["heal"] or list["holy heal"]) and "heal" or "dps"
 	knownBot[sender] = true
+	if roleByName[sender] == "tank" and was ~= "tank" and (state.passive or not state.autoPull) then
+		Whisper(sender, "nc -coa auto pull")
+	end
 end
 
 local function HideProbe(_, _, message, name)

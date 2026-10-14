@@ -8,9 +8,11 @@ A thin bar of buttons, the bots' roles drawn straight onto the party frames you 
 
 ## The bar
 
-The **Alts** button opens [My alts](#my-alts); **Bots** asks for bots. Six orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
+The **Alts** button opens [My alts](#my-alts); **Bots** asks for bots. Seven orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Auto pull / No pull**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
 
 The Active / Passive button shows where the bots stand: a charge arrow and *Active* while they fight, **Zzz** and *Passive* while they hold back. Passive also stops the tank pulling on its own; any order wakes them all.
+
+The **Auto pull** button chooses whether the tank pulls on its own (arrow, *Auto pull*) or waits for you (shield, *No pull*): then it only fights what you or the group attack.
 
 When a bot dies, a **Release** button shows up at the end of the bar: dead bots release their spirit and run back to their body.
 
@@ -95,6 +97,9 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**2.3**
+- New **Auto pull** button on the bar: the tank pulls on its own, or waits (No pull, shield icon) and only fights what you or the group attack (`@tank nc +coa auto pull` / `@tank nc -coa auto pull`). The choice comes back after Passive, and a tank joining later gets it too. A key binding toggles it.
 
 **2.2**
 - A bot's menu: **Give me the lead** (the bot leads) or **Make it the leader** (you lead); a tank can **mark its target** with a skull (`rti skull`, `co +mark rti`).
