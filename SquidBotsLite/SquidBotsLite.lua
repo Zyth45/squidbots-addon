@@ -171,7 +171,8 @@ local ROLE_COORDS = {
 }
 local CHANNELS = { "Zone", "Newcomers", "World" }
 local OFFER_SECONDS = 120
-local MAX_TOASTS = 5
+-- "Ask for all three" brings 7 offers by default (2 tanks, 2 healers, 3 damage: CoaLfg*Offers on the server).
+local MAX_TOASTS = 8
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
 local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 3, 37, 52
@@ -2100,7 +2101,17 @@ local function OnWhisper(message, sender)
 		if toasts[i].name == sender then table.remove(toasts, i) end
 	end
 	table.insert(toasts, { name = sender, level = level, class = class, role = role, expires = GetTime() + OFFER_SECONDS })
-	while #toasts > MAX_TOASTS do table.remove(toasts, 1) end
+	-- Too many offers: drop the oldest of the role with the most offers (damage first), so a tank and a healer stay.
+	while #toasts > MAX_TOASTS do
+		local count = { tank = 0, heal = 0, dps = 0 }
+		for _, offer in ipairs(toasts) do count[offer.role] = (count[offer.role] or 0) + 1 end
+		local drop = "dps"
+		if count.heal > count[drop] then drop = "heal" end
+		if count.tank > count[drop] then drop = "tank" end
+		for i, offer in ipairs(toasts) do
+			if offer.role == drop then table.remove(toasts, i) break end
+		end
+	end
 	if not bar:IsShown() then SetBarShown(true) end
 	RefreshToasts()
 end
