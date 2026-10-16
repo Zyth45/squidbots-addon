@@ -98,7 +98,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
-**2.3.1**
+**2.4**
 - Ask for all three: up to 8 offers above the bar, and when there are too many, a damage offer goes first, so the tanks and healers stay (the tanks used to vanish).
 
 **2.3**
