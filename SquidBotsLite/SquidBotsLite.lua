@@ -12,6 +12,8 @@ local STRINGS = {
 		TIP_PASSIVE = "Bots are passive: no fights, no auto pull. Click, or give any order, to wake them.",
 		TOGGLE_PASSIVE = "Passive / Active",
 		PULL_ON = "Auto pull", PULL_OFF = "No pull", TOGGLE_PULL = "Tank auto pull on / off",
+		RAIDFRAMES_ON = "Role icons and bot menus on the raid-style frames: on.",
+		RAIDFRAMES_OFF = "Role icons and bot menus on the raid-style frames: off.",
 		TIP_PULL_ON = "The tank pulls on its own. Click so it waits: it only fights what you or the group attack.",
 		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
@@ -87,6 +89,8 @@ local STRINGS = {
 		TIP_PASSIVE = "Les bots sont passifs : pas de combat, pas de pull auto. Cliquez, ou donnez n'importe quel ordre, pour les réveiller.",
 		TOGGLE_PASSIVE = "Passif / Actif",
 		PULL_ON = "Pull auto", PULL_OFF = "Pas de pull", TOGGLE_PULL = "Pull auto du tank oui / non",
+		RAIDFRAMES_ON = "Icônes de rôle et menus des bots sur les cadres de style raid : activés.",
+		RAIDFRAMES_OFF = "Icônes de rôle et menus des bots sur les cadres de style raid : désactivés.",
 		TIP_PULL_ON = "Le tank tire tout seul. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
 		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
@@ -1262,6 +1266,28 @@ end
 -- ---------------------------------------------------------------------------
 -- Party frame overlays: role icon (click for the bot's menu) and alert text
 -- ---------------------------------------------------------------------------
+local function OverlayClick(self)
+	local name = self.unit and UnitName(self.unit)
+	if name then ShowMenu(BotMenu(name)) end
+end
+
+-- Nothing told that the icon opens the bot's menu.
+local function OverlayTooltip(self)
+	local name = self.unit and UnitName(self.unit)
+	if not name then return end
+	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+	GameTooltip:SetText(name)
+	local info = specsByName[name]
+	local role = CurrentRole(name)
+	if info and info.current then
+		GameTooltip:AddLine(info.current .. (role and (" - " .. L[ROLE_KEYS[role]]) or ""), 1, 1, 1)
+	elseif role then
+		GameTooltip:AddLine(L[ROLE_KEYS[role]], 1, 1, 1)
+	end
+	GameTooltip:AddLine(L.TIP_BOT_ICON, 0.6, 0.6, 0.6)
+	GameTooltip:Show()
+end
+
 local function BuildOverlays()
 	for i = 1, 4 do
 		local frame = _G["PartyMemberFrame" .. i]
@@ -1279,26 +1305,8 @@ local function BuildOverlays()
 			overlay.badge = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 			overlay.badge:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 46, 10)
 			overlay.unit = "party" .. i
-			overlay:SetScript("OnClick", function(self)
-				local name = UnitName(self.unit)
-				if name then ShowMenu(BotMenu(name)) end
-			end)
-			-- Nothing told that the icon opens the bot's menu.
-			overlay:SetScript("OnEnter", function(self)
-				local name = UnitName(self.unit)
-				if not name then return end
-				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-				GameTooltip:SetText(name)
-				local info = specsByName[name]
-				local role = CurrentRole(name)
-				if info and info.current then
-					GameTooltip:AddLine(info.current .. (role and (" - " .. L[ROLE_KEYS[role]]) or ""), 1, 1, 1)
-				elseif role then
-					GameTooltip:AddLine(L[ROLE_KEYS[role]], 1, 1, 1)
-				end
-				GameTooltip:AddLine(L.TIP_BOT_ICON, 0.6, 0.6, 0.6)
-				GameTooltip:Show()
-			end)
+			overlay:SetScript("OnClick", OverlayClick)
+			overlay:SetScript("OnEnter", OverlayTooltip)
 			overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
 			-- Who plays what at a glance: the specialization name, small, right of the health bar.
 			overlay.spec = overlay:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -1331,6 +1339,99 @@ local function RefreshOverlays()
 				overlay.badge:SetText("")
 			end
 		else
+			overlay:Hide()
+		end
+	end
+end
+
+-- Raid-style frames (Ascension_CompactRaidFrames, "Use raid-style party frames"): the same role icon and
+-- bot menu, and the alert text inside the frame. Their frames are made on demand and change units, so
+-- they are looked for every few seconds and the unit is read from the frame at each refresh. Our icons
+-- belong to UIParent and are only anchored to those secure frames, which keeps them out of combat locks.
+-- Looking through every frame costs: every 10 seconds in a group, and half a second after the group changes.
+local compactOverlays, compactScanAt, compactGroupSize = {}, 0, -1
+local COMPACT_SCAN, COMPACT_RESCAN = 10, 0.5
+
+local function CompactUnit(frame)
+	local unit = frame.displayedUnit or frame.unit
+	if type(unit) ~= "string" and frame.GetAttribute then unit = frame:GetAttribute("unit") end
+	return type(unit) == "string" and unit or nil
+end
+
+local function IsCompactFrame(frame)
+	-- A CompactUnitFrame: a unit, a "healthBar" (the old party and target frames have "healthbar") and a name.
+	return frame.healthBar and frame.name and CompactUnit(frame)
+end
+
+local function CompactOverlay(frame)
+	local overlay = CreateFrame("Button", nil, UIParent)
+	overlay:SetWidth(14)
+	overlay:SetHeight(14)
+	overlay:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -2)
+	overlay.icon = overlay:CreateTexture(nil, "OVERLAY")
+	overlay.icon:SetAllPoints()
+	overlay.badge = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	overlay.badge:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 3, 3)
+	overlay.badge:SetPoint("RIGHT", frame, "RIGHT", -3, 0)
+	overlay.badge:SetJustifyH("LEFT")
+	overlay:SetScript("OnClick", OverlayClick)
+	overlay:SetScript("OnEnter", OverlayTooltip)
+	overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	overlay.frame = frame
+	compactOverlays[frame] = overlay
+	return overlay
+end
+
+local function ScanCompactFrames()
+	local frame = EnumerateFrames()
+	while frame do
+		if not compactOverlays[frame] and IsCompactFrame(frame) then CompactOverlay(frame) end
+		frame = EnumerateFrames(frame)
+	end
+end
+
+local function RefreshCompactOverlays()
+	if SquidBotsLiteDB.raidFrames == false then
+		for _, overlay in pairs(compactOverlays) do overlay:Hide() end
+		return
+	end
+	local now = GetTime()
+	local size = GetNumRaidMembers() + GetNumPartyMembers()
+	if size ~= compactGroupSize then
+		compactGroupSize = size
+		compactScanAt = math.min(compactScanAt, now + COMPACT_RESCAN)
+	end
+	if size > 0 and now >= compactScanAt then
+		compactScanAt = now + COMPACT_SCAN
+		if _G.CompactUnitMixin or IsAddOnLoaded("Ascension_CompactRaidFrames") or IsAddOnLoaded("CompactRaidFrame")
+			or _G.CompactRaidFrameContainer then
+			ScanCompactFrames()
+		end
+	end
+	for frame, overlay in pairs(compactOverlays) do
+		local unit = frame:IsVisible() and CompactUnit(frame)
+		local name = unit and not UnitIsUnit(unit, "player") and UnitName(unit)
+		if name then
+			overlay.unit = unit
+			overlay:SetFrameStrata(frame:GetFrameStrata())
+			overlay:SetFrameLevel(frame:GetFrameLevel() + 10)
+			if frame.roleIcon then frame.roleIcon:SetAlpha(0) end
+			SetRoleIcon(overlay.icon, roleByName[name] or "none")
+			if not roleByName[name] then
+				overlay.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+				overlay.icon:SetTexCoord(0, 1, 0, 1)
+				overlay.icon:Show()
+			end
+			local badge = badges[name]
+			if badge and badge.untilTime > now then
+				overlay.badge:SetText(badge.text)
+				overlay.badge:SetTextColor(badge.r, badge.g, badge.b)
+			else
+				overlay.badge:SetText("")
+			end
+			overlay:Show()
+		else
+			overlay.unit = nil
 			overlay:Hide()
 		end
 	end
@@ -2201,6 +2302,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			if elapsed < 0.3 then return end
 			elapsed = 0
 			RefreshOverlays()
+			RefreshCompactOverlays()
 			RefreshToasts()
 			RefreshRelease()
 			ProbeRoles()
@@ -2254,6 +2356,9 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "alts" then
 		ShowAlts()
+	elseif command == "raidframes" then
+		SquidBotsLiteDB.raidFrames = string.lower(rest) ~= "off"
+		Print(SquidBotsLiteDB.raidFrames and L.RAIDFRAMES_ON or L.RAIDFRAMES_OFF)
 	elseif command == "sheettrade" and SquidBotsLite_SheetOnTrade then
 		SquidBotsLite_SheetOnTrade(string.lower(rest) ~= "off")
 	elseif command == "sheetdebug" and SquidBotsLite_SheetDebug then
