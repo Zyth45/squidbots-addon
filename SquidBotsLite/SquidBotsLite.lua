@@ -242,7 +242,9 @@ local function SetRoleIcon(texture, role)
 	local c = role and ROLE_COORDS[role]
 	if c then
 		texture:SetTexture(ROLE_ICON)
-		texture:SetTexCoord(c[1], c[2], c[3], c[4])
+		-- Inset by most of a texel: drawn small, the filtering otherwise shows the edge of the next icon.
+		local e = 0.8 / 64
+		texture:SetTexCoord(c[1] + e, c[2] - e, c[3] + e, c[4] - e)
 		texture:Show()
 	else
 		texture:Hide()
