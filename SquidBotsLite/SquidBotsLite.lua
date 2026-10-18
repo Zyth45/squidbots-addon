@@ -1359,8 +1359,9 @@ local function CompactUnit(frame)
 end
 
 local function IsCompactFrame(frame)
-	-- A CompactUnitFrame: a unit, a "healthBar" (the old party and target frames have "healthbar") and a name.
-	return frame.healthBar and frame.name and CompactUnit(frame)
+	-- A CompactUnitFrame: a unit and a "healthBar" (the old party and target frames have "healthbar"). Ascension's
+	-- CompactRaidFrameN have no "name" field.
+	return frame.healthBar and CompactUnit(frame)
 end
 
 local function CompactOverlay(frame)
