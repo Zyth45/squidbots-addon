@@ -187,7 +187,7 @@ local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 3, 37, 52
 local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "recruit", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
-local PROBE_DELAY, PROBE_WINDOW = 3, 10
+local PROBE_DELAY, PROBE_WINDOW, PROBE_RETRY = 3, 10, 30
 local FORMATIONS = { { "near", "F_NEAR" }, { "line", "F_LINE" }, { "circle", "F_CIRCLE" }, { "shield", "F_SHIELD" },
 	{ "arrow", "F_ARROW" }, { "queue", "F_QUEUE" } }
 -- The Passive button shows the bots' current state: a charge arrow while they fight, Zzz while passive.
@@ -2140,7 +2140,8 @@ local function ProbeRoles()
 	for i = 1, 4 do
 		local unit = "party" .. i
 		local name = UnitName(unit)
-		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and not probedAt[name] and UnitIsConnected(unit)
+		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and UnitIsConnected(unit)
+			and (not probedAt[name] or now - probedAt[name] >= PROBE_RETRY)
 			and LooksLikeBot(name) then
 			firstSeen[name] = firstSeen[name] or now
 			if now - firstSeen[name] >= PROBE_DELAY then
@@ -2153,6 +2154,12 @@ end
 
 local function InProbeWindow(name)
 	return probedAt[name] and GetTime() - probedAt[name] < PROBE_WINDOW
+end
+
+-- A bot still on its way (dungeon finder, loading screen) can answer "co ?" long after the window: its strategies are
+-- still read, and hidden, as long as its role is unknown.
+local function AwaitsStrategies(name, message)
+	return (InProbeWindow(name) or (probedAt[name] and not roleByName[name])) and message:find("^Strategies: ")
 end
 
 local function OnStrategies(message, sender)
@@ -2170,7 +2177,7 @@ local function OnStrategies(message, sender)
 end
 
 local function HideProbe(_, _, message, name)
-	if InProbeWindow(name) and (message == "co ?" or message:find("^Strategies: ")) then
+	if (InProbeWindow(name) and message == "co ?") or AwaitsStrategies(name, message) then
 		return true
 	end
 end
@@ -2186,7 +2193,7 @@ local function OnWhisper(message, sender)
 		RefreshAlts()
 		return
 	end
-	if InProbeWindow(sender) and message:find("^Strategies: ") then
+	if AwaitsStrategies(sender, message) then
 		OnStrategies(message, sender)
 		return
 	end
@@ -2226,7 +2233,7 @@ end
 
 local function OnGroupChat(message, sender)
 	if OnSpecReply(message, sender) then return end
-	if InProbeWindow(sender) and message:find("^Strategies: ") then
+	if AwaitsStrategies(sender, message) then
 		OnStrategies(message, sender)
 		return
 	end
