@@ -29,6 +29,7 @@ local STRINGS = {
 		GEAR = "Best gear for the group", REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		TRAIN = "Learn from my target (trainer)", M_TRAIN = "Learn from my target (trainer)",
+		QUESTS = "Take my quests (next to the quest giver)",
 		M_GATHER_ALL = "Gather everything (grey too)", M_GATHER_SKILLUP = "Gather only what gives skill",
 		GATHER = "Gathering (whole group)",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
@@ -106,6 +107,7 @@ local STRINGS = {
 		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		TRAIN = "Apprendre de ma cible (entraîneur)", M_TRAIN = "Apprendre de ma cible (entraîneur)",
+		QUESTS = "Prendre mes quêtes (près du donneur)",
 		M_GATHER_ALL = "Tout récolter (gris compris)", M_GATHER_SKILLUP = "Récolter seulement ce qui fait monter",
 		GATHER = "Récolte (tout le groupe)",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
@@ -354,6 +356,8 @@ local function RecruitMenu()
 		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 		{ text = L.TRAIN, notCheckable = true, func = function() if TargetIsNpc() then SendGroup("trainer learn") end end },
+		-- "accept *": each bot takes every quest offered by the quest givers within reach of it (alts too).
+		{ text = L.QUESTS, notCheckable = true, func = function() SendGroup("accept *") end },
 		{ text = L.GATHER, hasArrow = true, notCheckable = true, menuList = {
 			{ text = L.M_GATHER_SKILLUP, notCheckable = true, func = function() SendGroup("nc -gather all") end },
 			{ text = L.M_GATHER_ALL, notCheckable = true, func = function() SendGroup("nc +gather all") end },
