@@ -102,6 +102,8 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 - Ascension's raid-style party frames get the role icons, the bot menu and the alerts too (`/sbl raidframes off` to stop).
 - Role icons cut cleanly from Ascension's role texture (no more edge of the next icon).
 - **Bots > Take my quests**: every bot next to the quest giver takes your quests, alts included (`accept *`).
+- A bot joining from the dungeon finder or a loading screen gets its role icon too (its late answer used to show in
+  your chat and leave a "?"); an unknown role is asked again after 30 seconds.
 
 **2.4**
 - Ask for all three: up to 8 offers above the bar, and when there are too many, a damage offer goes first, so the tanks and healers stay (the tanks used to vanish).
