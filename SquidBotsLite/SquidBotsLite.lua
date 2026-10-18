@@ -168,10 +168,12 @@ local CLASSES = {
 	"Sun Cleric", "Tinker", "Venomancer", "Reaper", "Primalist", "Runemaster",
 }
 local ROLE_ICON = "Interface\\LFGFrame\\UI-LFG-ICON-ROLES"
+-- Ascension's texture is 256 x 256 with 66-pixel icons (leader, heal / tank, dps / a black disc below the tank),
+-- not Blizzard's 64 x 64 one with 19-pixel icons.
 local ROLE_COORDS = {
-	tank = { 0, 19 / 64, 22 / 64, 41 / 64 },
-	heal = { 20 / 64, 39 / 64, 1 / 64, 20 / 64 },
-	dps = { 20 / 64, 39 / 64, 22 / 64, 41 / 64 },
+	tank = { 1 / 256, 66 / 256, 69 / 256, 130 / 256 },
+	heal = { 68 / 256, 132 / 256, 1 / 256, 66 / 256 },
+	dps = { 68 / 256, 132 / 256, 68 / 256, 133 / 256 },
 }
 local CHANNELS = { "Zone", "Newcomers", "World" }
 local OFFER_SECONDS = 120
@@ -242,9 +244,7 @@ local function SetRoleIcon(texture, role)
 	local c = role and ROLE_COORDS[role]
 	if c then
 		texture:SetTexture(ROLE_ICON)
-		-- Inset by most of a texel: drawn small, the filtering otherwise shows the edge of the next icon.
-		local e = 0.8 / 64
-		texture:SetTexCoord(c[1] + e, c[2] - e, c[3] + e, c[4] - e)
+		texture:SetTexCoord(c[1], c[2], c[3], c[4])
 		texture:Show()
 	else
 		texture:Hide()
