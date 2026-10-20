@@ -492,6 +492,10 @@ local function UnitOf(name)
 	for i = 1, 4 do
 		if UnitName("party" .. i) == name then return "party" .. i end
 	end
+	-- In a raid, party1-4 hold only the player's own subgroup.
+	for i = 1, GetNumRaidMembers() do
+		if UnitName("raid" .. i) == name then return "raid" .. i end
+	end
 end
 
 -- The group's leader: in a raid the roster says it (rank 2), in a party UnitIsPartyLeader.
@@ -1650,6 +1654,10 @@ local function ParseRoster(text)
 	local list, inParty, seen = {}, {}, {}
 	for i = 1, 4 do
 		local name = UnitName("party" .. i)
+		if name then inParty[name] = true end
+	end
+	for i = 1, GetNumRaidMembers() do
+		local name = UnitName("raid" .. i)
 		if name then inParty[name] = true end
 	end
 	SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
