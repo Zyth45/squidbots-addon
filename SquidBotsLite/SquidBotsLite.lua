@@ -447,14 +447,36 @@ end
 -- server never overrides it. The lists come from the bots, so every class and the specs of a later release
 -- show up without a table here.
 -- Only members known to be bots are asked anything: one that answered like a bot ("co ?", a lfg offer, a
--- "joins as" line, a list) or carries the "Bot" surname. A WotLK class (an alt of an old class) has no CoA
--- specialization and is left alone. Nothing is switched blind: a role waits for the bot's list.
+-- "joins as" line, a list) or carries the "Bot" surname. Nothing is switched blind: a role waits for the bot's
+-- list.
+-- A WotLK class has no CoA specialization: on a Warcraft Reborn realm every bot is one, with the three classic
+-- trees of its class (Blizzard order). Their list is the table below, "wcr" asks the bot its tree and
+-- "wcr spec <0-2>" switches it; an answer naming one of the class's trees (in English) gives the active one.
 local SPEC_WAIT, SPEC_HIDE, SPEC_REASK, REAPPLY_AFTER = 5, 8, 30, 1.5   -- seconds
 local ROLE_WORDS = { tank = "tank", healer = "heal", damage = "dps" }
 local ROLE_KEYS = { tank = "ROLE_TANK", heal = "ROLE_HEAL", dps = "ROLE_DPS" }
 local ROLES = { "tank", "heal", "dps" }
 local WOTLK_TOKENS = { WARRIOR = true, PALADIN = true, HUNTER = true, ROGUE = true, PRIEST = true, DEATHKNIGHT = true,
 	SHAMAN = true, MAGE = true, WARLOCK = true, DRUID = true }
+-- The classic trees, index 0 to 2 as "wcr spec" takes them: English name, French name, role.
+local WCR_SPECS = {
+	WARRIOR = { { "Arms", "Armes", "dps" }, { "Fury", "Fureur", "dps" }, { "Protection", "Protection", "tank" } },
+	PALADIN = { { "Holy", "Sacré", "heal" }, { "Protection", "Protection", "tank" }, { "Retribution", "Vindicte", "dps" } },
+	HUNTER = { { "Beast Mastery", "Maîtrise des bêtes", "dps" }, { "Marksmanship", "Précision", "dps" }, { "Survival", "Survie", "dps" } },
+	ROGUE = { { "Assassination", "Assassinat", "dps" }, { "Combat", "Combat", "dps" }, { "Subtlety", "Finesse", "dps" } },
+	PRIEST = { { "Discipline", "Discipline", "heal" }, { "Holy", "Sacré", "heal" }, { "Shadow", "Ombre", "dps" } },
+	DEATHKNIGHT = { { "Blood", "Sang", "tank" }, { "Frost", "Givre", "dps" }, { "Unholy", "Impie", "dps" } },
+	SHAMAN = { { "Elemental", "Élémentaire", "dps" }, { "Enhancement", "Amélioration", "dps" }, { "Restoration", "Restauration", "heal" } },
+	MAGE = { { "Arcane", "Arcanes", "dps" }, { "Fire", "Feu", "dps" }, { "Frost", "Givre", "dps" } },
+	WARLOCK = { { "Affliction", "Affliction", "dps" }, { "Demonology", "Démonologie", "dps" }, { "Destruction", "Destruction", "dps" } },
+	DRUID = { { "Balance", "Équilibre", "dps" }, { "Feral Combat", "Combat farouche", "tank" }, { "Restoration", "Restauration", "heal" } },
+}
+-- The WotLK classes as the lfg offers name them (English), with their token and French name.
+local WCR_CLASSES = {
+	{ "Death Knight", "DEATHKNIGHT", "Chevalier de la mort" }, { "Warrior", "WARRIOR", "Guerrier" }, { "Paladin", "PALADIN", "Paladin" },
+	{ "Hunter", "HUNTER", "Chasseur" }, { "Rogue", "ROGUE", "Voleur" }, { "Priest", "PRIEST", "Prêtre" },
+	{ "Shaman", "SHAMAN", "Chaman" }, { "Mage", "MAGE", "Mage" }, { "Warlock", "WARLOCK", "Démoniste" }, { "Druid", "DRUID", "Druide" },
+}
 -- Set aside by the server (CoaExcludedSpecializations): nothing in the core lets Bloodmage Eternal tank.
 local EXCLUDED_SPECS = { Eternal = true }
 -- Orders the addon sends to one bot after a switch (the server resets its strategies), kept out of the chat.
@@ -487,14 +509,27 @@ local function IsGroupLeader(name)
 	return unit and UnitIsPartyLeader(unit) and true or false
 end
 
-local function IsCoaBot(name)
+-- The WotLK class token of a party member (a Warcraft Reborn bot, or an alt of an old class), else nil.
+local function WcrToken(name)
 	local unit = UnitOf(name)
-	if unit then
-		local _, token = UnitClass(unit)
-		if token and WOTLK_TOKENS[token] then return false end
-	end
+	if not unit then return end
+	local _, token = UnitClass(unit)
+	if token and WOTLK_TOKENS[token] then return token end
+end
+
+-- A bot of the player's group, CoA class or WotLK class alike.
+local function IsCoaBot(name)
 	-- An alt of this account (seen offline in My alts, or logged in by the player) is a bot of theirs too.
 	return knownBot[name] or name:find(" Bot$") ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]) == true
+end
+
+-- The three trees of a WotLK class bot, named in the addon's language: no list to wait for.
+local function WcrList(token)
+	local list, fr = {}, SquidBotsLiteDB.lang == "fr"
+	for i, tree in ipairs(WCR_SPECS[token]) do
+		table.insert(list, { name = fr and tree[2] or tree[1], en = tree[1], index = i - 1, role = tree[3] })
+	end
+	return list
 end
 
 -- True when the question went out: a member not known as a bot yet is asked once it is (TickSpecs).
@@ -504,7 +539,14 @@ local function AskSpecs(name)
 	specAskedOnce[name] = GetTime()
 	specSilent[name] = nil
 	specHideUntil[name] = GetTime() + SPEC_HIDE
-	Whisper(name, "talents spec list")
+	local token = WcrToken(name)
+	if token then
+		local info = specsByName[name]
+		if not info or info.wcr ~= token then specsByName[name] = { list = WcrList(token), wcr = token } end
+		Whisper(name, "wcr")
+	else
+		Whisper(name, "talents spec list")
+	end
 	return true
 end
 
@@ -556,16 +598,23 @@ local function PickSpec(name, specName)
 	Remember(name, specName, spec.role)
 	specHideUntil[name] = GetTime() + SPEC_HIDE
 	reapplyAt[name] = GetTime() + REAPPLY_AFTER
-	Whisper(name, "talents spec " .. specName)
+	if spec.index then
+		Whisper(name, "wcr spec " .. spec.index)
+	else
+		Whisper(name, "talents spec " .. specName)
+	end
 end
 
 -- A role: nothing if the bot already plays it, else the specialization it last played in that role, else
--- its first one. Without its list yet, the bot is asked and the role waits for the answer.
+-- its first one. Without its list yet, the bot is asked and the role waits for the answer (a WotLK class bot
+-- has its list at once).
 local function PickRole(name, role)
 	if not specsByName[name] then
-		pendingRole[name] = role
 		AskSpecs(name)
-		return
+		if not (specsByName[name] and specsByName[name].wcr) then
+			pendingRole[name] = role
+			return
+		end
 	end
 	if CurrentRole(name) == role then return end
 	local specs = SpecsForRole(name, role)
@@ -698,8 +747,59 @@ local function ParseNow(message)
 	if picked and ROLE_WORDS[word] then return picked, ROLE_WORDS[word] end
 end
 
+-- The tree a WotLK class bot names in its answer to "wcr" or "wcr spec <n>", read only for a few seconds after
+-- the addon asked: the one tree of its class named, else the one marked active (">", "*", "active", "current"),
+-- else the index after "spec".
+local function ParseWcr(name, message)
+	local info = specsByName[name]
+	if not (info and info.wcr) or not specHideUntil[name] or GetTime() > specHideUntil[name] then return end
+	-- The answer to "co ?" names strategies such as "frost" or "holy": not a tree.
+	if message:find("^Strategies: ") then return end
+	local function TreeIn(text)
+		local found, count = nil, 0
+		local lower = string.lower(text)
+		for _, spec in ipairs(info.list) do
+			local word = string.lower(spec.en)
+			if lower:find(word, 1, true) or (spec.en == "Feral Combat" and lower:find("feral", 1, true)) then
+				found, count = spec, count + 1
+			end
+		end
+		return found, count
+	end
+	local found, count = TreeIn(message)
+	if count == 1 then return found end
+	if count > 1 then
+		for part in (message .. "\n"):gmatch("([^,;|\n]+)") do
+			local lower = string.lower(part)
+			if part:find(">", 1, true) or part:find("*", 1, true) or lower:find("active", 1, true) or lower:find("current", 1, true) then
+				local spec, n = TreeIn(part)
+				if n == 1 then return spec end
+			end
+		end
+	end
+	local index = tonumber(string.lower(message):match("spec%s*[:=]?%s*(%d)"))
+	if index and info.list[index + 1] then return info.list[index + 1] end
+end
+
 -- An answer of a bot about its specializations: true when it was one.
 local function OnSpecReply(message, sender)
+	local tree = ParseWcr(sender, message)
+	if tree then
+		knownBot[sender] = true
+		local info = specsByName[sender]
+		local asked = specAskedAt[sender] ~= nil
+		specAskedAt[sender] = nil
+		info.current = tree.name
+		roleByName[sender] = tree.role
+		Remember(sender, tree.name, tree.role)
+		if not asked then Print(string.format(L.SPEC_NOW, sender, tree.name, L[ROLE_KEYS[tree.role]])) end
+		if pendingRole[sender] then
+			local wanted = pendingRole[sender]
+			pendingRole[sender] = nil
+			PickRole(sender, wanted)
+		end
+		return true
+	end
 	local picked, role = ParseNow(message)
 	if picked then
 		knownBot[sender] = true
@@ -740,9 +840,10 @@ local function HideSpecChat(_, event, message, name)
 	local untilTime = specHideUntil[name]
 	if not untilTime or GetTime() > untilTime then return end
 	if event == "CHAT_MSG_WHISPER_INFORM" then
-		return message:find("^talents spec ") ~= nil or REAPPLY_ORDERS[message] ~= nil
+		return message:find("^talents spec ") ~= nil or message == "wcr" or message:find("^wcr spec %d$") ~= nil
+			or REAPPLY_ORDERS[message] ~= nil
 	end
-	return ParseNow(message) ~= nil or ParseSpecList(message) ~= nil
+	return ParseWcr(name, message) ~= nil or ParseNow(message) ~= nil or ParseSpecList(message) ~= nil
 end
 -- A bot answers on the channel of the last order it got within a second, so the group channels too.
 for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
@@ -2199,9 +2300,18 @@ local function OnWhisper(message, sender)
 	end
 	local level = message:match("[Ll]evel (%d+)")
 	if not level then return end
-	local class
+	local class, token
 	for _, name in ipairs(CLASSES) do
 		if message:find(name, 1, true) then class = name break end
+	end
+	-- A Warcraft Reborn bot offers a WotLK class (after the CoA names: "Witch Hunter" is not a Hunter).
+	if not class then
+		for _, wotlk in ipairs(WCR_CLASSES) do
+			if message:find(wotlk[1], 1, true) then
+				class, token = SquidBotsLiteDB.lang == "fr" and wotlk[3] or wotlk[1], wotlk[2]
+				break
+			end
+		end
 	end
 	local lower = string.lower(message)
 	if not class or not (lower:find("invite") or lower:find("service") or lower:find("ready") or lower:find("available") or lower:find("looking")) then
@@ -2209,7 +2319,14 @@ local function OnWhisper(message, sender)
 	end
 	-- "I'll keep your tank alive" is a healer talking: the healer words win.
 	local role = (lower:find("heal") or lower:find("keep your tank alive")) and "heal"
-		or (lower:find("tank") and "tank" or "dps")
+		or (lower:find("tank") and "tank")
+	-- No role word: the tree it names says it ("Restoration", "Protection").
+	if not role and token then
+		for _, tree in ipairs(WCR_SPECS[token]) do
+			if message:find(tree[1], 1, true) then role = tree[3] break end
+		end
+	end
+	role = role or "dps"
 	roleByName[sender] = role
 	knownBot[sender] = true
 	for i = #toasts, 1, -1 do
