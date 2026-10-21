@@ -2329,6 +2329,10 @@ local function OnWhisper(message, sender)
 			end
 		end
 	end
+	-- A Wildcard Hero offers itself as "Hero" (class 10), in no class list above.
+	if not class and message:find("Hero", 1, true) then
+		class = SquidBotsLiteDB.lang == "fr" and "Héros" or "Hero"
+	end
 	local lower = string.lower(message)
 	if not class or not (lower:find("invite") or lower:find("service") or lower:find("ready") or lower:find("available") or lower:find("looking")) then
 		return
