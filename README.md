@@ -98,7 +98,12 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
-**2.6 (in progress)**
+**2.6.1**
+- Wildcard realms: the lfg bot offers of Heroes ("DPS Hero Level 1 ... ready to go!") show their offer window again.
+- Role icons stay off nameplates: no more "SetFrameStrata(): Unknown frame strata" error with enemy or friendly
+  nameplates shown.
+
+**2.6**
 - Warcraft Reborn realms: bots of the WotLK classes (Warrior to Druid) count as bots. Their **Specialization** menu and the Specializations panel show the three classic trees of their class (English or French names) and switch them with `wcr spec 0|1|2`; the current tree is asked with `wcr`, both kept out of the chat. Role icons, Balance the group and the lfg bot offers (class and tree named in the offer) work for them too. CoA realms are unchanged.
 - In a raid, bots outside your own subgroup are recognised too: no more "talents spec list" answers flooding the chat, and **My alts** no longer lists the raid's random bots.
 - Role icons no longer land on nameplates: they go on the frames of the group alone. This ends the `SetFrameStrata(): Unknown frame strata: UNKNOWN` error on interfaces whose nameplates carry a health bar of their own.
