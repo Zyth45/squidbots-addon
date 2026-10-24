@@ -100,6 +100,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 **2.8**
 - **Dungeon clear** on realms with mod-dungeon-clear: the bar's **Dungeon** button (or `/sbl dc`) opens its panel: the run's state and why it waits, On / Off / Pause / Skip, the pull mode (Dynamic, Leeroy, Advanced) and the dungeon's bosses with their state and a **Go** button, through the player's own `.dc` commands. A line under the bar shows what the tank is doing, and its messages show in the chat. Where the module is off, the panel says so; without the module, Dungeon keeps its dungeon mode, which also stays in the panel and in the bar's right-click menu.
+- While a clear runs, the **Auto pull** button is greyed out: the clear chooses the pulls, and the tank's auto pull comes back when it stops.
 
 **2.6.1**
 - Wildcard realms: the lfg bot offers of Heroes ("DPS Hero Level 1 ... ready to go!") show their offer window again.
