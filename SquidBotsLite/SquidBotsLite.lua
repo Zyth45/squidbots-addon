@@ -2541,6 +2541,8 @@ local function OnDcAddon(message)
 	-- sent only on the addon channel, so without this they would never show.
 	if parts[1] == "CHAT" then
 		local text = message:match("^CHAT\t(.*)$")
+		-- "Dungeon clear is not enabled for Heroic dungeons on this realm.": the tank already says it in the chat.
+		if text and text:find("^Dungeon clear is not enabled for") then return end
 		if text and text ~= "" then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff[" .. L.DC_LINE .. "]|r " .. text) end
 		return
 	end
