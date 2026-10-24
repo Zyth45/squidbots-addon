@@ -2523,7 +2523,7 @@ versionWatch:SetScript("OnEvent", function(self, _, message)
 	end
 end)
 
--- The tank sends every player of its group "DC" addon messages; nothing is sent to read them. STATUS fields:
+-- The tank sends every player of its group "DC" addon messages (STATUS, CHAT); nothing is sent to read them. STATUS fields:
 -- 1 "STATUS", 2 enabled, 3 boss entry, 4 next boss, 5 stall reason, 6 skipped, 7 state, 8 detail (English),
 -- 9 pull setting (0 Leeroy, 1 Advanced, 2 Dynamic), 10 Dynamic's choice for the current pack.
 local DC_LINE_KEEP = 6
@@ -2536,6 +2536,13 @@ local function OnDcAddon(message)
 		table.insert(parts, message:sub(start, (tab or 0) - 1))
 		if not tab then break end
 		start = tab + 1
+	end
+	-- "CHAT": the tank's lines for the player (why the clear stopped or paused, a door, a stall, "pulling X"),
+	-- sent only on the addon channel, so without this they would never show.
+	if parts[1] == "CHAT" then
+		local text = message:match("^CHAT	(.*)$")
+		if text and text ~= "" then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff[" .. L.DC_LINE .. "]|r " .. text) end
+		return
 	end
 	if parts[1] ~= "STATUS" then return end
 	if dc.module ~= "on" then dc.module, dc.waitUntil = "on", nil end
