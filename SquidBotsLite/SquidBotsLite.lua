@@ -39,13 +39,11 @@ local STRINGS = {
 		DC_DISABLED = "Dungeon clear is disabled on this realm.", DC_OFF_SHORT = "disabled on this realm",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
 		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.",
-		DC_PANEL = "Panel: bosses, Go, camera", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
-		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced", DC_CAMERA = "Camera", DC_FOLLOW = "Follow",
+		DC_PANEL = "Panel: bosses and Go", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
+		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
 		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
 		DC_ALIVE = "alive", DC_DEAD = "dead", DC_SKIPPED = "skipped", DC_MISSING = "missing", DC_RUNNING = "running",
-		TIP_DC_CAMERA = "Spectator camera: fly freely around the dungeon, click again to come back.",
-		TIP_DC_FOLLOW = "Ride the camera on the tank; < and > move to the other bots.",
 		TIP_DUNGEON_DC = "Dungeon clear: the tank leads the group through the dungeon. Opens its panel (bosses, Go, pull mode). The old dungeon mode is in the panel and in the bar's right-click menu.",
 		DC_MANUAL = "Dungeon mode (you lead)",
 		TIP_DC_MANUAL = "The old Dungeon button: bots stick to you, avoid ground effects, engage with you.",
@@ -134,13 +132,11 @@ local STRINGS = {
 		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.", DC_OFF_SHORT = "désactivé sur ce royaume",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
 		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.",
-		DC_PANEL = "Panneau : boss, Go, caméra", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
-		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé", DC_CAMERA = "Caméra", DC_FOLLOW = "Suivre",
+		DC_PANEL = "Panneau : boss et Go", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
+		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
 		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
 		DC_ALIVE = "vivant", DC_DEAD = "mort", DC_SKIPPED = "passé", DC_MISSING = "introuvable", DC_RUNNING = "en cours",
-		TIP_DC_CAMERA = "Caméra spectateur : volez librement dans le donjon, recliquez pour revenir.",
-		TIP_DC_FOLLOW = "La caméra suit le tank ; < et > passent aux autres bots.",
 		TIP_DUNGEON_DC = "Dungeon clear : le tank mène le groupe à travers le donjon. Ouvre son panneau (boss, Go, mode de pull). L'ancien mode donjon est dans le panneau et dans le menu du clic droit sur la barre.",
 		DC_MANUAL = "Mode donjon (vous menez)",
 		TIP_DC_MANUAL = "L'ancien bouton Donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
@@ -2618,7 +2614,7 @@ function dc.OnAddon(message)
 end
 
 -- ---------------------------------------------------------------------------
--- Dungeon clear panel: the run's state, its buttons, the bosses with Go, the spectator camera
+-- Dungeon clear panel: the run's state, its buttons, the bosses with Go
 -- ---------------------------------------------------------------------------
 dc.ROWS, dc.ROW_H = 14, 18
 dc.STATUS_COLORS = { alive = { 1, 0.82, 0 }, dead = { 0.5, 0.5, 0.5 }, skipped = { 0.6, 0.6, 1 }, missing = { 1, 0.5, 0.3 } }
@@ -2644,7 +2640,7 @@ end
 function dc.BuildPanel()
 	local f = CreateFrame("Frame", "SquidBotsLiteDungeonClear", UIParent)
 	f:SetWidth(330)
-	f:SetHeight(236 + dc.ROWS * dc.ROW_H)
+	f:SetHeight(214 + dc.ROWS * dc.ROW_H)
 	f:SetPoint("CENTER", 260, 40)
 	f:SetBackdrop(PANEL_BACKDROP)
 	f:SetBackdropColor(0.04, 0.04, 0.05, 1)
@@ -2692,25 +2688,13 @@ function dc.BuildPanel()
 	Row(-124, { { 100, "DC_P_DYN", function() dc.Send("pull dynamic") end, nil, "pullDyn" },
 		{ 98, "DC_P_LEEROY", function() dc.Send("pull off") end, nil, "pullLeeroy" },
 		{ 98, "DC_P_ADV", function() dc.Send("pull on") end, nil, "pullAdv" } })
-	Row(-146, { { 98, "DC_CAMERA", function() dc.Send("spectate") end, "TIP_DC_CAMERA" },
-		{ 98, "DC_FOLLOW", function() dc.Send("spectate follow") end, "TIP_DC_FOLLOW" } })
-	f.manual = dc.Button(f, 296, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
-	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
-	local prev = dc.Button(f, 40, nil, function() dc.Send("spectate prev") end, "TIP_DC_FOLLOW")
-	prev:SetText("<")
-	prev:SetPoint("TOPLEFT", 216, -146)
-	local nextBot = dc.Button(f, 40, nil, function() dc.Send("spectate next") end, "TIP_DC_FOLLOW")
-	nextBot:SetText(">")
-	nextBot:SetPoint("TOPLEFT", 258, -146)
-	table.insert(f.buttons, prev)
-	table.insert(f.buttons, nextBot)
 	f.bossTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	f.bossTitle:SetPoint("TOPLEFT", 18, -176)
+	f.bossTitle:SetPoint("TOPLEFT", 18, -154)
 	local refresh = dc.Button(f, 90, "DC_REFRESH", function() dc.AskBosses() end)
-	refresh:SetPoint("TOPRIGHT", -16, -172)
+	refresh:SetPoint("TOPRIGHT", -16, -150)
 	table.insert(f.buttons, refresh)
 	f.empty = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	f.empty:SetPoint("TOPLEFT", 18, -198)
+	f.empty:SetPoint("TOPLEFT", 18, -176)
 	f.empty:SetWidth(294)
 	f.empty:SetJustifyH("LEFT")
 	f.rows = {}
@@ -2718,7 +2702,7 @@ function dc.BuildPanel()
 		local row = CreateFrame("Frame", nil, f)
 		row:SetWidth(298)
 		row:SetHeight(dc.ROW_H)
-		row:SetPoint("TOPLEFT", 16, -194 - (i - 1) * dc.ROW_H)
+		row:SetPoint("TOPLEFT", 16, -172 - (i - 1) * dc.ROW_H)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.name:SetPoint("LEFT", 2, 0)
 		row.name:SetWidth(170)
@@ -2812,6 +2796,7 @@ function dc.RefreshPanel()
 			row.name:SetTextColor(color[1], color[2], color[3])
 			row.status:SetText(dc.STATUS_KEYS[boss.status] and L[dc.STATUS_KEYS[boss.status]] or boss.status)
 			row.status:SetTextColor(color[1], color[2], color[3])
+			row.go:SetText(L.DC_GO)
 			if row.entry and boss.status ~= "dead" then row.go:Show() else row.go:Hide() end
 			row:Show()
 		else
