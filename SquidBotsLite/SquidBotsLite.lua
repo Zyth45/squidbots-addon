@@ -32,6 +32,12 @@ local STRINGS = {
 		QUESTS = "Take my quests (next to the quest giver)",
 		M_GATHER_ALL = "Gather everything (grey too)", M_GATHER_SKILLUP = "Gather only what gives skill",
 		GATHER = "Gathering (whole group)",
+		DC = "Dungeon clear", DC_START = "Start: the tank clears the dungeon", DC_STOP = "Stop: the bots come back to me",
+		DC_PAUSE = "Pause / resume", DC_SKIP = "Skip this boss or objective", DC_PULL = "Pull mode",
+		DC_PULL_DYN = "Dynamic (recommended)", DC_PULL_LEEROY = "Leeroy: straight in, fast", DC_PULL_ADV = "Advanced: pull back to a camp, careful",
+		DC_STATUS = "Status in chat", DC_BOSSES = "Bosses of the dungeon",
+		DC_DISABLED = "Dungeon clear is disabled on this realm.", DC_OFF_SHORT = "disabled on this realm",
+		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
@@ -110,6 +116,12 @@ local STRINGS = {
 		QUESTS = "Prendre mes quêtes (près du donneur)",
 		M_GATHER_ALL = "Tout récolter (gris compris)", M_GATHER_SKILLUP = "Récolter seulement ce qui fait monter",
 		GATHER = "Récolte (tout le groupe)",
+		DC = "Dungeon clear", DC_START = "Démarrer : le tank nettoie le donjon", DC_STOP = "Arrêter : les bots reviennent vers moi",
+		DC_PAUSE = "Pause / reprendre", DC_SKIP = "Passer ce boss ou cet objectif", DC_PULL = "Mode de pull",
+		DC_PULL_DYN = "Dynamique (conseillé)", DC_PULL_LEEROY = "Leeroy : fonce, rapide", DC_PULL_ADV = "Avancé : tire vers un camp, prudent",
+		DC_STATUS = "État dans le chat", DC_BOSSES = "Boss du donjon",
+		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.", DC_OFF_SHORT = "désactivé sur ce royaume",
+		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
@@ -341,6 +353,81 @@ local function TargetIsNpc()
 end
 
 local ShowAlts, ShowSpecs
+-- Dungeon clear (mod-dungeon-clear on the server): the player's own ".dc" commands, sent in /say like ".playerbots".
+-- Whether the realm has the module is asked once a session: ".dc status" whispered to oneself, so that without
+-- the module the line never shows in /say (the server pretends a command it lacks does not exist, and the
+-- whisper comes back). The answer is kept out of the chat. dc.module: nil (not known yet), "on", "off" (installed,
+-- DungeonClear.Enable = 0), "absent".
+local DC_PROBE_DELAY, DC_PROBE_WAIT = 8, 5
+local dc = { module = nil, probeAt = nil, waitUntil = nil, pull = nil }
+
+local function DcSend(args)
+	SendChatMessage(".dc " .. args, "SAY")
+end
+
+local function DcPullItem(text, mode, value)
+	return { text = text, checked = function() return dc.pull == value end, func = function() DcSend("pull " .. mode) end }
+end
+
+local function DcMenu()
+	return {
+		{ text = L.DC_START, notCheckable = true, func = function() DcSend("on") end },
+		{ text = L.DC_STOP, notCheckable = true, func = function() DcSend("off") end },
+		{ text = L.DC_PAUSE, notCheckable = true, func = function() DcSend("pause") end },
+		{ text = L.DC_SKIP, notCheckable = true, func = function() DcSend("skip") end },
+		-- ".dc pull off|on|dynamic": off = Leeroy, on = Advanced. The tick follows the tank's STATUS (0, 1, 2).
+		{ text = L.DC_PULL, hasArrow = true, notCheckable = true, menuList = {
+			DcPullItem(L.DC_PULL_DYN, "dynamic", 2),
+			DcPullItem(L.DC_PULL_LEEROY, "off", 0),
+			DcPullItem(L.DC_PULL_ADV, "on", 1),
+		} },
+		{ text = L.DC_STATUS, notCheckable = true, func = function() DcSend("status") end },
+		{ text = L.DC_BOSSES, notCheckable = true, func = function() DcSend("bosses") end },
+	}
+end
+
+local function TickDc()
+	if dc.module or not dc.probeAt then return end
+	local now = GetTime()
+	if not dc.waitUntil then
+		if now < dc.probeAt then return end
+		dc.waitUntil = now + DC_PROBE_WAIT
+		SendChatMessage(".dc status", "WHISPER", nil, UnitName("player"))
+	elseif now > dc.waitUntil then
+		dc.module, dc.waitUntil = "absent", nil
+	end
+end
+
+local function DcProbing()
+	return dc.waitUntil and GetTime() <= dc.waitUntil
+end
+
+-- The probe's answers: a system line from the module, or the whisper back to oneself without it. The chat
+-- frames see an event before our frame does, so their filter only reads, and the handler decides.
+local function IsDcAnswer(message)
+	return message:find("^mod%-dungeon%-clear is disabled on this server") or message == "No tank bot found in your group."
+		or message == "This command must be used in-game."
+end
+
+local function DcJustAnswered()
+	return DcProbing() or (dc.answeredAt and GetTime() - dc.answeredAt < 1)
+end
+
+local function OnDcSystem(message)
+	if message:find("^mod%-dungeon%-clear is disabled on this server") then
+		if DcProbing() then dc.answeredAt = GetTime() end
+		dc.module, dc.waitUntil = "off", nil
+	elseif DcProbing() and IsDcAnswer(message) then
+		dc.module, dc.waitUntil, dc.answeredAt = "on", nil, GetTime()
+	end
+end
+
+local function OnDcWhisperBack(message, name)
+	if message == ".dc status" and name == UnitName("player") and DcProbing() then
+		dc.module, dc.waitUntil, dc.answeredAt = "absent", nil, GetTime()
+	end
+end
+
 local function RecruitMenu()
 	local items = {
 		{ text = L.RECRUIT, isTitle = true, notCheckable = true },
@@ -363,6 +450,11 @@ local function RecruitMenu()
 			{ text = L.M_GATHER_ALL, notCheckable = true, func = function() SendGroup("nc +gather all") end },
 		} },
 	}
+	if dc.module == "on" then
+		table.insert(items, { text = L.DC, hasArrow = true, notCheckable = true, menuList = DcMenu() })
+	elseif dc.module == "off" then
+		table.insert(items, { text = L.DC .. " (" .. L.DC_OFF_SHORT .. ")", notCheckable = true, func = function() Print(L.DC_DISABLED) end })
+	end
 	if SquidBotsLiteDB.gm then
 		table.insert(items, { text = L.REGEAR, notCheckable = true, func = function() SendChatMessage(".playerbots coa regear", "SAY") end })
 	end
@@ -2425,6 +2517,59 @@ versionWatch:SetScript("OnEvent", function(self, _, message)
 	end
 end)
 
+-- The tank sends every player of its group "DC" addon messages; nothing is sent to read them. STATUS fields:
+-- 1 "STATUS", 2 enabled, 3 boss entry, 4 next boss, 5 stall reason, 6 skipped, 7 state, 8 detail (English),
+-- 9 pull setting (0 Leeroy, 1 Advanced, 2 Dynamic), 10 Dynamic's choice for the current pack.
+local DC_LINE_KEEP = 6
+local dcLine, dcHideAt
+
+local function OnDcAddon(message)
+	local parts, start = {}, 1
+	while true do
+		local tab = message:find("\t", start, true)
+		table.insert(parts, message:sub(start, (tab or 0) - 1))
+		if not tab then break end
+		start = tab + 1
+	end
+	if parts[1] ~= "STATUS" then return end
+	if dc.module ~= "on" then dc.module, dc.waitUntil = "on", nil end
+	dc.pull = tonumber(parts[9] or "")
+	if not dcLine then
+		dcLine = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		dcLine:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -2)
+		dcLine:SetJustifyH("LEFT")
+	end
+	local state, detail, stall = parts[7] or "", parts[8] or "", parts[5] or ""
+	local text
+	if parts[2] ~= "1" then
+		text = L.DC_STOPPED
+		dcHideAt = GetTime() + DC_LINE_KEEP
+	else
+		text = detail ~= "" and detail or state
+		if state == "paused" then text = L.DC_PAUSED .. (detail ~= "" and (" - " .. detail) or "") end
+		if stall ~= "" then text = text .. " |cffff5555(" .. stall .. ")|r" end
+		dcHideAt = nil
+	end
+	dcLine:SetText("|cff66ccff" .. L.DC_LINE .. ":|r " .. text)
+	dcLine:Show()
+end
+
+local function TickDcLine()
+	if dcLine and dcHideAt and GetTime() > dcHideAt then
+		dcLine:Hide()
+		dcHideAt = nil
+	end
+end
+
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
+	if IsDcAnswer(message) and DcJustAnswered() then return true end
+end)
+for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM" }) do
+	ChatFrame_AddMessageEventFilter(e, function(_, _, message, name)
+		if message == ".dc status" and name == UnitName("player") and DcJustAnswered() then return true end
+	end)
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
@@ -2444,9 +2589,10 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		BuildSpecs()
 		RefreshTexts()
 		for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
-			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM" }) do
+			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM", "CHAT_MSG_ADDON" }) do
 			self:RegisterEvent(e)
 		end
+		dc.probeAt = GetTime() + DC_PROBE_DELAY
 		local elapsed = 0
 		self:SetScript("OnUpdate", function(_, delta)
 			elapsed = elapsed + delta
@@ -2459,10 +2605,16 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			ProbeRoles()
 			TickAlts()
 			TickSpecs()
+			TickDc()
+			TickDcLine()
 		end)
+	elseif event == "CHAT_MSG_ADDON" then
+		if arg1 == "DC" and arg2 then OnDcAddon(arg2) end
 	elseif event == "CHAT_MSG_WHISPER" then
+		OnDcWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)
 	elseif event == "CHAT_MSG_SYSTEM" then
+		OnDcSystem(arg1)
 		if OnSystem(arg1) then return end
 		-- "Kegarink Bot joins as tank": a bot name can hold a space since CoA Bots 1.5 (CoaBotSurname).
 		local name, role = arg1:match("^(.-) joins as (%a+)")

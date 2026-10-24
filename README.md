@@ -98,6 +98,9 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**2.8**
+- **Bots > Dungeon clear** on realms with mod-dungeon-clear: start or stop the clear, pause, skip a boss, pull mode (Dynamic, Leeroy, Advanced), status and bosses, through the player's own `.dc` commands. A line under the bar shows what the tank is doing. On a realm where the module is off, the menu says so; without the module, it does not show.
+
 **2.6.1**
 - Wildcard realms: the lfg bot offers of Heroes ("DPS Hero Level 1 ... ready to go!") show their offer window again.
 - Role icons stay off nameplates: no more "SetFrameStrata(): Unknown frame strata" error with enemy or friendly
