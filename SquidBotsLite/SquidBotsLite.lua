@@ -360,76 +360,76 @@ local ShowAlts, ShowSpecs
 -- the module the line never shows in /say (the server pretends a command it lacks does not exist, and the
 -- whisper comes back). The answer is kept out of the chat. dc.module: nil (not known yet), "on", "off" (installed,
 -- DungeonClear.Enable = 0), "absent".
-local DC_PROBE_DELAY, DC_PROBE_WAIT = 8, 5
-local dc = { module = nil, probeAt = nil, waitUntil = nil, pull = nil }
+-- One table for all of it: the client allows 200 locals in a file's main chunk.
+local dc = { module = nil, probeAt = nil, waitUntil = nil, pull = nil, PROBE_DELAY = 8, PROBE_WAIT = 5, LINE_KEEP = 6 }
 
-local function DcSend(args)
+function dc.Send(args)
 	SendChatMessage(".dc " .. args, "SAY")
 end
 
-local function DcPullItem(text, mode, value)
-	return { text = text, checked = function() return dc.pull == value end, func = function() DcSend("pull " .. mode) end }
+function dc.PullItem(text, mode, value)
+	return { text = text, checked = function() return dc.pull == value end, func = function() dc.Send("pull " .. mode) end }
 end
 
-local function DcMenu()
+function dc.Menu()
 	return {
 		-- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
 		{ text = L.DC_START, notCheckable = true, func = function()
 			local inside, kind = IsInInstance()
-			if inside and (kind == "party" or kind == "raid") then DcSend("on") else Print(L.DC_NOT_IN_DUNGEON) end
+			if inside and (kind == "party" or kind == "raid") then dc.Send("on") else Print(L.DC_NOT_IN_DUNGEON) end
 		end },
-		{ text = L.DC_STOP, notCheckable = true, func = function() DcSend("off") end },
-		{ text = L.DC_PAUSE, notCheckable = true, func = function() DcSend("pause") end },
-		{ text = L.DC_SKIP, notCheckable = true, func = function() DcSend("skip") end },
+		{ text = L.DC_STOP, notCheckable = true, func = function() dc.Send("off") end },
+		{ text = L.DC_PAUSE, notCheckable = true, func = function() dc.Send("pause") end },
+		{ text = L.DC_SKIP, notCheckable = true, func = function() dc.Send("skip") end },
 		-- ".dc pull off|on|dynamic": off = Leeroy, on = Advanced. The tick follows the tank's STATUS (0, 1, 2).
 		{ text = L.DC_PULL, hasArrow = true, notCheckable = true, menuList = {
-			DcPullItem(L.DC_PULL_DYN, "dynamic", 2),
-			DcPullItem(L.DC_PULL_LEEROY, "off", 0),
-			DcPullItem(L.DC_PULL_ADV, "on", 1),
+			dc.PullItem(L.DC_PULL_DYN, "dynamic", 2),
+			dc.PullItem(L.DC_PULL_LEEROY, "off", 0),
+			dc.PullItem(L.DC_PULL_ADV, "on", 1),
 		} },
-		{ text = L.DC_STATUS, notCheckable = true, func = function() DcSend("status") end },
-		{ text = L.DC_BOSSES, notCheckable = true, func = function() DcSend("bosses") end },
+		{ text = L.DC_STATUS, notCheckable = true, func = function() dc.Send("status") end },
+		{ text = L.DC_BOSSES, notCheckable = true, func = function() dc.Send("bosses") end },
 	}
 end
 
-local function TickDc()
+function dc.Tick()
 	if dc.module or not dc.probeAt then return end
 	local now = GetTime()
 	if not dc.waitUntil then
 		if now < dc.probeAt then return end
-		dc.waitUntil = now + DC_PROBE_WAIT
+		dc.waitUntil = now + dc.PROBE_WAIT
 		SendChatMessage(".dc status", "WHISPER", nil, UnitName("player"))
 	elseif now > dc.waitUntil then
 		dc.module, dc.waitUntil = "absent", nil
 	end
 end
 
-local function DcProbing()
+function dc.Probing()
 	return dc.waitUntil and GetTime() <= dc.waitUntil
 end
 
 -- The probe's answers: a system line from the module, or the whisper back to oneself without it. The chat
 -- frames see an event before our frame does, so their filter only reads, and the handler decides.
-local function IsDcAnswer(message)
+function dc.IsAnswer(message)
 	return message:find("^mod%-dungeon%-clear is disabled on this server") or message == "No tank bot found in your group."
 		or message == "This command must be used in-game."
 end
 
-local function DcJustAnswered()
-	return DcProbing() or (dc.answeredAt and GetTime() - dc.answeredAt < 1)
+function dc.JustAnswered()
+	return dc.Probing() or (dc.answeredAt and GetTime() - dc.answeredAt < 1)
 end
 
-local function OnDcSystem(message)
+function dc.OnSystem(message)
 	if message:find("^mod%-dungeon%-clear is disabled on this server") then
-		if DcProbing() then dc.answeredAt = GetTime() end
+		if dc.Probing() then dc.answeredAt = GetTime() end
 		dc.module, dc.waitUntil = "off", nil
-	elseif DcProbing() and IsDcAnswer(message) then
+	elseif dc.Probing() and dc.IsAnswer(message) then
 		dc.module, dc.waitUntil, dc.answeredAt = "on", nil, GetTime()
 	end
 end
 
-local function OnDcWhisperBack(message, name)
-	if message == ".dc status" and name == UnitName("player") and DcProbing() then
+function dc.OnWhisperBack(message, name)
+	if message == ".dc status" and name == UnitName("player") and dc.Probing() then
 		dc.module, dc.waitUntil, dc.answeredAt = "absent", nil, GetTime()
 	end
 end
@@ -457,7 +457,7 @@ local function RecruitMenu()
 		} },
 	}
 	if dc.module == "on" then
-		table.insert(items, { text = L.DC, hasArrow = true, notCheckable = true, menuList = DcMenu() })
+		table.insert(items, { text = L.DC, hasArrow = true, notCheckable = true, menuList = dc.Menu() })
 	elseif dc.module == "off" then
 		table.insert(items, { text = L.DC .. " (" .. L.DC_OFF_SHORT .. ")", notCheckable = true, func = function() Print(L.DC_DISABLED) end })
 	end
@@ -1558,28 +1558,27 @@ end
 -- they are looked for every few seconds and the unit is read from the frame at each refresh. Our icons
 -- belong to UIParent and are only anchored to those secure frames, which keeps them out of combat locks.
 -- Looking through every frame costs: every 10 seconds in a group, and half a second after the group changes.
-local compactOverlays, compactScanAt, compactGroupSize = {}, 0, -1
-local COMPACT_SCAN, COMPACT_RESCAN = 10, 0.5
+local compact = { overlays = {}, scanAt = 0, groupSize = -1, SCAN = 10, RESCAN = 0.5 }
 
-local function CompactUnit(frame)
+function compact.Unit(frame)
 	local unit = frame.displayedUnit or frame.unit
 	if type(unit) ~= "string" and frame.GetAttribute then unit = frame:GetAttribute("unit") end
 	return type(unit) == "string" and unit or nil
 end
 
-local function IsCompactFrame(frame)
+function compact.IsFrame(frame)
 	-- A CompactUnitFrame: a unit and a "healthBar" (the old party and target frames have "healthbar"). Ascension's
 	-- CompactRaidFrameN have no "name" field.
 	-- A nameplate carries a healthBar and a unit of its own ("nameplate1"): only the frames of the group are ours,
 	-- and a nameplate's strata reads back as "UNKNOWN", which SetFrameStrata then refuses.
-	local unit = frame.healthBar and CompactUnit(frame)
+	local unit = frame.healthBar and compact.Unit(frame)
 	if not unit or not (unit == "player" or string.find(unit, "^party%d") or string.find(unit, "^raid%d")) then
 		return nil
 	end
 	return unit
 end
 
-local function CompactOverlay(frame)
+function compact.Overlay(frame)
 	local overlay = CreateFrame("Button", nil, UIParent)
 	overlay:SetWidth(14)
 	overlay:SetHeight(14)
@@ -1594,38 +1593,38 @@ local function CompactOverlay(frame)
 	overlay:SetScript("OnEnter", OverlayTooltip)
 	overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	overlay.frame = frame
-	compactOverlays[frame] = overlay
+	compact.overlays[frame] = overlay
 	return overlay
 end
 
-local function ScanCompactFrames()
+function compact.Scan()
 	local frame = EnumerateFrames()
 	while frame do
-		if not compactOverlays[frame] and IsCompactFrame(frame) then CompactOverlay(frame) end
+		if not compact.overlays[frame] and compact.IsFrame(frame) then compact.Overlay(frame) end
 		frame = EnumerateFrames(frame)
 	end
 end
 
-local function RefreshCompactOverlays()
+function compact.Refresh()
 	if SquidBotsLiteDB.raidFrames == false then
-		for _, overlay in pairs(compactOverlays) do overlay:Hide() end
+		for _, overlay in pairs(compact.overlays) do overlay:Hide() end
 		return
 	end
 	local now = GetTime()
 	local size = GetNumRaidMembers() + GetNumPartyMembers()
-	if size ~= compactGroupSize then
-		compactGroupSize = size
-		compactScanAt = math.min(compactScanAt, now + COMPACT_RESCAN)
+	if size ~= compact.groupSize then
+		compact.groupSize = size
+		compact.scanAt = math.min(compact.scanAt, now + compact.RESCAN)
 	end
-	if size > 0 and now >= compactScanAt then
-		compactScanAt = now + COMPACT_SCAN
+	if size > 0 and now >= compact.scanAt then
+		compact.scanAt = now + compact.SCAN
 		if _G.CompactUnitMixin or IsAddOnLoaded("Ascension_CompactRaidFrames") or IsAddOnLoaded("CompactRaidFrame")
 			or _G.CompactRaidFrameContainer then
-			ScanCompactFrames()
+			compact.Scan()
 		end
 	end
-	for frame, overlay in pairs(compactOverlays) do
-		local unit = frame:IsVisible() and CompactUnit(frame)
+	for frame, overlay in pairs(compact.overlays) do
+		local unit = frame:IsVisible() and compact.Unit(frame)
 		local name = unit and not UnitIsUnit(unit, "player") and UnitName(unit)
 		if name then
 			overlay.unit = unit
@@ -2526,10 +2525,7 @@ end)
 -- The tank sends every player of its group "DC" addon messages (STATUS, CHAT); nothing is sent to read them. STATUS fields:
 -- 1 "STATUS", 2 enabled, 3 boss entry, 4 next boss, 5 stall reason, 6 skipped, 7 state, 8 detail (English),
 -- 9 pull setting (0 Leeroy, 1 Advanced, 2 Dynamic), 10 Dynamic's choice for the current pack.
-local DC_LINE_KEEP = 6
-local dcLine, dcHideAt
-
-local function OnDcAddon(message)
+function dc.OnAddon(message)
 	local parts, start = {}, 1
 	while true do
 		local tab = message:find("\t", start, true)
@@ -2549,39 +2545,39 @@ local function OnDcAddon(message)
 	if parts[1] ~= "STATUS" then return end
 	if dc.module ~= "on" then dc.module, dc.waitUntil = "on", nil end
 	dc.pull = tonumber(parts[9] or "")
-	if not dcLine then
-		dcLine = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		dcLine:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -2)
-		dcLine:SetJustifyH("LEFT")
+	if not dc.line then
+		dc.line = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		dc.line:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -2)
+		dc.line:SetJustifyH("LEFT")
 	end
 	local state, detail, stall = parts[7] or "", parts[8] or "", parts[5] or ""
 	local text
 	if parts[2] ~= "1" then
 		text = L.DC_STOPPED
-		dcHideAt = GetTime() + DC_LINE_KEEP
+		dc.hideAt = GetTime() + dc.LINE_KEEP
 	else
 		text = detail ~= "" and detail or state
 		if state == "paused" then text = L.DC_PAUSED .. (detail ~= "" and (" - " .. detail) or "") end
 		if stall ~= "" then text = text .. " |cffff5555(" .. stall .. ")|r" end
-		dcHideAt = nil
+		dc.hideAt = nil
 	end
-	dcLine:SetText("|cff66ccff" .. L.DC_LINE .. ":|r " .. text)
-	dcLine:Show()
+	dc.line:SetText("|cff66ccff" .. L.DC_LINE .. ":|r " .. text)
+	dc.line:Show()
 end
 
-local function TickDcLine()
-	if dcLine and dcHideAt and GetTime() > dcHideAt then
-		dcLine:Hide()
-		dcHideAt = nil
+function dc.TickLine()
+	if dc.line and dc.hideAt and GetTime() > dc.hideAt then
+		dc.line:Hide()
+		dc.hideAt = nil
 	end
 end
 
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
-	if IsDcAnswer(message) and DcJustAnswered() then return true end
+	if dc.IsAnswer(message) and dc.JustAnswered() then return true end
 end)
 for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM" }) do
 	ChatFrame_AddMessageEventFilter(e, function(_, _, message, name)
-		if message == ".dc status" and name == UnitName("player") and DcJustAnswered() then return true end
+		if message == ".dc status" and name == UnitName("player") and dc.JustAnswered() then return true end
 	end)
 end
 
@@ -2607,29 +2603,29 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM", "CHAT_MSG_ADDON" }) do
 			self:RegisterEvent(e)
 		end
-		dc.probeAt = GetTime() + DC_PROBE_DELAY
+		dc.probeAt = GetTime() + dc.PROBE_DELAY
 		local elapsed = 0
 		self:SetScript("OnUpdate", function(_, delta)
 			elapsed = elapsed + delta
 			if elapsed < 0.3 then return end
 			elapsed = 0
 			RefreshOverlays()
-			RefreshCompactOverlays()
+			compact.Refresh()
 			RefreshToasts()
 			RefreshRelease()
 			ProbeRoles()
 			TickAlts()
 			TickSpecs()
-			TickDc()
-			TickDcLine()
+			dc.Tick()
+			dc.TickLine()
 		end)
 	elseif event == "CHAT_MSG_ADDON" then
-		if arg1 == "DC" and arg2 then OnDcAddon(arg2) end
+		if arg1 == "DC" and arg2 then dc.OnAddon(arg2) end
 	elseif event == "CHAT_MSG_WHISPER" then
-		OnDcWhisperBack(arg1, arg2)
+		dc.OnWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)
 	elseif event == "CHAT_MSG_SYSTEM" then
-		OnDcSystem(arg1)
+		dc.OnSystem(arg1)
 		if OnSystem(arg1) then return end
 		-- "Kegarink Bot joins as tank": a bot name can hold a space since CoA Bots 1.5 (CoaBotSurname).
 		local name, role = arg1:match("^(.-) joins as (%a+)")
