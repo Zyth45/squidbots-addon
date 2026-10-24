@@ -16,6 +16,7 @@ local STRINGS = {
 		RAIDFRAMES_OFF = "Role icons and bot menus on the raid-style frames: off.",
 		TIP_PULL_ON = "The tank pulls on its own. Click so it waits: it only fights what you or the group attack.",
 		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
+		TIP_PULL_DC = "Dungeon clear is running: it chooses the pulls (pull mode in its panel). Auto pull comes back when the clear stops.",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
 		TIP_ALTS = "Your other characters: log them in as bots, summon them, open their sheet (gear, bags, quests, mounts).",
@@ -104,6 +105,7 @@ local STRINGS = {
 		RAIDFRAMES_OFF = "Icônes de rôle et menus des bots sur les cadres de style raid : désactivés.",
 		TIP_PULL_ON = "Le tank tire tout seul. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
 		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
+		TIP_PULL_DC = "Dungeon clear est en cours : c'est lui qui choisit les pulls (mode de pull dans son panneau). Le pull auto revient quand le clear s'arrête.",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
 		TIP_ALTS = "Vos autres personnages : connectez-les en bots, appelez-les, ouvrez leur fiche (équipement, sacs, quêtes, montures).",
@@ -1257,6 +1259,9 @@ Highlight = function()
 		pull.icon:SetTexture(state.autoPull and ICON_PULL_ON or ICON_PULL_OFF)
 		pull.label = state.autoPull and "PULL_ON" or "PULL_OFF"
 		pull.tip = state.autoPull and "TIP_PULL_ON" or "TIP_PULL_OFF"
+		-- While a clear runs, mod-dungeon-clear takes "coa auto pull" off the tank and puts it back after: greyed out.
+		if dc.enabled then pull.tip = "TIP_PULL_DC" end
+		pull.icon:SetDesaturated(dc.enabled and 1 or nil)
 		pull.caption:SetText(L[pull.label])
 	end
 end
@@ -1421,6 +1426,7 @@ local function BuildBar()
 			if SetPassive(not state.passive) then state.passive = not state.passive; Highlight() end
 		end },
 		{ "pull", ICON_PULL_ON, "PULL_ON", "TIP_PULL_ON", function()
+			if dc.enabled then Print(L.TIP_PULL_DC) return end
 			SetAutoPull(not state.autoPull)
 		end },
 		-- On a realm with mod-dungeon-clear (on, or off: the panel then says so), the panel; elsewhere the old dungeon mode.
@@ -2554,6 +2560,7 @@ function dc.OnAddon(message)
 	dc.pull = tonumber(parts[9] or "")
 	dc.enabled, dc.state, dc.detail, dc.stall = parts[2] == "1", parts[7] or "", parts[8] or "", parts[5] or ""
 	dc.nextBoss = parts[4] ~= "None" and parts[4] or nil
+	Highlight()
 	if not dc.line then
 		dc.line = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		dc.line:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -2)
