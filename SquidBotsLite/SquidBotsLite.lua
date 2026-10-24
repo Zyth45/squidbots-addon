@@ -46,6 +46,9 @@ local STRINGS = {
 		DC_ALIVE = "alive", DC_DEAD = "dead", DC_SKIPPED = "skipped", DC_MISSING = "missing", DC_RUNNING = "running",
 		TIP_DC_CAMERA = "Spectator camera: fly freely around the dungeon, click again to come back.",
 		TIP_DC_FOLLOW = "Ride the camera on the tank; < and > move to the other bots.",
+		TIP_DUNGEON_DC = "Dungeon clear: the tank leads the group through the dungeon. Opens its panel (bosses, Go, pull mode). The old dungeon mode is in the panel and in the bar's right-click menu.",
+		DC_MANUAL = "Dungeon mode (you lead)",
+		TIP_DC_MANUAL = "The old Dungeon button: bots stick to you, avoid ground effects, engage with you.",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
@@ -138,6 +141,9 @@ local STRINGS = {
 		DC_ALIVE = "vivant", DC_DEAD = "mort", DC_SKIPPED = "passé", DC_MISSING = "introuvable", DC_RUNNING = "en cours",
 		TIP_DC_CAMERA = "Caméra spectateur : volez librement dans le donjon, recliquez pour revenir.",
 		TIP_DC_FOLLOW = "La caméra suit le tank ; < et > passent aux autres bots.",
+		TIP_DUNGEON_DC = "Dungeon clear : le tank mène le groupe à travers le donjon. Ouvre son panneau (boss, Go, mode de pull). L'ancien mode donjon est dans le panneau et dans le menu du clic droit sur la barre.",
+		DC_MANUAL = "Mode donjon (vous menez)",
+		TIP_DC_MANUAL = "L'ancien bouton Donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
@@ -411,6 +417,9 @@ function dc.Menu()
 end
 
 function dc.Tick()
+	if buttons.dungeon then
+		buttons.dungeon.tip = (dc.module == "on" or dc.module == "off") and "TIP_DUNGEON_DC" or "TIP_DUNGEON"
+	end
 	if dc.module or not dc.probeAt then return end
 	local now = GetTime()
 	if not dc.waitUntil then
@@ -1456,8 +1465,13 @@ local function BuildBar()
 		{ "pull", ICON_PULL_ON, "PULL_ON", "TIP_PULL_ON", function()
 			SetAutoPull(not state.autoPull)
 		end },
+		-- On a realm with mod-dungeon-clear (on, or off: the panel then says so), the panel; elsewhere the old dungeon mode.
 		{ "dungeon", "Interface\\Icons\\Achievement_Dungeon_ClassicDungeonMaster", "DUNGEON", "TIP_DUNGEON", function()
-			if SendOrder("co -wait for attack,+avoid aoe", "follow") then SetOrder("dungeon") end
+			if dc.module == "on" or dc.module == "off" then
+				dc.TogglePanel()
+			else
+				dc.DungeonMode()
+			end
 		end },
 		{ "summon", "Interface\\Icons\\Spell_Arcane_PortalDalaran", "SUMMON", "TIP_SUMMON", function()
 			SendGroup("summon")
@@ -2630,7 +2644,7 @@ end
 function dc.BuildPanel()
 	local f = CreateFrame("Frame", "SquidBotsLiteDungeonClear", UIParent)
 	f:SetWidth(330)
-	f:SetHeight(200 + dc.ROWS * dc.ROW_H)
+	f:SetHeight(236 + dc.ROWS * dc.ROW_H)
 	f:SetPoint("CENTER", 260, 40)
 	f:SetBackdrop(PANEL_BACKDROP)
 	f:SetBackdropColor(0.04, 0.04, 0.05, 1)
@@ -2680,12 +2694,16 @@ function dc.BuildPanel()
 		{ 98, "DC_P_ADV", function() dc.Send("pull on") end, nil, "pullAdv" } })
 	Row(-146, { { 98, "DC_CAMERA", function() dc.Send("spectate") end, "TIP_DC_CAMERA" },
 		{ 98, "DC_FOLLOW", function() dc.Send("spectate follow") end, "TIP_DC_FOLLOW" } })
+	f.manual = dc.Button(f, 296, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
+	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
 	local prev = dc.Button(f, 40, nil, function() dc.Send("spectate prev") end, "TIP_DC_FOLLOW")
 	prev:SetText("<")
 	prev:SetPoint("TOPLEFT", 216, -146)
 	local nextBot = dc.Button(f, 40, nil, function() dc.Send("spectate next") end, "TIP_DC_FOLLOW")
 	nextBot:SetText(">")
 	nextBot:SetPoint("TOPLEFT", 258, -146)
+	table.insert(f.buttons, prev)
+	table.insert(f.buttons, nextBot)
 	f.bossTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.bossTitle:SetPoint("TOPLEFT", 18, -176)
 	local refresh = dc.Button(f, 90, "DC_REFRESH", function() dc.AskBosses() end)
@@ -2722,6 +2740,14 @@ function dc.BuildPanel()
 	dc.panel = f
 end
 
+function dc.DungeonMode()
+	if SendOrder("co -wait for attack,+avoid aoe", "follow") then SetOrder("dungeon") end
+end
+
+function dc.TogglePanel()
+	if dc.panel and dc.panel:IsShown() then dc.panel:Hide() else dc.ShowPanel() end
+end
+
 function dc.AskBosses()
 	-- "silent": the list comes as addon messages only, without one chat line per boss.
 	dc.Send("bosses silent")
@@ -2730,8 +2756,10 @@ end
 function dc.ShowPanel()
 	if not dc.panel then dc.BuildPanel() end
 	dc.panel:Show()
-	dc.Send("status silent")
-	dc.AskBosses()
+	if dc.module ~= "off" then
+		dc.Send("status silent")
+		dc.AskBosses()
+	end
 	dc.RefreshPanel()
 end
 
@@ -2739,8 +2767,20 @@ function dc.RefreshPanel()
 	local f = dc.panel
 	if not f or not f:IsShown() then return end
 	f.title:SetText(L.DC_LINE)
+	f.manual:SetText(L.DC_MANUAL)
+	local off = dc.module == "off"
 	for _, button in ipairs(f.buttons) do
 		if button.label then button:SetText(L[button.label]) end
+		if off then button:Disable() else button:Enable() end
+	end
+	if off then
+		f.state:SetText("|cffff5555" .. L.DC_DISABLED .. "|r")
+		f.detail:SetText("")
+		f.next:SetText("")
+		f.bossTitle:SetText("")
+		f.empty:SetText("")
+		for _, row in ipairs(f.rows) do row:Hide() end
+		return
 	end
 	local state
 	if dc.enabled == nil then
