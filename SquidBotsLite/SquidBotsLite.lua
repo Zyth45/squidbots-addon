@@ -39,6 +39,16 @@ local STRINGS = {
 		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
 		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
+		DC_PULL_T = "Pull mode", DC_STALLED = "blocked",
+		TIP_DC_ON = "The tank leads the group through the dungeon, boss after boss, clearing the trash on the way. Inside a dungeon, with a tank bot in your group.",
+		TIP_DC_OFF = "Ends the clear: the bots come back to follow you.",
+		TIP_DC_PAUSE = "The tank stops where it is without ending the clear; click again to go on.",
+		TIP_DC_SKIP = "The tank gives up what it is on (a boss it cannot reach, a stuck step) and goes to the next boss. The skipped boss stays in the list: Go takes it back there.",
+		TIP_DC_P_DYN = "Pack by pack: walks into an easy one, pulls a big or tight one back to a camp. Best for most dungeons.",
+		TIP_DC_P_LEEROY = "Walks straight into every pack and fights there. Fastest, for dungeons you outgear.",
+		TIP_DC_P_ADV = "Pulls every pack back to a held camp before fighting it. Slowest and safest.",
+		TIP_DC_REFRESH = "Asks the tank for the list of bosses again.",
+		TIP_DC_GO = "The tank heads straight for this boss (and starts the clear if it was off).",
 		DC_ALIVE = "alive", DC_DEAD = "dead", DC_SKIPPED = "skipped", DC_MISSING = "missing", DC_RUNNING = "running",
 		TIP_DUNGEON_DC = "Dungeon clear: the tank leads the group through the dungeon. Opens its panel (bosses, Go, pull mode). The old dungeon mode is in the panel and in the bar's right-click menu.",
 		DC_MANUAL = "Dungeon mode (you lead)",
@@ -128,6 +138,16 @@ local STRINGS = {
 		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
 		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
+		DC_PULL_T = "Mode de pull", DC_STALLED = "bloqué",
+		TIP_DC_ON = "Le tank mène le groupe à travers le donjon, boss après boss, en nettoyant les packs en chemin. Dans un donjon, avec un bot tank dans le groupe.",
+		TIP_DC_OFF = "Arrête le clear : les bots reviennent vous suivre.",
+		TIP_DC_PAUSE = "Le tank s'arrête sur place sans finir le clear ; recliquez pour repartir.",
+		TIP_DC_SKIP = "Le tank abandonne ce qu'il fait (un boss qu'il n'atteint pas, une étape bloquée) et passe au boss suivant. Le boss passé reste dans la liste : Go l'y ramène.",
+		TIP_DC_P_DYN = "Pack par pack : fonce sur un pack facile, tire un pack gros ou serré vers un camp. Le meilleur choix pour la plupart des donjons.",
+		TIP_DC_P_LEEROY = "Fonce sur chaque pack et se bat sur place. Le plus rapide, pour les donjons où vous êtes bien équipés.",
+		TIP_DC_P_ADV = "Tire chaque pack vers un camp avant de le combattre. Le plus lent, le plus sûr.",
+		TIP_DC_REFRESH = "Redemande au tank la liste des boss.",
+		TIP_DC_GO = "Le tank va droit vers ce boss (et lance le clear s'il était arrêté).",
 		DC_ALIVE = "vivant", DC_DEAD = "mort", DC_SKIPPED = "passé", DC_MISSING = "introuvable", DC_RUNNING = "en cours",
 		TIP_DUNGEON_DC = "Dungeon clear : le tank mène le groupe à travers le donjon. Ouvre son panneau (boss, Go, mode de pull). L'ancien mode donjon est dans le panneau et dans le menu du clic droit sur la barre.",
 		DC_MANUAL = "Mode donjon (vous menez)",
@@ -2585,9 +2605,10 @@ end
 -- ---------------------------------------------------------------------------
 -- Dungeon clear panel: the run's state, its buttons, the bosses with Go
 -- ---------------------------------------------------------------------------
-dc.ROWS, dc.ROW_H = 14, 18
-dc.STATUS_COLORS = { alive = { 1, 0.82, 0 }, dead = { 0.5, 0.5, 0.5 }, skipped = { 0.6, 0.6, 1 }, missing = { 1, 0.5, 0.3 } }
+dc.ROWS, dc.ROW_H, dc.ROWS_TOP = 16, 20, 196
+dc.STATUS_COLORS = { alive = { 1, 0.82, 0 }, dead = { 0.45, 0.45, 0.45 }, skipped = { 0.6, 0.6, 1 }, missing = { 1, 0.5, 0.3 } }
 dc.STATUS_KEYS = { alive = "DC_ALIVE", dead = "DC_DEAD", skipped = "DC_SKIPPED", missing = "DC_MISSING" }
+dc.PULL_KEYS = { [0] = "DC_P_LEEROY", [1] = "DC_P_ADV", [2] = "DC_P_DYN" }
 
 function dc.Button(parent, width, label, onClick, tip)
 	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -2598,7 +2619,8 @@ function dc.Button(parent, width, label, onClick, tip)
 	if tip then
 		button:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_TOP")
-			GameTooltip:SetText(L[tip], 1, 1, 1, 1, true)
+			GameTooltip:SetText(L[label] or "", 1, 0.82, 0)
+			GameTooltip:AddLine(L[tip], 1, 1, 1, true)
 			GameTooltip:Show()
 		end)
 		button:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -2606,13 +2628,28 @@ function dc.Button(parent, width, label, onClick, tip)
 	return button
 end
 
+-- A thin line between the parts of the panel, and a small gold heading.
+function dc.Rule(f, y)
+	local rule = f:CreateTexture(nil, "ARTWORK")
+	rule:SetTexture("Interface\\Buttons\\WHITE8X8")
+	rule:SetVertexColor(1, 0.82, 0, 0.18)
+	rule:SetHeight(1)
+	rule:SetPoint("TOPLEFT", 16, y)
+	rule:SetPoint("TOPRIGHT", -16, y)
+end
+
+function dc.Heading(f, y)
+	local heading = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	heading:SetPoint("TOPLEFT", 18, y)
+	return heading
+end
+
 function dc.BuildPanel()
 	local f = CreateFrame("Frame", "SquidBotsLiteDungeonClear", UIParent)
-	f:SetWidth(330)
-	f:SetHeight(214 + dc.ROWS * dc.ROW_H)
+	f:SetWidth(340)
 	f:SetPoint("CENTER", 260, 40)
 	f:SetBackdrop(PANEL_BACKDROP)
-	f:SetBackdropColor(0.04, 0.04, 0.05, 1)
+	f:SetBackdropColor(0.04, 0.04, 0.05, 0.96)
 	f:SetFrameStrata("DIALOG")
 	f:SetMovable(true)
 	f:EnableMouse(true)
@@ -2625,72 +2662,89 @@ function dc.BuildPanel()
 	f.title:SetPoint("TOP", 0, -14)
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", -4, -4)
-	-- What the tank does, why it waits, where it goes.
+	-- The run: a coloured dot and its state, the pull mode on the right, what the tank does, the next boss.
+	f.dot = f:CreateTexture(nil, "OVERLAY")
+	f.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
+	f.dot:SetWidth(8)
+	f.dot:SetHeight(8)
+	f.dot:SetPoint("TOPLEFT", 20, -42)
 	f.state = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	f.state:SetPoint("TOPLEFT", 18, -38)
-	f.state:SetWidth(294)
-	f.state:SetJustifyH("LEFT")
+	f.state:SetPoint("TOPLEFT", 34, -39)
+	f.pullNow = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.pullNow:SetPoint("TOPRIGHT", -20, -41)
 	f.detail = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	f.detail:SetPoint("TOPLEFT", 18, -56)
-	f.detail:SetWidth(294)
+	f.detail:SetPoint("TOPLEFT", 20, -58)
+	f.detail:SetWidth(300)
 	f.detail:SetHeight(26)
 	f.detail:SetJustifyH("LEFT")
 	f.detail:SetJustifyV("TOP")
 	f.next = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	f.next:SetPoint("TOPLEFT", 18, -84)
-	f.next:SetWidth(294)
+	f.next:SetPoint("TOPLEFT", 20, -86)
+	f.next:SetWidth(300)
 	f.next:SetJustifyH("LEFT")
+	dc.Rule(f, -102)
 	f.buttons = {}
 	local function Row(y, defs)
 		local x = 16
 		for _, def in ipairs(defs) do
 			local button = dc.Button(f, def[1], def[2], def[3], def[4])
 			button:SetPoint("TOPLEFT", x, y)
-			x = x + def[1] + 2
+			x = x + def[1] + 4
 			table.insert(f.buttons, button)
 			if def[5] then f[def[5]] = button end
 		end
 	end
-	Row(-102, { { 74, "DC_ON", function() dc.Start() end }, { 74, "DC_OFF", function() dc.Send("off") end },
-		{ 74, "DC_PAUSE_B", function() dc.Send("pause") end }, { 74, "DC_SKIP_B", function() dc.Send("skip") end } })
+	Row(-110, { { 74, "DC_ON", function() dc.Start() end, "TIP_DC_ON" }, { 74, "DC_OFF", function() dc.Send("off") end, "TIP_DC_OFF" },
+		{ 74, "DC_PAUSE_B", function() dc.Send("pause") end, "TIP_DC_PAUSE" },
+		{ 74, "DC_SKIP_B", function() dc.Send("skip") end, "TIP_DC_SKIP" } })
+	f.pullTitle = dc.Heading(f, -138)
 	-- ".dc pull off|on|dynamic": off = Leeroy, on = Advanced; the lit one follows the tank's STATUS.
-	Row(-124, { { 100, "DC_P_DYN", function() dc.Send("pull dynamic") end, nil, "pullDyn" },
-		{ 98, "DC_P_LEEROY", function() dc.Send("pull off") end, nil, "pullLeeroy" },
-		{ 98, "DC_P_ADV", function() dc.Send("pull on") end, nil, "pullAdv" } })
-	f.manual = dc.Button(f, 296, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
-	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
-	f.bossTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	f.bossTitle:SetPoint("TOPLEFT", 18, -154)
-	local refresh = dc.Button(f, 90, "DC_REFRESH", function() dc.AskBosses() end)
-	refresh:SetPoint("TOPRIGHT", -16, -150)
+	Row(-152, { { 100, "DC_P_DYN", function() dc.Send("pull dynamic") end, "TIP_DC_P_DYN", "pullDyn" },
+		{ 98, "DC_P_LEEROY", function() dc.Send("pull off") end, "TIP_DC_P_LEEROY", "pullLeeroy" },
+		{ 98, "DC_P_ADV", function() dc.Send("pull on") end, "TIP_DC_P_ADV", "pullAdv" } })
+	dc.Rule(f, -180)
+	f.bossTitle = dc.Heading(f, -188)
+	local refresh = dc.Button(f, 80, "DC_REFRESH", function() dc.AskBosses() end, "TIP_DC_REFRESH")
+	refresh:SetHeight(18)
+	refresh:SetPoint("TOPRIGHT", -16, -184)
 	table.insert(f.buttons, refresh)
 	f.empty = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	f.empty:SetPoint("TOPLEFT", 18, -176)
-	f.empty:SetWidth(294)
+	f.empty:SetPoint("TOPLEFT", 20, -dc.ROWS_TOP - 6)
+	f.empty:SetWidth(300)
 	f.empty:SetJustifyH("LEFT")
 	f.rows = {}
 	for i = 1, dc.ROWS do
 		local row = CreateFrame("Frame", nil, f)
-		row:SetWidth(298)
+		row:SetWidth(308)
 		row:SetHeight(dc.ROW_H)
-		row:SetPoint("TOPLEFT", 16, -172 - (i - 1) * dc.ROW_H)
+		row:SetPoint("TOPLEFT", 16, -dc.ROWS_TOP - (i - 1) * dc.ROW_H)
+		-- Every other row a little lighter; the next boss in gold.
+		row.bg = row:CreateTexture(nil, "BACKGROUND")
+		row.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+		row.bg:SetAllPoints()
+		row.mark = row:CreateTexture(nil, "OVERLAY")
+		row.mark:SetWidth(12)
+		row.mark:SetHeight(12)
+		row.mark:SetPoint("LEFT", 4, 0)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		row.name:SetPoint("LEFT", 2, 0)
-		row.name:SetWidth(170)
+		row.name:SetPoint("LEFT", 20, 0)
+		row.name:SetWidth(166)
 		row.name:SetJustifyH("LEFT")
 		row.status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		row.status:SetPoint("LEFT", 176, 0)
-		row.status:SetWidth(70)
+		row.status:SetPoint("LEFT", 190, 0)
+		row.status:SetWidth(66)
 		row.status:SetJustifyH("LEFT")
 		-- ".dc go <entry>": the tank heads for that boss (and starts the clear if it was off).
 		row.go = dc.Button(row, 44, "DC_GO", function(self)
 			local entry = self:GetParent().entry
 			if entry then dc.Send("go " .. entry) end
-		end)
+		end, "TIP_DC_GO")
 		row.go:SetHeight(16)
-		row.go:SetPoint("RIGHT", 0, 0)
+		row.go:SetPoint("RIGHT", -2, 0)
 		f.rows[i] = row
 	end
+	f.manual = dc.Button(f, 308, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
+	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
 	f:Hide()
 	dc.panel = f
 end
@@ -2723,50 +2777,74 @@ function dc.RefreshPanel()
 	if not f or not f:IsShown() then return end
 	f.title:SetText(L.DC_LINE)
 	f.manual:SetText(L.DC_MANUAL)
+	f.pullTitle:SetText(L.DC_PULL_T)
+	f.bossTitle:SetText(L.DC_BOSSES_T)
 	local off = dc.module == "off"
 	for _, button in ipairs(f.buttons) do
 		if button.label then button:SetText(L[button.label]) end
 		if off then button:Disable() else button:Enable() end
 	end
+	local bosses = off and {} or (dc.bosses or {})
+	local shown = math.min(#bosses, dc.ROWS)
+	-- The panel fits the list: no empty space under a short dungeon.
+	f:SetHeight(dc.ROWS_TOP + math.max(shown, 1) * dc.ROW_H + 52)
 	if off then
+		f.dot:SetVertexColor(1, 0.3, 0.3)
 		f.state:SetText("|cffff5555" .. L.DC_DISABLED .. "|r")
+		f.pullNow:SetText("")
 		f.detail:SetText("")
 		f.next:SetText("")
-		f.bossTitle:SetText("")
 		f.empty:SetText("")
 		for _, row in ipairs(f.rows) do row:Hide() end
 		return
 	end
-	local state
-	if dc.enabled == nil then
-		state = "|cff999999" .. L.DC_STOPPED .. "|r"
-	elseif not dc.enabled then
-		state = "|cffff5555" .. L.DC_STOPPED .. "|r"
+	local r, g, b, state
+	if not dc.enabled then
+		r, g, b, state = 0.6, 0.6, 0.6, L.DC_STOPPED
 	elseif dc.state == "paused" then
-		state = "|cffffd100" .. L.DC_PAUSED .. "|r"
+		r, g, b, state = 1, 0.82, 0, L.DC_PAUSED
+	elseif dc.stall and dc.stall ~= "" then
+		r, g, b, state = 1, 0.35, 0.35, L.DC_STALLED
 	else
-		state = "|cff55ff55" .. L.DC_RUNNING .. "|r"
+		r, g, b, state = 0.35, 1, 0.35, L.DC_RUNNING
 	end
+	f.dot:SetVertexColor(r, g, b)
 	f.state:SetText(state)
+	f.state:SetTextColor(r, g, b)
+	f.pullNow:SetText(dc.pull and dc.PULL_KEYS[dc.pull] and ("|cff999999" .. L.DC_PULL_T .. ":|r " .. L[dc.PULL_KEYS[dc.pull]]) or "")
 	local detail = dc.detail or ""
-	if dc.stall and dc.stall ~= "" then detail = detail .. " |cffff5555(" .. dc.stall .. ")|r" end
+	if dc.stall and dc.stall ~= "" then detail = detail .. " |cffff5555" .. dc.stall .. "|r" end
 	f.detail:SetText(detail)
 	f.next:SetText(string.format(L.DC_NEXT, dc.nextBoss or L.DC_NONE))
 	for key, value in pairs({ pullLeeroy = 0, pullAdv = 1, pullDyn = 2 }) do
 		if dc.pull == value then f[key]:LockHighlight() else f[key]:UnlockHighlight() end
 	end
-	f.bossTitle:SetText(L.DC_BOSSES_T)
-	local bosses = dc.bosses or {}
 	f.empty:SetText(#bosses == 0 and L.DC_NO_LIST or "")
 	for i, row in ipairs(f.rows) do
 		local boss = bosses[i]
 		if boss then
+			local isNext = dc.enabled and boss.name == dc.nextBoss
 			row.entry = not boss.event and boss.entry or nil
 			row.name:SetText(boss.name)
 			local color = dc.STATUS_COLORS[boss.status] or { 1, 1, 1 }
 			row.name:SetTextColor(color[1], color[2], color[3])
 			row.status:SetText(dc.STATUS_KEYS[boss.status] and L[dc.STATUS_KEYS[boss.status]] or boss.status)
 			row.status:SetTextColor(color[1], color[2], color[3])
+			if isNext then
+				row.bg:SetVertexColor(1, 0.82, 0, 0.16)
+			else
+				row.bg:SetVertexColor(1, 1, 1, i % 2 == 0 and 0.04 or 0)
+			end
+			-- A skull on a dead boss, an arrow on the one the tank heads for.
+			if boss.status == "dead" then
+				row.mark:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
+				row.mark:Show()
+			elseif isNext then
+				row.mark:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+				row.mark:Show()
+			else
+				row.mark:Hide()
+			end
 			row.go:SetText(L.DC_GO)
 			if row.entry and boss.status ~= "dead" then row.go:Show() else row.go:Hide() end
 			row:Show()
