@@ -2688,6 +2688,8 @@ function dc.BuildPanel()
 	Row(-124, { { 100, "DC_P_DYN", function() dc.Send("pull dynamic") end, nil, "pullDyn" },
 		{ 98, "DC_P_LEEROY", function() dc.Send("pull off") end, nil, "pullLeeroy" },
 		{ 98, "DC_P_ADV", function() dc.Send("pull on") end, nil, "pullAdv" } })
+	f.manual = dc.Button(f, 296, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
+	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
 	f.bossTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.bossTitle:SetPoint("TOPLEFT", 18, -154)
 	local refresh = dc.Button(f, 90, "DC_REFRESH", function() dc.AskBosses() end)
