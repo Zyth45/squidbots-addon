@@ -39,7 +39,7 @@ local STRINGS = {
 		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
 		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
-		DC_PULL_T = "Pull mode", DC_STALLED = "blocked",
+		DC_PULL_T = "Pull mode", DC_STALLED = "blocked", DC_RESUME = "Resume",
 		TIP_DC_ON = "The tank leads the group through the dungeon, boss after boss, clearing the trash on the way. Inside a dungeon, with a tank bot in your group.",
 		TIP_DC_OFF = "Ends the clear: the bots come back to follow you.",
 		TIP_DC_PAUSE = "The tank stops where it is without ending the clear; click again to go on.",
@@ -138,7 +138,7 @@ local STRINGS = {
 		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
 		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
-		DC_PULL_T = "Mode de pull", DC_STALLED = "bloqué",
+		DC_PULL_T = "Mode de pull", DC_STALLED = "bloqué", DC_RESUME = "Reprendre",
 		TIP_DC_ON = "Le tank mène le groupe à travers le donjon, boss après boss, en nettoyant les packs en chemin. Dans un donjon, avec un bot tank dans le groupe.",
 		TIP_DC_OFF = "Arrête le clear : les bots reviennent vous suivre.",
 		TIP_DC_PAUSE = "Le tank s'arrête sur place sans finir le clear ; recliquez pour repartir.",
@@ -2605,10 +2605,9 @@ end
 -- ---------------------------------------------------------------------------
 -- Dungeon clear panel: the run's state, its buttons, the bosses with Go
 -- ---------------------------------------------------------------------------
-dc.ROWS, dc.ROW_H, dc.ROWS_TOP = 16, 20, 196
+dc.ROWS, dc.ROW_H, dc.ROWS_TOP = 16, 20, 208
 dc.STATUS_COLORS = { alive = { 1, 0.82, 0 }, dead = { 0.45, 0.45, 0.45 }, skipped = { 0.6, 0.6, 1 }, missing = { 1, 0.5, 0.3 } }
 dc.STATUS_KEYS = { alive = "DC_ALIVE", dead = "DC_DEAD", skipped = "DC_SKIPPED", missing = "DC_MISSING" }
-dc.PULL_KEYS = { [0] = "DC_P_LEEROY", [1] = "DC_P_ADV", [2] = "DC_P_DYN" }
 
 function dc.Button(parent, width, label, onClick, tip)
 	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -2670,8 +2669,6 @@ function dc.BuildPanel()
 	f.dot:SetPoint("TOPLEFT", 20, -42)
 	f.state = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	f.state:SetPoint("TOPLEFT", 34, -39)
-	f.pullNow = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	f.pullNow:SetPoint("TOPRIGHT", -20, -41)
 	f.detail = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.detail:SetPoint("TOPLEFT", 20, -58)
 	f.detail:SetWidth(300)
@@ -2694,8 +2691,8 @@ function dc.BuildPanel()
 			if def[5] then f[def[5]] = button end
 		end
 	end
-	Row(-110, { { 74, "DC_ON", function() dc.Start() end, "TIP_DC_ON" }, { 74, "DC_OFF", function() dc.Send("off") end, "TIP_DC_OFF" },
-		{ 74, "DC_PAUSE_B", function() dc.Send("pause") end, "TIP_DC_PAUSE" },
+	Row(-110, { { 74, "DC_ON", function() dc.Start() end, "TIP_DC_ON", "on" }, { 74, "DC_OFF", function() dc.Send("off") end, "TIP_DC_OFF", "off" },
+		{ 74, "DC_PAUSE_B", function() dc.Send("pause") end, "TIP_DC_PAUSE", "pause" },
 		{ 74, "DC_SKIP_B", function() dc.Send("skip") end, "TIP_DC_SKIP" } })
 	f.pullTitle = dc.Heading(f, -138)
 	-- ".dc pull off|on|dynamic": off = Leeroy, on = Advanced; the lit one follows the tank's STATUS.
@@ -2706,7 +2703,7 @@ function dc.BuildPanel()
 	f.bossTitle = dc.Heading(f, -188)
 	local refresh = dc.Button(f, 80, "DC_REFRESH", function() dc.AskBosses() end, "TIP_DC_REFRESH")
 	refresh:SetHeight(18)
-	refresh:SetPoint("TOPRIGHT", -16, -184)
+	refresh:SetPoint("TOPRIGHT", -16, -185)
 	table.insert(f.buttons, refresh)
 	f.empty = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.empty:SetPoint("TOPLEFT", 20, -dc.ROWS_TOP - 6)
@@ -2743,8 +2740,9 @@ function dc.BuildPanel()
 		row.go:SetPoint("RIGHT", -2, 0)
 		f.rows[i] = row
 	end
-	f.manual = dc.Button(f, 308, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
-	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
+	f.manual = dc.Button(f, 200, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
+	f.manual:SetHeight(18)
+	f.manual:SetPoint("BOTTOM", 0, 14)
 	f:Hide()
 	dc.panel = f
 end
@@ -2787,11 +2785,10 @@ function dc.RefreshPanel()
 	local bosses = off and {} or (dc.bosses or {})
 	local shown = math.min(#bosses, dc.ROWS)
 	-- The panel fits the list: no empty space under a short dungeon.
-	f:SetHeight(dc.ROWS_TOP + math.max(shown, 1) * dc.ROW_H + 52)
+	f:SetHeight(dc.ROWS_TOP + math.max(shown, 1) * dc.ROW_H + 44)
 	if off then
 		f.dot:SetVertexColor(1, 0.3, 0.3)
 		f.state:SetText("|cffff5555" .. L.DC_DISABLED .. "|r")
-		f.pullNow:SetText("")
 		f.detail:SetText("")
 		f.next:SetText("")
 		f.empty:SetText("")
@@ -2811,15 +2808,26 @@ function dc.RefreshPanel()
 	f.dot:SetVertexColor(r, g, b)
 	f.state:SetText(state)
 	f.state:SetTextColor(r, g, b)
-	f.pullNow:SetText(dc.pull and dc.PULL_KEYS[dc.pull] and ("|cff999999" .. L.DC_PULL_T .. ":|r " .. L[dc.PULL_KEYS[dc.pull]]) or "")
 	local detail = dc.detail or ""
 	if dc.stall and dc.stall ~= "" then detail = detail .. " |cffff5555" .. dc.stall .. "|r" end
 	f.detail:SetText(detail)
 	f.next:SetText(string.format(L.DC_NEXT, dc.nextBoss or L.DC_NONE))
+	f.pause.label = dc.state == "paused" and "DC_RESUME" or "DC_PAUSE_B"
+	f.pause:SetText(L[f.pause.label])
+	if dc.enabled then f.on:Disable() else f.off:Disable() end
+	if not dc.enabled then f.pause:Disable() end
 	for key, value in pairs({ pullLeeroy = 0, pullAdv = 1, pullDyn = 2 }) do
 		if dc.pull == value then f[key]:LockHighlight() else f[key]:UnlockHighlight() end
 	end
 	f.empty:SetText(#bosses == 0 and L.DC_NO_LIST or "")
+	local dead, total = 0, 0
+	for _, boss in ipairs(bosses) do
+		if not boss.event then
+			total = total + 1
+			if boss.status == "dead" then dead = dead + 1 end
+		end
+	end
+	f.bossTitle:SetText(total > 0 and string.format("%s  |cffaaaaaa%d / %d|r", L.DC_BOSSES_T, dead, total) or L.DC_BOSSES_T)
 	for i, row in ipairs(f.rows) do
 		local boss = bosses[i]
 		if boss then
