@@ -38,6 +38,7 @@ local STRINGS = {
 		DC_STATUS = "Status in chat", DC_BOSSES = "Bosses of the dungeon",
 		DC_DISABLED = "Dungeon clear is disabled on this realm.", DC_OFF_SHORT = "disabled on this realm",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
+		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
@@ -122,6 +123,7 @@ local STRINGS = {
 		DC_STATUS = "État dans le chat", DC_BOSSES = "Boss du donjon",
 		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.", DC_OFF_SHORT = "désactivé sur ce royaume",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
+		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
@@ -371,7 +373,11 @@ end
 
 local function DcMenu()
 	return {
-		{ text = L.DC_START, notCheckable = true, func = function() DcSend("on") end },
+		-- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
+		{ text = L.DC_START, notCheckable = true, func = function()
+			local inside, kind = IsInInstance()
+			if inside and (kind == "party" or kind == "raid") then DcSend("on") else Print(L.DC_NOT_IN_DUNGEON) end
+		end },
 		{ text = L.DC_STOP, notCheckable = true, func = function() DcSend("off") end },
 		{ text = L.DC_PAUSE, notCheckable = true, func = function() DcSend("pause") end },
 		{ text = L.DC_SKIP, notCheckable = true, func = function() DcSend("skip") end },
