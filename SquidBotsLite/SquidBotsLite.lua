@@ -39,6 +39,13 @@ local STRINGS = {
 		DC_DISABLED = "Dungeon clear is disabled on this realm.", DC_OFF_SHORT = "disabled on this realm",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
 		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.",
+		DC_PANEL = "Panel: bosses, Go, camera", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
+		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced", DC_CAMERA = "Camera", DC_FOLLOW = "Follow",
+		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
+		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
+		DC_ALIVE = "alive", DC_DEAD = "dead", DC_SKIPPED = "skipped", DC_MISSING = "missing", DC_RUNNING = "running",
+		TIP_DC_CAMERA = "Spectator camera: fly freely around the dungeon, click again to come back.",
+		TIP_DC_FOLLOW = "Ride the camera on the tank; < and > move to the other bots.",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
@@ -124,6 +131,13 @@ local STRINGS = {
 		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.", DC_OFF_SHORT = "désactivé sur ce royaume",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
 		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.",
+		DC_PANEL = "Panneau : boss, Go, caméra", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
+		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé", DC_CAMERA = "Caméra", DC_FOLLOW = "Suivre",
+		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
+		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
+		DC_ALIVE = "vivant", DC_DEAD = "mort", DC_SKIPPED = "passé", DC_MISSING = "introuvable", DC_RUNNING = "en cours",
+		TIP_DC_CAMERA = "Caméra spectateur : volez librement dans le donjon, recliquez pour revenir.",
+		TIP_DC_FOLLOW = "La caméra suit le tank ; < et > passent aux autres bots.",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
@@ -367,17 +381,21 @@ function dc.Send(args)
 	SendChatMessage(".dc " .. args, "SAY")
 end
 
+-- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
+function dc.Start()
+	local inside, kind = IsInInstance()
+	if inside and (kind == "party" or kind == "raid") then dc.Send("on") else Print(L.DC_NOT_IN_DUNGEON) end
+end
+
 function dc.PullItem(text, mode, value)
 	return { text = text, checked = function() return dc.pull == value end, func = function() dc.Send("pull " .. mode) end }
 end
 
 function dc.Menu()
 	return {
+		{ text = L.DC_PANEL, notCheckable = true, func = function() dc.ShowPanel() end },
 		-- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
-		{ text = L.DC_START, notCheckable = true, func = function()
-			local inside, kind = IsInInstance()
-			if inside and (kind == "party" or kind == "raid") then dc.Send("on") else Print(L.DC_NOT_IN_DUNGEON) end
-		end },
+		{ text = L.DC_START, notCheckable = true, func = function() dc.Start() end },
 		{ text = L.DC_STOP, notCheckable = true, func = function() dc.Send("off") end },
 		{ text = L.DC_PAUSE, notCheckable = true, func = function() dc.Send("pause") end },
 		{ text = L.DC_SKIP, notCheckable = true, func = function() dc.Send("skip") end },
@@ -2542,9 +2560,28 @@ function dc.OnAddon(message)
 		if text and text ~= "" then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff[" .. L.DC_LINE .. "]|r " .. text) end
 		return
 	end
+	-- The boss list: BOSS_START, one "BOSS" per boss or scripted event, BOSS_END (sent on ".dc bosses", and again
+	-- by the tank whenever a boss changes). BOSS fields: 2 entry, 3 order, 4 name, 5 alive|dead|skipped|missing.
+	if parts[1] == "BOSS_START" then
+		dc.pending = {}
+		return
+	elseif parts[1] == "BOSS" then
+		dc.pending = dc.pending or {}
+		table.insert(dc.pending, { entry = parts[2], order = tonumber(parts[3] or "") or 99, name = parts[4] or "?",
+			status = parts[5] or "", event = (parts[4] or ""):find("^Event: ") ~= nil })
+		return
+	elseif parts[1] == "BOSS_END" then
+		dc.bosses = dc.pending or {}
+		dc.pending = nil
+		table.sort(dc.bosses, function(a, b) return a.order < b.order end)
+		dc.RefreshPanel()
+		return
+	end
 	if parts[1] ~= "STATUS" then return end
 	if dc.module ~= "on" then dc.module, dc.waitUntil = "on", nil end
 	dc.pull = tonumber(parts[9] or "")
+	dc.enabled, dc.state, dc.detail, dc.stall = parts[2] == "1", parts[7] or "", parts[8] or "", parts[5] or ""
+	dc.nextBoss = parts[4] ~= "None" and parts[4] or nil
 	if not dc.line then
 		dc.line = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		dc.line:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -2)
@@ -2563,6 +2600,184 @@ function dc.OnAddon(message)
 	end
 	dc.line:SetText("|cff66ccff" .. L.DC_LINE .. ":|r " .. text)
 	dc.line:Show()
+	dc.RefreshPanel()
+end
+
+-- ---------------------------------------------------------------------------
+-- Dungeon clear panel: the run's state, its buttons, the bosses with Go, the spectator camera
+-- ---------------------------------------------------------------------------
+dc.ROWS, dc.ROW_H = 14, 18
+dc.STATUS_COLORS = { alive = { 1, 0.82, 0 }, dead = { 0.5, 0.5, 0.5 }, skipped = { 0.6, 0.6, 1 }, missing = { 1, 0.5, 0.3 } }
+dc.STATUS_KEYS = { alive = "DC_ALIVE", dead = "DC_DEAD", skipped = "DC_SKIPPED", missing = "DC_MISSING" }
+
+function dc.Button(parent, width, label, onClick, tip)
+	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	button:SetWidth(width)
+	button:SetHeight(20)
+	button.label = label
+	button:SetScript("OnClick", onClick)
+	if tip then
+		button:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_TOP")
+			GameTooltip:SetText(L[tip], 1, 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	end
+	return button
+end
+
+function dc.BuildPanel()
+	local f = CreateFrame("Frame", "SquidBotsLiteDungeonClear", UIParent)
+	f:SetWidth(330)
+	f:SetHeight(200 + dc.ROWS * dc.ROW_H)
+	f:SetPoint("CENTER", 260, 40)
+	f:SetBackdrop(PANEL_BACKDROP)
+	f:SetBackdropColor(0.04, 0.04, 0.05, 1)
+	f:SetFrameStrata("DIALOG")
+	f:SetMovable(true)
+	f:EnableMouse(true)
+	f:SetClampedToScreen(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	table.insert(UISpecialFrames, "SquidBotsLiteDungeonClear")
+	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.title:SetPoint("TOP", 0, -14)
+	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+	close:SetPoint("TOPRIGHT", -4, -4)
+	-- What the tank does, why it waits, where it goes.
+	f.state = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	f.state:SetPoint("TOPLEFT", 18, -38)
+	f.state:SetWidth(294)
+	f.state:SetJustifyH("LEFT")
+	f.detail = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.detail:SetPoint("TOPLEFT", 18, -56)
+	f.detail:SetWidth(294)
+	f.detail:SetHeight(26)
+	f.detail:SetJustifyH("LEFT")
+	f.detail:SetJustifyV("TOP")
+	f.next = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	f.next:SetPoint("TOPLEFT", 18, -84)
+	f.next:SetWidth(294)
+	f.next:SetJustifyH("LEFT")
+	f.buttons = {}
+	local function Row(y, defs)
+		local x = 16
+		for _, def in ipairs(defs) do
+			local button = dc.Button(f, def[1], def[2], def[3], def[4])
+			button:SetPoint("TOPLEFT", x, y)
+			x = x + def[1] + 2
+			table.insert(f.buttons, button)
+			if def[5] then f[def[5]] = button end
+		end
+	end
+	Row(-102, { { 74, "DC_ON", function() dc.Start() end }, { 74, "DC_OFF", function() dc.Send("off") end },
+		{ 74, "DC_PAUSE_B", function() dc.Send("pause") end }, { 74, "DC_SKIP_B", function() dc.Send("skip") end } })
+	-- ".dc pull off|on|dynamic": off = Leeroy, on = Advanced; the lit one follows the tank's STATUS.
+	Row(-124, { { 100, "DC_P_DYN", function() dc.Send("pull dynamic") end, nil, "pullDyn" },
+		{ 98, "DC_P_LEEROY", function() dc.Send("pull off") end, nil, "pullLeeroy" },
+		{ 98, "DC_P_ADV", function() dc.Send("pull on") end, nil, "pullAdv" } })
+	Row(-146, { { 98, "DC_CAMERA", function() dc.Send("spectate") end, "TIP_DC_CAMERA" },
+		{ 98, "DC_FOLLOW", function() dc.Send("spectate follow") end, "TIP_DC_FOLLOW" } })
+	local prev = dc.Button(f, 40, nil, function() dc.Send("spectate prev") end, "TIP_DC_FOLLOW")
+	prev:SetText("<")
+	prev:SetPoint("TOPLEFT", 216, -146)
+	local nextBot = dc.Button(f, 40, nil, function() dc.Send("spectate next") end, "TIP_DC_FOLLOW")
+	nextBot:SetText(">")
+	nextBot:SetPoint("TOPLEFT", 258, -146)
+	f.bossTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.bossTitle:SetPoint("TOPLEFT", 18, -176)
+	local refresh = dc.Button(f, 90, "DC_REFRESH", function() dc.AskBosses() end)
+	refresh:SetPoint("TOPRIGHT", -16, -172)
+	table.insert(f.buttons, refresh)
+	f.empty = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.empty:SetPoint("TOPLEFT", 18, -198)
+	f.empty:SetWidth(294)
+	f.empty:SetJustifyH("LEFT")
+	f.rows = {}
+	for i = 1, dc.ROWS do
+		local row = CreateFrame("Frame", nil, f)
+		row:SetWidth(298)
+		row:SetHeight(dc.ROW_H)
+		row:SetPoint("TOPLEFT", 16, -194 - (i - 1) * dc.ROW_H)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.name:SetPoint("LEFT", 2, 0)
+		row.name:SetWidth(170)
+		row.name:SetJustifyH("LEFT")
+		row.status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.status:SetPoint("LEFT", 176, 0)
+		row.status:SetWidth(70)
+		row.status:SetJustifyH("LEFT")
+		-- ".dc go <entry>": the tank heads for that boss (and starts the clear if it was off).
+		row.go = dc.Button(row, 44, "DC_GO", function(self)
+			local entry = self:GetParent().entry
+			if entry then dc.Send("go " .. entry) end
+		end)
+		row.go:SetHeight(16)
+		row.go:SetPoint("RIGHT", 0, 0)
+		f.rows[i] = row
+	end
+	f:Hide()
+	dc.panel = f
+end
+
+function dc.AskBosses()
+	-- "silent": the list comes as addon messages only, without one chat line per boss.
+	dc.Send("bosses silent")
+end
+
+function dc.ShowPanel()
+	if not dc.panel then dc.BuildPanel() end
+	dc.panel:Show()
+	dc.Send("status silent")
+	dc.AskBosses()
+	dc.RefreshPanel()
+end
+
+function dc.RefreshPanel()
+	local f = dc.panel
+	if not f or not f:IsShown() then return end
+	f.title:SetText(L.DC_LINE)
+	for _, button in ipairs(f.buttons) do
+		if button.label then button:SetText(L[button.label]) end
+	end
+	local state
+	if dc.enabled == nil then
+		state = "|cff999999" .. L.DC_STOPPED .. "|r"
+	elseif not dc.enabled then
+		state = "|cffff5555" .. L.DC_STOPPED .. "|r"
+	elseif dc.state == "paused" then
+		state = "|cffffd100" .. L.DC_PAUSED .. "|r"
+	else
+		state = "|cff55ff55" .. L.DC_RUNNING .. "|r"
+	end
+	f.state:SetText(state)
+	local detail = dc.detail or ""
+	if dc.stall and dc.stall ~= "" then detail = detail .. " |cffff5555(" .. dc.stall .. ")|r" end
+	f.detail:SetText(detail)
+	f.next:SetText(string.format(L.DC_NEXT, dc.nextBoss or L.DC_NONE))
+	for key, value in pairs({ pullLeeroy = 0, pullAdv = 1, pullDyn = 2 }) do
+		if dc.pull == value then f[key]:LockHighlight() else f[key]:UnlockHighlight() end
+	end
+	f.bossTitle:SetText(L.DC_BOSSES_T)
+	local bosses = dc.bosses or {}
+	f.empty:SetText(#bosses == 0 and L.DC_NO_LIST or "")
+	for i, row in ipairs(f.rows) do
+		local boss = bosses[i]
+		if boss then
+			row.entry = not boss.event and boss.entry or nil
+			row.name:SetText(boss.name)
+			local color = dc.STATUS_COLORS[boss.status] or { 1, 1, 1 }
+			row.name:SetTextColor(color[1], color[2], color[3])
+			row.status:SetText(dc.STATUS_KEYS[boss.status] and L[dc.STATUS_KEYS[boss.status]] or boss.status)
+			row.status:SetTextColor(color[1], color[2], color[3])
+			if row.entry and boss.status ~= "dead" then row.go:Show() else row.go:Hide() end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
 end
 
 function dc.TickLine()
@@ -2670,6 +2885,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "alts" then
 		ShowAlts()
+	elseif command == "dc" then
+		dc.ShowPanel()
 	elseif command == "raidframes" then
 		SquidBotsLiteDB.raidFrames = string.lower(rest) ~= "off"
 		Print(SquidBotsLiteDB.raidFrames and L.RAIDFRAMES_ON or L.RAIDFRAMES_OFF)
