@@ -32,14 +32,9 @@ local STRINGS = {
 		QUESTS = "Take my quests (next to the quest giver)",
 		M_GATHER_ALL = "Gather everything (grey too)", M_GATHER_SKILLUP = "Gather only what gives skill",
 		GATHER = "Gathering (whole group)",
-		DC = "Dungeon clear", DC_START = "Start: the tank clears the dungeon", DC_STOP = "Stop: the bots come back to me",
-		DC_PAUSE = "Pause / resume", DC_SKIP = "Skip this boss or objective", DC_PULL = "Pull mode",
-		DC_PULL_DYN = "Dynamic (recommended)", DC_PULL_LEEROY = "Leeroy: straight in, fast", DC_PULL_ADV = "Advanced: pull back to a camp, careful",
-		DC_STATUS = "Status in chat", DC_BOSSES = "Bosses of the dungeon",
-		DC_DISABLED = "Dungeon clear is disabled on this realm.", DC_OFF_SHORT = "disabled on this realm",
+		DC_DISABLED = "Dungeon clear is disabled on this realm.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
-		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.",
-		DC_PANEL = "Panel: bosses and Go", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
+		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
 		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
 		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
@@ -125,14 +120,9 @@ local STRINGS = {
 		QUESTS = "Prendre mes quêtes (près du donneur)",
 		M_GATHER_ALL = "Tout récolter (gris compris)", M_GATHER_SKILLUP = "Récolter seulement ce qui fait monter",
 		GATHER = "Récolte (tout le groupe)",
-		DC = "Dungeon clear", DC_START = "Démarrer : le tank nettoie le donjon", DC_STOP = "Arrêter : les bots reviennent vers moi",
-		DC_PAUSE = "Pause / reprendre", DC_SKIP = "Passer ce boss ou cet objectif", DC_PULL = "Mode de pull",
-		DC_PULL_DYN = "Dynamique (conseillé)", DC_PULL_LEEROY = "Leeroy : fonce, rapide", DC_PULL_ADV = "Avancé : tire vers un camp, prudent",
-		DC_STATUS = "État dans le chat", DC_BOSSES = "Boss du donjon",
-		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.", DC_OFF_SHORT = "désactivé sur ce royaume",
+		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
-		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.",
-		DC_PANEL = "Panneau : boss et Go", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
+		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
 		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
 		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
@@ -389,29 +379,6 @@ function dc.Start()
 	if inside and (kind == "party" or kind == "raid") then dc.Send("on") else Print(L.DC_NOT_IN_DUNGEON) end
 end
 
-function dc.PullItem(text, mode, value)
-	return { text = text, checked = function() return dc.pull == value end, func = function() dc.Send("pull " .. mode) end }
-end
-
-function dc.Menu()
-	return {
-		{ text = L.DC_PANEL, notCheckable = true, func = function() dc.ShowPanel() end },
-		-- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
-		{ text = L.DC_START, notCheckable = true, func = function() dc.Start() end },
-		{ text = L.DC_STOP, notCheckable = true, func = function() dc.Send("off") end },
-		{ text = L.DC_PAUSE, notCheckable = true, func = function() dc.Send("pause") end },
-		{ text = L.DC_SKIP, notCheckable = true, func = function() dc.Send("skip") end },
-		-- ".dc pull off|on|dynamic": off = Leeroy, on = Advanced. The tick follows the tank's STATUS (0, 1, 2).
-		{ text = L.DC_PULL, hasArrow = true, notCheckable = true, menuList = {
-			dc.PullItem(L.DC_PULL_DYN, "dynamic", 2),
-			dc.PullItem(L.DC_PULL_LEEROY, "off", 0),
-			dc.PullItem(L.DC_PULL_ADV, "on", 1),
-		} },
-		{ text = L.DC_STATUS, notCheckable = true, func = function() dc.Send("status") end },
-		{ text = L.DC_BOSSES, notCheckable = true, func = function() dc.Send("bosses") end },
-	}
-end
-
 function dc.Tick()
 	if buttons.dungeon then
 		buttons.dungeon.tip = (dc.module == "on" or dc.module == "off") and "TIP_DUNGEON_DC" or "TIP_DUNGEON"
@@ -479,11 +446,6 @@ local function RecruitMenu()
 			{ text = L.M_GATHER_ALL, notCheckable = true, func = function() SendGroup("nc +gather all") end },
 		} },
 	}
-	if dc.module == "on" then
-		table.insert(items, { text = L.DC, hasArrow = true, notCheckable = true, menuList = dc.Menu() })
-	elseif dc.module == "off" then
-		table.insert(items, { text = L.DC .. " (" .. L.DC_OFF_SHORT .. ")", notCheckable = true, func = function() Print(L.DC_DISABLED) end })
-	end
 	if SquidBotsLiteDB.gm then
 		table.insert(items, { text = L.REGEAR, notCheckable = true, func = function() SendChatMessage(".playerbots coa regear", "SAY") end })
 	end
