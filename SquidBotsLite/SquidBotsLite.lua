@@ -2540,7 +2540,7 @@ local function OnDcAddon(message)
 	-- "CHAT": the tank's lines for the player (why the clear stopped or paused, a door, a stall, "pulling X"),
 	-- sent only on the addon channel, so without this they would never show.
 	if parts[1] == "CHAT" then
-		local text = message:match("^CHAT	(.*)$")
+		local text = message:match("^CHAT\t(.*)$")
 		if text and text ~= "" then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff[" .. L.DC_LINE .. "]|r " .. text) end
 		return
 	end
