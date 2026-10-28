@@ -253,7 +253,6 @@ local ui = {
 		insets = { left = 1, right = 1, top = 1, bottom = 1 } },
 	SKILL_ICON = { mining = "Interface\\Icons\\Trade_Mining", herbalism = "Interface\\Icons\\Trade_Herbalism" },
 	LOOT_ICON = { mining = "Interface\\Icons\\INV_Ore_Copper_01", herbalism = "Interface\\Icons\\INV_Misc_Herb_07" },
-	CLASSES = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes",
 	UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark", NOBODY = "Interface\\CharacterFrame\\TempPortrait",
 }
 SquidBotsLite_UI = ui
@@ -276,28 +275,26 @@ function ui.ClassName(name)
 	return string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, name)
 end
 
--- Its portrait while it is in the group, else its class icon, else a question mark.
+-- Its class icon: the client ships one for every class, CoA ones too, as Interface\Icons\ClassIcon_<token>
+-- (ClassIcon_SonOfArugal for SONOFARUGAL). A class not seen yet: its portrait while it is in the group, else
+-- the client's blank portrait.
 function ui.ClassIcon(texture, name)
+	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
+	texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	if info and info.token then
+		texture:SetTexture("Interface\\Icons\\ClassIcon_" .. info.token:lower())
+		return
+	end
 	local units = { "player" }
 	for i = 1, 4 do table.insert(units, "party" .. i) end
 	for i = 1, GetNumRaidMembers() do table.insert(units, "raid" .. i) end
 	for _, unit in ipairs(units) do
 		if UnitName(unit) == name then
 			SetPortraitTexture(texture, unit)
-			texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 			return
 		end
 	end
-	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
-	local coords = info and info.token and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[info.token]
-	if coords then
-		texture:SetTexture(ui.CLASSES)
-		texture:SetTexCoord(coords[1] + 0.015, coords[2] - 0.015, coords[3] + 0.015, coords[4] - 0.015)
-	else
-		-- A CoA class has no place in the class icons of 3.3.5: the client's blank portrait.
-		texture:SetTexture(ui.NOBODY)
-		texture:SetTexCoord(0.1, 0.9, 0.1, 0.9)
-	end
+	texture:SetTexture(ui.NOBODY)
 end
 
 -- A square icon button; tip(self) returns its title and its line.
