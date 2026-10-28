@@ -83,6 +83,7 @@ At login the server names its CoA Bots version. SquidBots Lite carries the same 
 /sbl channel <name>  ask in a different channel (a name, not a number)
 /sbl alts            your other characters, played as bots
 /sbl bot <name>      the bot sheet of a bot of your group (or of your target)
+/sbl missions        send your logged-in alts gathering on their own
 /sbl roles on | off  ask bots of unknown role for it
 /sbl gm              GM mode
 /sbl reset           put the bar back in the middle
@@ -97,6 +98,9 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**2.8.2**
+- **Missions** (My alts > Missions, or `/sbl missions`; CoA Bots 2.8.2): send a logged-in alt gathering on its own, mining or herbalism, for 30 to 120 minutes, up to 3 alts at a time. It leaves the group, gathers, and mails you what it found. The panel shows each alt's state live (on the way, gathering, mailing), its zone, the minutes left, the items gathered and its deaths, with a **Recall** button; a message tells you when the mail has arrived. Through what you can whisper to your own alt: `mission gather [minutes] [mining|herbalism]`, `mission status`, `mission stop`.
 
 **2.8**
 - **Dungeon clear** on realms with mod-dungeon-clear: the bar's **Dungeon** button (or `/sbl dc`) opens its panel: the run's state and why it waits, On / Off / Pause / Skip, the pull mode (Dynamic, Leeroy, Advanced) and the dungeon's bosses with their state and a **Go** button, through the player's own `.dc` commands. A line under the bar shows what the tank is doing, and its messages show in the chat. Where the module is off, the panel says so; without the module, Dungeon keeps its dungeon mode, which also stays in the panel and in the bar's right-click menu.

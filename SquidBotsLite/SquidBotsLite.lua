@@ -57,7 +57,7 @@ local STRINGS = {
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
 		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
-		TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
+		MISSIONS = "Missions", TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
 		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
 		T_SAVED = "Team %s saved: %d characters.", T_STARTED = "Team %s: logging in %d characters, one a second.",
 		T_EMPTY = "Nobody to save: invite or log in your alts first.",
@@ -156,7 +156,7 @@ local STRINGS = {
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
 		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
-		TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
+		MISSIONS = "Missions", TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
 		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
 		T_SAVED = "Équipe %s enregistrée : %d personnages.", T_STARTED = "Équipe %s : connexion de %d personnages, un par seconde.",
 		T_EMPTY = "Personne à enregistrer : invitez ou connectez d'abord vos alts.",
@@ -1767,6 +1767,15 @@ local function AskRoster()
 	altsFrame.status:SetText(L.ALTS_WAIT)
 	BotCommand("list")
 end
+-- For Missions.lua: ask the roster again, and the alts logged in as bots now.
+SquidBotsLite_AskRoster = function() if altsFrame then AskRoster() end end
+function SquidBotsLite_OnlineAlts()
+	local list = {}
+	for _, alt in ipairs(roster) do
+		if alt.online and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[alt.name] then table.insert(list, alt.name) end
+	end
+	return list
+end
 
 -- "Bot roster: +Aria Dawn , -Brom Warrior": + logged in as a bot, - offline. The server names the class only
 -- for the WotLK classes (blank for a CoA class), and a CoA name may hold a space. The random bots of the
@@ -1943,6 +1952,7 @@ local function AltsTexts()
 	altsFrame.refresh:SetText(L.ALTS_REFRESH)
 	altsFrame.teams:SetText(L.TEAMS)
 	altsFrame.accounts:SetText(L.ACCOUNTS)
+	altsFrame.missions:SetText(L.MISSIONS)
 	altsFrame.help:SetText(L.ALTS_HELP)
 	for _, row in ipairs(altRows) do
 		row.summon:SetText(L.ALTS_SUMMON)
@@ -2151,6 +2161,12 @@ local function BuildAlts()
 	altsFrame.accounts:SetHeight(20)
 	altsFrame.accounts:SetPoint("LEFT", altsFrame.teams, "RIGHT", 6, 0)
 	altsFrame.accounts:SetScript("OnClick", AccountsMenu)
+	-- Missions.lua: send a logged-in alt gathering on its own.
+	altsFrame.missions = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
+	altsFrame.missions:SetWidth(90)
+	altsFrame.missions:SetHeight(20)
+	altsFrame.missions:SetPoint("LEFT", altsFrame.accounts, "RIGHT", 6, 0)
+	altsFrame.missions:SetScript("OnClick", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end)
 	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	altsFrame.status:SetPoint("TOPLEFT", 18, -62)
 	altsFrame.status:SetWidth(390)
@@ -2344,6 +2360,7 @@ local function OnSystem(message)
 		roster = ParseRoster(text)
 		RefreshAlts()
 		AskAltStats()
+		if SquidBotsLite_MissionsRoster then SquidBotsLite_MissionsRoster() end
 		return true
 	end
 end
@@ -2965,6 +2982,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 	elseif command == "channel" then
 		SquidBotsLiteDB.channel = rest
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
+	elseif command == "missions" then
+		if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end
 	elseif command == "alts" then
 		ShowAlts()
 	elseif command == "dc" then
