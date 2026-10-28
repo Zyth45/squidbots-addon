@@ -68,7 +68,10 @@ local STRINGS = {
 		A_HOWTO = "To play the characters of another account: log on that account once and set its key, then link it from here with that key.",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
-		ALTS_HELP = "Log an alt in: it joins your group as your bot. Hover a name for more.",
+		ALTS_HELP = "Click a logged-in alt for its sheet. Hover an icon to see what it does.",
+		ALTS_COUNT = "%d / %d logged in", ALTS_ON_MISSION = "on a mission", TIP_ALTS_REFRESH = "Ask the server for your characters again.",
+		TIP_ALT_ADD = "It joins your group as your bot.", TIP_ALT_REMOVE = "Logs it out of the game.",
+		TIP_ALT_SUMMON = "Brings it to you: an alt logs in where it logged out.",
 		ALTS_LOOK = "Keeps its look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Click: open its bot sheet.", ALTS_GOLD = "Gold: %s", ALTS_XP = "XP: %d%% (rested %d%%)",
 		INVITE = "Invite", ASKED = "Asked in %s: %s", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
@@ -167,7 +170,10 @@ local STRINGS = {
 		A_HOWTO = "Pour jouer les personnages d'un autre compte : connectez-vous une fois sur ce compte et définissez sa clé, puis liez-le d'ici avec cette clé.",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
-		ALTS_HELP = "Connectez un alt : il rejoint votre groupe comme bot. Survolez un nom pour en savoir plus.",
+		ALTS_HELP = "Cliquez sur un alt connecté pour sa fiche. Survolez une icône pour son rôle.",
+		ALTS_COUNT = "%d / %d connectés", ALTS_ON_MISSION = "en mission", TIP_ALTS_REFRESH = "Redemander vos personnages au serveur.",
+		TIP_ALT_ADD = "Il rejoint votre groupe comme bot.", TIP_ALT_REMOVE = "Le déconnecte du jeu.",
+		TIP_ALT_SUMMON = "L'amène à vous : un alt se connecte là où il s'était déconnecté.",
 		ALTS_LOOK = "Garde son apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Clic : ouvrir sa fiche.", ALTS_GOLD = "Or : %s", ALTS_XP = "XP : %d%% (reposé %d%%)",
 		INVITE = "Inviter", ASKED = "Demandé dans %s : %s", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
@@ -240,6 +246,105 @@ local ICON_PULL_ON, ICON_PULL_OFF = "Interface\\Icons\\Ability_Marksmanship", "I
 -- names of the world show through. The role buttons use square icons, like the bar.
 local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
+-- Pieces shared by the My alts and Missions panels (Missions.lua reads them as SquidBotsLite_UI): a card per
+-- character, its class icon, square icon buttons with a tooltip, the gathering skills' icons.
+local ui = {
+	CARD = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
+		insets = { left = 1, right = 1, top = 1, bottom = 1 } },
+	SKILL_ICON = { mining = "Interface\\Icons\\Trade_Mining", herbalism = "Interface\\Icons\\Trade_Herbalism" },
+	LOOT_ICON = { mining = "Interface\\Icons\\INV_Ore_Copper_01", herbalism = "Interface\\Icons\\INV_Misc_Herb_07" },
+	CLASSES = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes",
+	UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark", NOBODY = "Interface\\CharacterFrame\\TempPortrait",
+}
+SquidBotsLite_UI = ui
+
+-- A card: dark, a thin border that turns gold under the mouse.
+function ui.Card(frame)
+	frame:SetBackdrop(ui.CARD)
+	frame:SetBackdropColor(0.09, 0.09, 0.11, 0.95)
+	frame:SetBackdropBorderColor(1, 1, 1, 0.08)
+	frame:EnableMouse(true)
+	frame:HookScript("OnEnter", function(self) self:SetBackdropBorderColor(1, 0.82, 0, 0.55) end)
+	frame:HookScript("OnLeave", function(self) self:SetBackdropBorderColor(1, 1, 1, 0.08) end)
+end
+
+-- "Name" in its class colour, as noted in SquidBotsLiteDB.altInfo.
+function ui.ClassName(name)
+	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
+	local color = info and info.token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[info.token]
+	if not color then return name end
+	return string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, name)
+end
+
+-- Its portrait while it is in the group, else its class icon, else a question mark.
+function ui.ClassIcon(texture, name)
+	local units = { "player" }
+	for i = 1, 4 do table.insert(units, "party" .. i) end
+	for i = 1, GetNumRaidMembers() do table.insert(units, "raid" .. i) end
+	for _, unit in ipairs(units) do
+		if UnitName(unit) == name then
+			SetPortraitTexture(texture, unit)
+			texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			return
+		end
+	end
+	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
+	local coords = info and info.token and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[info.token]
+	if coords then
+		texture:SetTexture(ui.CLASSES)
+		texture:SetTexCoord(coords[1] + 0.015, coords[2] - 0.015, coords[3] + 0.015, coords[4] - 0.015)
+	else
+		-- A CoA class has no place in the class icons of 3.3.5: the client's blank portrait.
+		texture:SetTexture(ui.NOBODY)
+		texture:SetTexCoord(0.1, 0.9, 0.1, 0.9)
+	end
+end
+
+-- A square icon button; tip(self) returns its title and its line.
+function ui.IconButton(parent, size, icon, tip, onClick)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(size)
+	button:SetHeight(size)
+	button.icon = button:CreateTexture(nil, "ARTWORK")
+	button.icon:SetAllPoints()
+	button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	button.icon:SetTexture(icon)
+	button.border = button:CreateTexture(nil, "BACKGROUND")
+	button.border:SetTexture("Interface\\Buttons\\WHITE8X8")
+	button.border:SetVertexColor(0, 0, 0, 0.9)
+	button.border:SetPoint("TOPLEFT", -1, 1)
+	button.border:SetPoint("BOTTOMRIGHT", 1, -1)
+	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+	button:SetScript("OnMouseDown", function(self) if self:IsEnabled() == 1 then self.icon:SetVertexColor(0.6, 0.6, 0.6) end end)
+	button:SetScript("OnMouseUp", function(self) self.icon:SetVertexColor(1, 1, 1) end)
+	button:SetScript("OnClick", onClick)
+	button:SetScript("OnEnter", function(self)
+		local title, line = tip(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(title or "", 1, 0.82, 0)
+		if line then GameTooltip:AddLine(line, 1, 1, 1, true) end
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	return button
+end
+
+function ui.SetIcon(button, icon, enabled)
+	button.icon:SetTexture(icon)
+	button.icon:SetDesaturated(not enabled)
+	if enabled then button:Enable() else button:Disable() end
+end
+
+-- A thin gold line across a panel, at y from its top.
+function ui.Rule(f, y)
+	local rule = f:CreateTexture(nil, "ARTWORK")
+	rule:SetTexture("Interface\\Buttons\\WHITE8X8")
+	rule:SetVertexColor(1, 0.82, 0, 0.18)
+	rule:SetHeight(1)
+	rule:SetPoint("TOPLEFT", 16, y)
+	rule:SetPoint("TOPRIGHT", -16, y)
+	return rule
+end
 local ROLE_BUTTON_ICONS = { tank = "Interface\\Icons\\Ability_Defend", heal = "Interface\\Icons\\Spell_Holy_FlashHeal",
 	dps = "Interface\\Icons\\Ability_MeleeDamage" }
 local BINDINGS = { { "follow", "FOLLOW" }, { "stay", "STAY" }, { "attack", "M_ATTACK" }, { "passive", "TOGGLE_PASSIVE" }, { "pull", "TOGGLE_PULL" },
@@ -1747,8 +1852,9 @@ end
 -- ---------------------------------------------------------------------------
 -- My alts: the player's other characters, logged in as bots
 -- ---------------------------------------------------------------------------
-local ALT_ROWS = 10
-local ALT_ROW_H = 36
+local ALT_ROWS = 8
+local ALT_ROW_H = 50
+local ALT_TOP = 74
 -- "Bot list" names the alts only; their level and class are noted whenever they are seen (played, or in the
 -- group) and kept account-wide in SquidBotsLiteDB.altInfo.
 local SHEET_ICON = "Interface\\Icons\\Achievement_Character_Human_Male"
@@ -1919,19 +2025,33 @@ local function RefreshAlts()
 	if not altsFrame then return end
 	NoteGroup()
 	-- 25 alts for a raid: the list scrolls (wheel or bar), ALT_ROWS at a time.
-	altsFrame:SetHeight(138 + math.max(3, math.min(#roster, ALT_ROWS)) * ALT_ROW_H)
+	altsFrame:SetHeight(ALT_TOP + math.max(3, math.min(#roster, ALT_ROWS)) * ALT_ROW_H + 44)
 	FauxScrollFrame_Update(altsFrame.scroll, #roster, ALT_ROWS, ALT_ROW_H)
 	local offset = FauxScrollFrame_GetOffset(altsFrame.scroll)
+	local online = 0
+	for _, alt in ipairs(roster) do if alt.online then online = online + 1 end end
+	altsFrame.count:SetText(#roster > 0 and string.format(L.ALTS_COUNT, online, #roster) or "")
 	for i, row in ipairs(altRows) do
 		local alt = roster[i + offset]
 		row.alt = alt
 		if alt then
-			row.name:SetText(alt.linked and (alt.name .. " |cff8888aa(" .. L.ALTS_LINKED .. ")|r") or alt.name)
-			row.info:SetText(AltLine(alt.name))
+			local name = alt.online and ui.ClassName(alt.name) or ("|cff9d9d9d" .. alt.name .. "|r")
+			row.name:SetText(alt.linked and (name .. " |cff8888aa(" .. L.ALTS_LINKED .. ")|r") or name)
+			-- Level, class, spec; its gathering skill as an icon, and a gold word while it is out on a mission.
+			local line = AltLine(alt.name)
+			local skill = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[alt.name]
+			if skill and ui.SKILL_ICON[skill] then line = line .. "  |T" .. ui.SKILL_ICON[skill] .. ":12:12|t" end
+			if SquidBotsLite_OnMission and SquidBotsLite_OnMission(alt.name) then
+				line = line .. "  |cffffd100" .. L.ALTS_ON_MISSION .. "|r"
+			end
+			row.info:SetText(line)
 			ShowXP(row.xp, alt.name)
-			row.dot:SetVertexColor(alt.online and 0.2 or 0.45, alt.online and 1 or 0.45, alt.online and 0.2 or 0.45)
-			row.toggle:SetText(alt.online and L.ALTS_REMOVE or L.ALTS_ADD)
-			row.toggle:Enable()
+			ui.ClassIcon(row.icon, alt.name)
+			row.icon:SetDesaturated(not alt.online)
+			row.icon:SetAlpha(alt.online and 1 or 0.55)
+			row.dot:SetTexture(alt.online and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
+			row:SetBackdropColor(alt.online and 0.10 or 0.07, alt.online and 0.10 or 0.07, alt.online and 0.12 or 0.08, 0.95)
+			ui.SetIcon(row.toggle, alt.online and "Interface\\Icons\\Spell_ChargeNegative" or "Interface\\Icons\\Spell_ChargePositive", true)
 			if alt.online then row.summon:Show() else row.summon:Hide() end
 			if alt.online and SquidBotsLite_OpenSheet then row.sheet:Show() else row.sheet:Hide() end
 			row:Show()
@@ -1949,15 +2069,10 @@ end
 local function AltsTexts()
 	if not altsFrame then return end
 	altsFrame.title:SetText("SquidBots Lite - " .. L.ALTS)
-	altsFrame.refresh:SetText(L.ALTS_REFRESH)
 	altsFrame.teams:SetText(L.TEAMS)
 	altsFrame.accounts:SetText(L.ACCOUNTS)
 	altsFrame.missions:SetText(L.MISSIONS)
 	altsFrame.help:SetText(L.ALTS_HELP)
-	for _, row in ipairs(altRows) do
-		row.summon:SetText(L.ALTS_SUMMON)
-		row.sheet:SetText("   " .. L.ALTS_SHEET)
-	end
 end
 
 -- Teams: named lists of characters kept account-wide (SquidBotsLiteDB.teams), logged in one a second with the same
@@ -2126,11 +2241,11 @@ end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
-	altsFrame:SetWidth(452)
-	altsFrame:SetHeight(138 + ALT_ROWS * ALT_ROW_H)
+	altsFrame:SetWidth(470)
+	altsFrame:SetHeight(ALT_TOP + ALT_ROWS * ALT_ROW_H + 44)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
-	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
+	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 0.96)
 	altsFrame:SetFrameStrata("DIALOG")
 	altsFrame:SetMovable(true)
 	altsFrame:SetToplevel(true)
@@ -2146,55 +2261,57 @@ local function BuildAlts()
 	altsFrame.title:SetPoint("TOP", 0, -14)
 	local close = CreateFrame("Button", nil, altsFrame, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", -4, -4)
-	altsFrame.refresh = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
-	altsFrame.refresh:SetWidth(90)
-	altsFrame.refresh:SetHeight(20)
-	altsFrame.refresh:SetPoint("TOPLEFT", 16, -36)
-	altsFrame.refresh:SetScript("OnClick", function() AskRoster() end)
-	altsFrame.teams = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
-	altsFrame.teams:SetWidth(90)
-	altsFrame.teams:SetHeight(20)
-	altsFrame.teams:SetPoint("LEFT", altsFrame.refresh, "RIGHT", 6, 0)
-	altsFrame.teams:SetScript("OnClick", TeamsMenu)
-	altsFrame.accounts = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
-	altsFrame.accounts:SetWidth(90)
-	altsFrame.accounts:SetHeight(20)
-	altsFrame.accounts:SetPoint("LEFT", altsFrame.teams, "RIGHT", 6, 0)
-	altsFrame.accounts:SetScript("OnClick", AccountsMenu)
-	-- Missions.lua: send a logged-in alt gathering on its own.
-	altsFrame.missions = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
-	altsFrame.missions:SetWidth(90)
-	altsFrame.missions:SetHeight(20)
-	altsFrame.missions:SetPoint("LEFT", altsFrame.accounts, "RIGHT", 6, 0)
-	altsFrame.missions:SetScript("OnClick", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end)
-	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	altsFrame.status:SetPoint("TOPLEFT", 18, -62)
-	altsFrame.status:SetWidth(390)
-	altsFrame.status:SetJustifyH("LEFT")
+	-- The menus on the left, the count of alts logged in and Refresh on the right.
+	local x = 16
+	for _, def in ipairs({ { "teams", TeamsMenu }, { "accounts", AccountsMenu },
+		-- Missions.lua: send a logged-in alt gathering on its own.
+		{ "missions", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end } }) do
+		local button = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
+		button:SetWidth(92)
+		button:SetHeight(22)
+		button:SetPoint("TOPLEFT", x, -36)
+		button:SetScript("OnClick", def[2])
+		altsFrame[def[1]] = button
+		x = x + 96
+	end
+	altsFrame.refresh = ui.IconButton(altsFrame, 22, "Interface\\Buttons\\UI-RefreshButton",
+		function() return L.ALTS_REFRESH, L.TIP_ALTS_REFRESH end, function() AskRoster() end)
+	altsFrame.refresh.icon:SetTexCoord(0, 1, 0, 1)
+	altsFrame.refresh:SetPoint("TOPRIGHT", -18, -36)
+	altsFrame.count = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	altsFrame.count:SetPoint("RIGHT", altsFrame.refresh, "LEFT", -8, 0)
+	ui.Rule(altsFrame, -66)
+	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	altsFrame.status:SetPoint("TOPLEFT", 20, -ALT_TOP - 8)
+	altsFrame.status:SetWidth(420)
 	altsFrame.status:SetJustifyH("LEFT")
 	for i = 1, ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
-		row:SetWidth(398)
-		row:SetHeight(ALT_ROW_H - 2)
-		row:SetPoint("TOPLEFT", 16, -80 - (i - 1) * ALT_ROW_H)
-		row.dot = row:CreateTexture(nil, "ARTWORK")
-		row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
-		row.dot:SetWidth(8)
-		row.dot:SetHeight(8)
-		row.dot:SetPoint("LEFT", 2, 0)
-		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		row.name:SetPoint("TOPLEFT", 16, -3)
-		row.name:SetWidth(166)
+		row:SetWidth(414)
+		row:SetHeight(ALT_ROW_H - 4)
+		row:SetPoint("TOPLEFT", 16, -ALT_TOP - (i - 1) * ALT_ROW_H)
+		-- Its portrait or class icon, with the friends list's dot: green logged in, grey offline.
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(34)
+		row.icon:SetHeight(34)
+		row.icon:SetPoint("LEFT", 6, 0)
+		row.dot = row:CreateTexture(nil, "OVERLAY")
+		row.dot:SetWidth(14)
+		row.dot:SetHeight(14)
+		row.dot:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 4, -3)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		row.name:SetPoint("TOPLEFT", 50, -6)
+		row.name:SetWidth(250)
 		row.name:SetJustifyH("LEFT")
 		row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		row.info:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-		row.info:SetWidth(168)
+		row.info:SetPoint("TOPLEFT", 50, -22)
+		row.info:SetWidth(260)
 		row.info:SetHeight(12)
 		row.info:SetJustifyH("LEFT")
 		row.xp = CreateFrame("StatusBar", nil, row)
-		row.xp:SetWidth(150)
-		row.xp:SetHeight(4)
-		row.xp:SetPoint("TOPLEFT", row.info, "BOTTOMLEFT", 0, -2)
+		row.xp:SetWidth(180)
+		row.xp:SetHeight(3)
+		row.xp:SetPoint("TOPLEFT", 50, -37)
 		row.xp:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 		row.xp:SetStatusBarColor(0.58, 0.0, 0.55)
 		row.xp:SetMinMaxValues(0, 100)
@@ -2205,65 +2322,49 @@ local function BuildAlts()
 		row.xp.rest = row.xp:CreateTexture(nil, "ARTWORK")
 		row.xp.rest:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
 		row.xp.rest:SetVertexColor(0.0, 0.39, 0.88, 0.6)
-		row.xp.rest:SetHeight(4)
+		row.xp.rest:SetHeight(3)
 		row.xp.rest:SetPoint("LEFT", row.xp:GetStatusBarTexture(), "RIGHT", 0, 0)
 		row.xp:Hide()
-		row.toggle = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-		row.toggle:SetWidth(76)
-		row.toggle:SetHeight(18)
-		row.toggle:SetPoint("LEFT", 186, 0)
-		row.toggle:SetScript("OnClick", function(self)
+		-- On the right, from the edge: log in / out, then Summon and the bot sheet while it is logged in.
+		row.toggle = ui.IconButton(row, 26, "Interface\\Icons\\Spell_ChargePositive", function(self)
+			local alt = self:GetParent().alt
+			if alt and alt.online then return L.ALTS_REMOVE, L.TIP_ALT_REMOVE end
+			return L.ALTS_ADD, L.TIP_ALT_ADD
+		end, function(self)
 			local alt = self:GetParent().alt
 			if not alt then return end
 			BotCommand((alt.online and "remove " or "add ") .. alt.name)
-			self:Disable()
+			ui.SetIcon(self, self.icon:GetTexture(), false)
 			refreshAt = GetTime() + AFTER_TOGGLE
 		end)
+		row.toggle:SetPoint("RIGHT", -10, 0)
 		-- An alt logs in where it logged out: Summon brings it over.
-		row.summon = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-		row.summon:SetWidth(60)
-		row.summon:SetHeight(18)
-		row.summon:SetPoint("LEFT", row.toggle, "RIGHT", 4, 0)
-		row.summon:SetScript("OnClick", function(self)
+		row.summon = ui.IconButton(row, 26, "Interface\\Icons\\Spell_Shadow_Twilight",
+			function() return L.ALTS_SUMMON, L.TIP_ALT_SUMMON end, function(self)
 			local alt = self:GetParent().alt
 			if alt then Whisper(alt.name, "summon") end
 		end)
-		row.sheet = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-		row.sheet:SetWidth(76)
-		row.sheet:SetHeight(18)
-		row.sheet:SetPoint("LEFT", row.summon, "RIGHT", 4, 0)
-		row.sheet.icon = row.sheet:CreateTexture(nil, "OVERLAY")
-		row.sheet.icon:SetWidth(14)
-		row.sheet.icon:SetHeight(14)
-		row.sheet.icon:SetPoint("LEFT", 6, 0)
-		row.sheet.icon:SetTexture(SHEET_ICON)
-		row.sheet.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-		-- A gold glow that breathes until the player has opened a sheet once: the feature is new.
-		row.sheet.glow = row.sheet:CreateTexture(nil, "BACKGROUND")
-		row.sheet.glow:SetTexture("Interface\\Buttons\\UI-Panel-Button-Glow")
-		row.sheet.glow:SetTexCoord(0, 0.75, 0, 0.609375)
-		row.sheet.glow:SetBlendMode("ADD")
-		row.sheet.glow:SetPoint("TOPLEFT", -10, 8)
-		row.sheet.glow:SetPoint("BOTTOMRIGHT", 10, -8)
-		row.sheet:SetScript("OnUpdate", function(self)
-			if SquidBotsLiteDB.sheetOpened then self.glow:Hide() return end
-			self.glow:SetAlpha(0.35 + 0.35 * math.sin(GetTime() * 4))
-		end)
-		row.sheet:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetText(L.ALTS_SHEET)
-			GameTooltip:AddLine(L.TIP_SHEET, 1, 1, 1, true)
-			GameTooltip:Show()
-		end)
-		row.sheet:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		row.sheet:SetScript("OnClick", function(self)
+		row.summon:SetPoint("RIGHT", row.toggle, "LEFT", -6, 0)
+		row.sheet = ui.IconButton(row, 26, SHEET_ICON, function() return L.ALTS_SHEET, L.TIP_SHEET end, function(self)
 			local alt = self:GetParent().alt
 			if alt and SquidBotsLite_OpenSheet then
 				SquidBotsLiteDB.sheetOpened = true
 				SquidBotsLite_OpenSheet(alt.name)
 			end
 		end)
-		-- A logged-in alt's name opens its bot sheet (Manager.lua, beta).
+		row.sheet:SetPoint("RIGHT", row.summon, "LEFT", -6, 0)
+		-- A gold glow that breathes until the player has opened a sheet once: the feature is new.
+		row.sheet.glow = row.sheet:CreateTexture(nil, "OVERLAY")
+		row.sheet.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+		row.sheet.glow:SetBlendMode("ADD")
+		row.sheet.glow:SetWidth(50)
+		row.sheet.glow:SetHeight(50)
+		row.sheet.glow:SetPoint("CENTER")
+		row.sheet:SetScript("OnUpdate", function(self)
+			if SquidBotsLiteDB.sheetOpened then self.glow:Hide() return end
+			self.glow:SetAlpha(0.35 + 0.35 * math.sin(GetTime() * 4))
+		end)
+		-- A logged-in alt's card opens its bot sheet (Manager.lua, beta).
 		row:EnableMouse(true)
 		row:SetScript("OnEnter", function(self)
 			local alt = self.alt
@@ -2286,12 +2387,14 @@ local function BuildAlts()
 				SquidBotsLite_OpenSheet(self.alt.name)
 			end
 		end)
+		-- After its own scripts: the card's border lights up under the mouse.
+		ui.Card(row)
 		row:Hide()
 		altRows[i] = row
 	end
 	altsFrame.scroll = CreateFrame("ScrollFrame", "SquidBotsLiteAltsScroll", altsFrame, "FauxScrollFrameTemplate")
-	altsFrame.scroll:SetPoint("TOPLEFT", 16, -80)
-	altsFrame.scroll:SetPoint("BOTTOMRIGHT", -32, 60)
+	altsFrame.scroll:SetPoint("TOPLEFT", 16, -ALT_TOP)
+	altsFrame.scroll:SetPoint("BOTTOMRIGHT", -36, 44)
 	altsFrame.scroll:SetScript("OnVerticalScroll", function(self, offset)
 		FauxScrollFrame_OnVerticalScroll(self, offset, ALT_ROW_H, RefreshAlts)
 	end)
@@ -2304,9 +2407,15 @@ local function BuildAlts()
 			bar:SetValue(bar:GetValue() - delta * ALT_ROW_H)
 		end)
 	end
+	altsFrame.footer = altsFrame:CreateTexture(nil, "ARTWORK")
+	altsFrame.footer:SetTexture("Interface\\Buttons\\WHITE8X8")
+	altsFrame.footer:SetVertexColor(1, 0.82, 0, 0.18)
+	altsFrame.footer:SetHeight(1)
+	altsFrame.footer:SetPoint("BOTTOMLEFT", 16, 34)
+	altsFrame.footer:SetPoint("BOTTOMRIGHT", -16, 34)
 	altsFrame.help = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	altsFrame.help:SetPoint("BOTTOMLEFT", 16, 14)
-	altsFrame.help:SetWidth(398)
+	altsFrame.help:SetPoint("BOTTOMLEFT", 18, 16)
+	altsFrame.help:SetWidth(430)
 	altsFrame.help:SetJustifyH("LEFT")
 	altsFrame:Hide()
 	AltsTexts()

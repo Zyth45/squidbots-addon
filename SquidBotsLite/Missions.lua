@@ -18,6 +18,10 @@ local STRINGS = {
 		MAIL = "Mail from %s has arrived: %d items (at a mailbox).", DONE = "%s: mission over. %s",
 		TIP_SEND = "Choose the skill and how long: up to 120 min, 3 alts at a time.",
 		TIP_RECALL = "Ends the mission now: the loot comes by mail, the alt waits for you or comes back.",
+		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
+		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
+		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
+		TIP_FULL = "Three alts are already out: recall one or wait for it.", TIP_REFRESH = "Ask your alts where they are now.",
 	},
 	fr = {
 		TITLE = "Missions", REFRESH = "Actualiser", SEND = "Envoyer", RECALL = "Rappeler", NONE = "Libre",
@@ -32,6 +36,10 @@ local STRINGS = {
 		MAIL = "Le courrier de %s est arrivé : %d objets (à une boîte aux lettres).", DONE = "%s : mission terminée. %s",
 		TIP_SEND = "Choisissez le métier et la durée : jusqu'à 120 min, 3 alts à la fois.",
 		TIP_RECALL = "Arrête la mission tout de suite : le butin arrive par courrier, l'alt vous attend ou revient.",
+		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
+		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
+		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
+		TIP_FULL = "Trois alts sont déjà partis : rappelez-en un ou attendez son retour.", TIP_REFRESH = "Redemander à vos alts où ils en sont.",
 	},
 }
 local function T(key)
@@ -41,12 +49,13 @@ end
 
 local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
-local ROWS, ROW_H, ROWS_TOP = 10, 34, 96
+local ROWS, ROW_H, ROWS_TOP = 6, 62, 74
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
 local DURATIONS = { 30, 60, 90, 120 }
 
-local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {} }
+-- done: the alts back from a mission this session, with how many items they mailed.
+local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {} }
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -106,10 +115,12 @@ function M.OnLine(name, message)
 			SquidBotsLiteDB.missionSkill = SquidBotsLiteDB.missionSkill or {}
 			SquidBotsLiteDB.missionSkill[name] = skill
 		end
+		M.done[name] = nil
 		table.insert(M.queue, name)
 	elseif message:find("^Mission done: ") then
 		M.status[name] = { state = "NONE" }
 		local count = tonumber(message:match("(%d+) items sent to you by mail") or "")
+		M.done[name] = count or 0
 		if count and count > 0 then M.mail[name] = count end
 		local rest = message:match("^Mission done: (.*)$") or ""
 		if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("DONE"), name, rest), 1, 0.82, 0) end
@@ -118,7 +129,10 @@ function M.OnLine(name, message)
 end
 
 function M.Send(name, minutes, skill)
+	M.done[name] = nil
 	local text = "mission gather " .. minutes .. (skill and (" " .. skill) or "")
+	SquidBotsLiteDB.missionTotal = SquidBotsLiteDB.missionTotal or {}
+	SquidBotsLiteDB.missionTotal[name] = minutes
 	Whisper(name, text)
 end
 
@@ -153,32 +167,110 @@ function M.SendMenu(name)
 end
 
 -- ---------------------------------------------------------------------------
--- The panel
+-- The panel: a card per logged-in alt, with its state, a bar of the time spent, the loot and the deaths
 -- ---------------------------------------------------------------------------
-local function Button(parent, width, onClick, tip)
-	local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-	button:SetWidth(width)
-	button:SetHeight(20)
-	button:SetScript("OnClick", onClick)
-	if tip then
-		button:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_TOP")
-			GameTooltip:SetText(self:GetText() or "", 1, 0.82, 0)
-			GameTooltip:AddLine(T(tip), 1, 1, 1, true)
-			GameTooltip:Show()
-		end)
-		button:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	end
-	return button
+local UI = SquidBotsLite_UI
+local PHASE_ICON = { TRAVEL = "Interface\\Icons\\Ability_Mount_RidingHorse", DELIVER = "Interface\\Icons\\INV_Letter_15" }
+local PHASE_COLOR = { TRAVEL = { 0.3, 0.6, 1 }, WORK = { 0.3, 0.85, 0.3 }, DELIVER = { 1, 0.82, 0 } }
+local BADGE_COLOR = { FREE = { 0.3, 0.85, 0.3 }, OUT = { 1, 0.82, 0 }, DONE = { 0.4, 0.7, 1 }, WAIT = { 0.6, 0.6, 0.6 } }
+local SEND_ICON, RECALL_ICON = "Interface\\Icons\\Ability_Hunter_Pathfinding", "Interface\\Icons\\INV_Misc_Rune_01"
+
+local function Icon(parent, size, layer)
+	local texture = parent:CreateTexture(nil, layer or "ARTWORK")
+	texture:SetWidth(size)
+	texture:SetHeight(size)
+	texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	return texture
+end
+
+local function Rule(f, point, y)
+	local rule = f:CreateTexture(nil, "ARTWORK")
+	rule:SetTexture("Interface\\Buttons\\WHITE8X8")
+	rule:SetVertexColor(1, 0.82, 0, 0.18)
+	rule:SetHeight(1)
+	rule:SetPoint(point .. "LEFT", 16, y)
+	rule:SetPoint(point .. "RIGHT", -16, y)
+end
+
+function M.BuildRow(f, i)
+	local row = CreateFrame("Frame", nil, f)
+	row:SetWidth(408)
+	row:SetHeight(ROW_H - 4)
+	row:SetPoint("TOPLEFT", 16, -ROWS_TOP - (i - 1) * ROW_H)
+	UI.Card(row)
+	-- Its portrait or class icon, its gathering skill in the corner.
+	row.icon = Icon(row, 38)
+	row.icon:SetPoint("LEFT", 8, 0)
+	row.skill = Icon(row, 16, "OVERLAY")
+	row.skill:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 4, -4)
+	row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	row.name:SetPoint("TOPLEFT", 56, -7)
+	row.name:SetJustifyH("LEFT")
+	-- The state, as a small coloured pill after the name: free, on a mission, done.
+	row.badge = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.badge:SetPoint("LEFT", row.name, "RIGHT", 12, 0)
+	row.pill = row:CreateTexture(nil, "BORDER")
+	row.pill:SetTexture("Interface\\Buttons\\WHITE8X8")
+	row.pill:SetPoint("TOPLEFT", row.badge, "TOPLEFT", -5, 2)
+	row.pill:SetPoint("BOTTOMRIGHT", row.badge, "BOTTOMRIGHT", 5, -2)
+	-- The phase: its icon and where.
+	row.phase = Icon(row, 14)
+	row.phase:SetPoint("TOPLEFT", 56, -25)
+	row.line = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.line:SetPoint("LEFT", row.phase, "RIGHT", 5, 0)
+	row.line:SetWidth(270)
+	row.line:SetJustifyH("LEFT")
+	-- The time spent out of the mission's, the minutes left written on it.
+	row.bar = CreateFrame("StatusBar", nil, row)
+	row.bar:SetWidth(200)
+	row.bar:SetHeight(10)
+	row.bar:SetPoint("TOPLEFT", 56, -43)
+	row.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+	row.bar:SetMinMaxValues(0, 1)
+	row.bar.bg = row.bar:CreateTexture(nil, "BACKGROUND")
+	row.bar.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+	row.bar.bg:SetVertexColor(0, 0, 0, 0.7)
+	row.bar.bg:SetPoint("TOPLEFT", -1, 1)
+	row.bar.bg:SetPoint("BOTTOMRIGHT", 1, -1)
+	row.bar.text = row.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.bar.text:SetPoint("CENTER", 0, 1)
+	row.bar.text:SetFont(row.bar.text:GetFont(), 9, "OUTLINE")
+	-- What it gathered (ore or herb), and its deaths in red with a skull, only once it died.
+	row.loot = Icon(row, 14)
+	row.loot:SetPoint("LEFT", row.bar, "RIGHT", 10, 0)
+	row.items = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.items:SetPoint("LEFT", row.loot, "RIGHT", 3, 0)
+	row.skull = row:CreateTexture(nil, "ARTWORK")
+	row.skull:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
+	row.skull:SetWidth(14)
+	row.skull:SetHeight(14)
+	row.skull:SetPoint("LEFT", row.items, "RIGHT", 10, 0)
+	row.deaths = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	row.deaths:SetPoint("LEFT", row.skull, "RIGHT", 2, 0)
+	row.deaths:SetTextColor(1, 0.35, 0.35)
+	-- Send (skill and length from a menu) or Recall.
+	row.action = UI.IconButton(row, 32, SEND_ICON, function(self)
+		local name = self:GetParent().alt
+		if name and M.OnMission(name) then return T("RECALL"), T("TIP_RECALL") end
+		if M.Count() >= 3 then return T("SEND"), T("TIP_FULL") end
+		return T("SEND"), T("TIP_SEND")
+	end, function(self)
+		local name = self:GetParent().alt
+		if not name then return end
+		if M.OnMission(name) then M.Recall(name) else M.SendMenu(name) end
+	end)
+	row.action:SetPoint("RIGHT", -12, 0)
+	return row
 end
 
 function M.Build()
 	local f = CreateFrame("Frame", "SquidBotsLiteMissions", UIParent)
-	f:SetWidth(400)
+	f:SetWidth(440)
 	f:SetPoint("CENTER", -200, 40)
 	f:SetBackdrop(BACKDROP)
 	f:SetBackdropColor(0.04, 0.04, 0.05, 0.96)
 	f:SetFrameStrata("DIALOG")
+	f:SetToplevel(true)
 	f:SetMovable(true)
 	f:EnableMouse(true)
 	f:SetClampedToScreen(true)
@@ -190,92 +282,139 @@ function M.Build()
 	f.title:SetPoint("TOP", 0, -14)
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", -4, -4)
-	f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	f.hint:SetPoint("TOPLEFT", 18, -36)
-	f.hint:SetWidth(364)
-	f.hint:SetJustifyH("LEFT")
+	-- How many alts are out: three slots, lit gold when taken.
 	f.count = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	f.count:SetPoint("TOPLEFT", 18, -76)
-	f.refresh = Button(f, 90, function()
+	f.count:SetPoint("TOPLEFT", 20, -44)
+	f.slots = {}
+	for i = 1, 3 do
+		local slot = f:CreateTexture(nil, "ARTWORK")
+		slot:SetTexture("Interface\\Buttons\\WHITE8X8")
+		slot:SetWidth(10)
+		slot:SetHeight(10)
+		slot:SetPoint("LEFT", f.count, "RIGHT", 8 + (i - 1) * 14, 0)
+		f.slots[i] = slot
+	end
+	f.refresh = UI.IconButton(f, 22, "Interface\\Buttons\\UI-RefreshButton", function() return T("REFRESH"), T("TIP_REFRESH") end, function()
 		if SquidBotsLite_AskRoster then SquidBotsLite_AskRoster() end
 		M.Poll()
 		M.RefreshPanel()
 	end)
-	f.refresh:SetHeight(18)
-	f.refresh:SetPoint("TOPRIGHT", -16, -72)
+	f.refresh.icon:SetTexCoord(0, 1, 0, 1)
+	f.refresh:SetPoint("TOPRIGHT", -18, -38)
+	Rule(f, "TOP", -66)
 	f.empty = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	f.empty:SetPoint("TOPLEFT", 20, -ROWS_TOP - 6)
-	f.empty:SetWidth(360)
+	f.empty:SetPoint("TOPLEFT", 20, -ROWS_TOP - 8)
+	f.empty:SetWidth(400)
 	f.empty:SetJustifyH("LEFT")
 	f.rows = {}
-	for i = 1, ROWS do
-		local row = CreateFrame("Frame", nil, f)
-		row:SetWidth(368)
-		row:SetHeight(ROW_H)
-		row:SetPoint("TOPLEFT", 16, -ROWS_TOP - (i - 1) * ROW_H)
-		row.bg = row:CreateTexture(nil, "BACKGROUND")
-		row.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
-		row.bg:SetAllPoints()
-		row.dot = row:CreateTexture(nil, "ARTWORK")
-		row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
-		row.dot:SetWidth(8)
-		row.dot:SetHeight(8)
-		row.dot:SetPoint("LEFT", 6, 0)
-		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		row.name:SetPoint("TOPLEFT", 20, -3)
-		row.name:SetWidth(250)
-		row.name:SetJustifyH("LEFT")
-		row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		row.info:SetPoint("TOPLEFT", 20, -18)
-		row.info:SetWidth(262)
-		row.info:SetJustifyH("LEFT")
-		row.action = Button(row, 78, function(self)
-			local name = self:GetParent().alt
-			if not name then return end
-			if M.OnMission(name) then M.Recall(name) else M.SendMenu(name) end
-		end)
-		row.action:SetPoint("RIGHT", -4, 0)
-		row.action:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_TOP")
-			GameTooltip:SetText(self:GetText() or "", 1, 0.82, 0)
-			GameTooltip:AddLine(T(self.tip or "TIP_SEND"), 1, 1, 1, true)
-			GameTooltip:Show()
-		end)
-		row.action:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		f.rows[i] = row
-	end
+	for i = 1, ROWS do f.rows[i] = M.BuildRow(f, i) end
+	Rule(f, "BOTTOM", 34)
+	f.help = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.help:SetPoint("BOTTOMLEFT", 18, 16)
+	f.help:SetWidth(404)
+	f.help:SetJustifyH("LEFT")
+	-- The whole story in the tooltip of the help line's area.
+	f.helpArea = CreateFrame("Frame", nil, f)
+	f.helpArea:SetPoint("BOTTOMLEFT", 16, 8)
+	f.helpArea:SetPoint("BOTTOMRIGHT", -16, 8)
+	f.helpArea:SetHeight(24)
+	f.helpArea:EnableMouse(true)
+	f.helpArea:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+		GameTooltip:SetText(T("TITLE"), 1, 0.82, 0)
+		GameTooltip:AddLine(T("HINT"), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	f.helpArea:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	f:Hide()
 	M.panel = f
 end
 
-local function Line(s)
-	local parts = {}
+local function Badge(row, key, color)
+	row.badge:SetText(T(key))
+	row.badge:SetTextColor(color[1], color[2], color[3])
+	row.pill:SetVertexColor(color[1], color[2], color[3], 0.18)
+end
+
+-- The mission's length: the one chosen from here, else the minutes left first seen, rounded up to half hours.
+local function Total(name, left)
+	SquidBotsLiteDB.missionTotal = SquidBotsLiteDB.missionTotal or {}
+	local total = SquidBotsLiteDB.missionTotal[name]
+	if not total or left > total then
+		total = math.min(120, math.max(30, math.ceil(left / 30) * 30))
+		SquidBotsLiteDB.missionTotal[name] = total
+	end
+	return total
+end
+
+function M.ShowOut(row, name, s)
+	local skill = s.skill or (SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name])
+	local color = PHASE_COLOR[s.state] or PHASE_COLOR.DELIVER
+	Badge(row, "BADGE_OUT", BADGE_COLOR.OUT)
+	row.phase:SetTexture(s.state == "WORK" and (UI.SKILL_ICON[skill] or UI.UNKNOWN) or PHASE_ICON[s.state] or PHASE_ICON.DELIVER)
 	if s.state == "TRAVEL" then
-		table.insert(parts, string.format(T("TRAVEL"), s.zone))
+		row.line:SetText(string.format(T("TRAVEL"), s.zone))
 	elseif s.state == "WORK" then
-		table.insert(parts, string.format(T("WORK"), s.zone))
+		row.line:SetText(string.format(T("WORK"), s.zone))
 	else
-		table.insert(parts, T("DELIVER"))
+		row.line:SetText(T("DELIVER"))
 	end
-	table.insert(parts, string.format(T("LEFT"), s.minutes))
-	table.insert(parts, string.format(T("ITEMS"), s.items))
-	if s.deaths == 1 then
-		table.insert(parts, "|cffff5555" .. T("DEATH") .. "|r")
-	elseif s.deaths > 1 then
-		table.insert(parts, "|cffff5555" .. string.format(T("DEATHS"), s.deaths) .. "|r")
+	local total = Total(name, s.minutes)
+	row.bar:SetValue((total - s.minutes) / total)
+	row.bar:SetStatusBarColor(color[1], color[2], color[3])
+	row.bar.text:SetText(string.format(T("LEFT"), s.minutes))
+	row.bar:Show()
+	row.loot:SetTexture(UI.LOOT_ICON[skill] or UI.UNKNOWN)
+	row.items:SetText(s.items)
+	row.loot:Show()
+	row.items:Show()
+	if s.deaths > 0 then
+		row.deaths:SetText(s.deaths)
+		row.skull:Show()
+		row.deaths:Show()
+	else
+		row.skull:Hide()
+		row.deaths:Hide()
 	end
-	return table.concat(parts, "  ·  ")
+	UI.SetIcon(row.action, RECALL_ICON, true)
+end
+
+function M.ShowIdle(row, name, s)
+	local skill = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
+	row.bar:Hide()
+	row.loot:Hide()
+	row.items:Hide()
+	row.skull:Hide()
+	row.deaths:Hide()
+	local done = M.done[name]
+	if done then
+		Badge(row, "BADGE_DONE", BADGE_COLOR.DONE)
+		row.phase:SetTexture(PHASE_ICON.DELIVER)
+		row.line:SetText(done > 0 and string.format(T("DONE_LINE"), done) or T("DONE_NOTHING"))
+	elseif s then
+		Badge(row, "BADGE_FREE", BADGE_COLOR.FREE)
+		row.phase:SetTexture(UI.SKILL_ICON[skill] or SEND_ICON)
+		row.line:SetText(skill and string.format(T("READY_SKILL"), T("SKILL_" .. skill)) or T("READY"))
+	else
+		Badge(row, "BADGE_WAIT", BADGE_COLOR.WAIT)
+		row.phase:SetTexture(SEND_ICON)
+		row.line:SetText("|cff9d9d9d" .. T("WAIT") .. "|r")
+	end
+	UI.SetIcon(row.action, SEND_ICON, M.Count() < 3)
 end
 
 function M.RefreshPanel()
 	local f = M.panel
 	if not f or not f:IsShown() then return end
-	f.title:SetText(T("TITLE"))
-	f.hint:SetText(T("HINT"))
-	f.refresh:SetText(T("REFRESH"))
-	f.count:SetText(string.format(T("COUNT"), M.Count()))
+	f.title:SetText("SquidBots Lite - " .. T("TITLE"))
+	f.help:SetText(T("HELP"))
+	local out = M.Count()
+	f.count:SetText(T("OUT"))
+	for i, slot in ipairs(f.slots) do
+		if i <= out then slot:SetVertexColor(1, 0.82, 0, 1) else slot:SetVertexColor(1, 1, 1, 0.12) end
+	end
 	local alts = M.alts
-	f:SetHeight(ROWS_TOP + math.max(1, math.min(#alts, ROWS)) * ROW_H + 24)
+	f:SetHeight(ROWS_TOP + math.max(1, math.min(#alts, ROWS)) * ROW_H + 44)
 	f.empty:SetText(#alts == 0 and T("NO_ALTS") or "")
 	for i, row in ipairs(f.rows) do
 		local name = alts[i]
@@ -283,25 +422,26 @@ function M.RefreshPanel()
 			row.alt = name
 			local s = M.status[name]
 			local skill = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
-			row.name:SetText(name .. (skill and (" |cffaaaaaa(" .. T("SKILL_" .. skill) .. ")|r") or ""))
-			row.bg:SetVertexColor(1, 1, 1, i % 2 == 0 and 0.04 or 0)
-			if s and s.state ~= "NONE" then
-				row.dot:SetVertexColor(1, 0.82, 0)
-				row.info:SetText(Line(s))
-				row.action:SetText(T("RECALL"))
-				row.action.tip = "TIP_RECALL"
+			row.name:SetText(UI.ClassName(name))
+			UI.ClassIcon(row.icon, name)
+			if skill and UI.SKILL_ICON[skill] then
+				row.skill:SetTexture(UI.SKILL_ICON[skill])
+				row.skill:Show()
 			else
-				row.dot:SetVertexColor(s and 0.35 or 0.5, s and 1 or 0.5, s and 0.35 or 0.5)
-				row.info:SetText(s and T("NONE") or T("WAIT"))
-				row.action:SetText(T("SEND"))
-				row.action.tip = "TIP_SEND"
+				row.skill:Hide()
 			end
+			if s and s.state ~= "NONE" then M.ShowOut(row, name, s) else M.ShowIdle(row, name, s) end
 			row:Show()
 		else
 			row.alt = nil
 			row:Hide()
 		end
 	end
+end
+
+-- For My alts: a gold word on the alts out on a mission.
+function SquidBotsLite_OnMission(name)
+	return M.OnMission(name)
 end
 
 function SquidBotsLite_ShowMissions()
