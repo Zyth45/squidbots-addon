@@ -1530,6 +1530,8 @@ local function LayoutBar()
 		buttons[key]:SetPoint("TOPLEFT", 3 + (i - 1) * step, 0)
 	end
 	bar:SetWidth(#BAR_ORDER * step)
+	-- The bar runs a little past its last button: what sits over it (Missions.lua) lines up on that button.
+	bar.last = buttons[BAR_ORDER[#BAR_ORDER]]
 end
 
 local function RefreshTexts()

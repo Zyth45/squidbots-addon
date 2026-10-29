@@ -3,6 +3,8 @@
 -- their own alt: "mission gather [minutes] [mining|herbalism]", "mission status", "mission stop" (CoA Bots 2.8.2).
 -- "mission status" answers "MISSION;<TRAVEL|WORK|DELIVER>;<zone>;<minutes left>;<items>;<mining|herbalism>;<deaths>"
 -- or "MISSION;NONE"; those lines and the polls stay out of the chat.
+-- Watching an alt out (the camera on it, same continent): "mission watch" / "mission unwatch"; it answers
+-- "Watch on: <zone>.", "Watch off: <reason>." or "Watch refused: <reason>.".
 
 local STRINGS = {
 	en = {
@@ -21,6 +23,9 @@ local STRINGS = {
 		RESUMED = "%s went back to its mission, so it stays out of your group: Recall it from Missions to have it back.",
 		BACK_AT = "back ~%s", RATE = "~%d/h", AGAIN = "Same again: %s, %d min",
 		BAR_OUT = "%d on a mission · %d min", BAR_BACK = "%s is back: loot by mail", TIP_BADGE = "Click: the Missions panel.",
+		WATCH = "Watch", TIP_WATCH = "The camera follows it while it works (same continent only). Back to me, or Escape, to return.",
+		WATCH_BAR = "Watching %s", WATCH_BACK = "Back to me", WATCH_WAIT = "Asking %s for its view...",
+		WATCH_REFUSED = "%s: no view (%s)", WATCH_OFF = "View of %s closed: %s", TIP_WATCH_BACK = "Your own camera again.",
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
@@ -42,6 +47,9 @@ local STRINGS = {
 		RESUMED = "%s a repris sa mission, il reste donc hors de votre groupe : rappelez-le depuis Missions pour le récupérer.",
 		BACK_AT = "retour ~%s", RATE = "~%d/h", AGAIN = "Pareil : %s, %d min",
 		BAR_OUT = "%d en mission · %d min", BAR_BACK = "%s est revenu : butin par courrier", TIP_BADGE = "Clic : le panneau Missions.",
+		WATCH = "Regarder", TIP_WATCH = "La caméra le suit pendant qu'il travaille (même continent seulement). Revenir à moi, ou Échap, pour revenir.",
+		WATCH_BAR = "Vue de %s", WATCH_BACK = "Revenir à moi", WATCH_WAIT = "Je demande sa vue à %s...",
+		WATCH_REFUSED = "%s : pas de vue (%s)", WATCH_OFF = "Vue de %s fermée : %s", TIP_WATCH_BACK = "Votre caméra à nouveau.",
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
@@ -141,6 +149,7 @@ function M.OnLine(name, message)
 		end
 	elseif message:find("^Mission done: ") then
 		M.status[name] = { state = "NONE" }
+		if M.watching == name then M.Unwatch(true) end
 		local count = tonumber(message:match("(%d+) items sent to you by mail") or "")
 		M.done[name] = count or 0
 		if SquidBotsLiteDB.missionOut then SquidBotsLiteDB.missionOut[name] = nil end
@@ -149,6 +158,81 @@ function M.OnLine(name, message)
 		local rest = message:match("^Mission done: (.*)$") or ""
 		if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("DONE"), name, rest), 1, 0.82, 0) end
 		M.RefreshPanel()
+	end
+end
+
+function M.WatchBar()
+	if M.bar then return M.bar end
+	local f = CreateFrame("Frame", "SquidBotsLiteWatch", UIParent)
+	f:SetHeight(34)
+	f:SetPoint("TOP", 0, -110)
+	f:SetFrameStrata("DIALOG")
+	f:SetBackdrop(SquidBotsLite_UI.CARD)
+	f:SetBackdropColor(0.05, 0.05, 0.06, 0.9)
+	f:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+	f.icon = f:CreateTexture(nil, "ARTWORK")
+	f.icon:SetWidth(20)
+	f.icon:SetHeight(20)
+	f.icon:SetPoint("LEFT", 8, 0)
+	f.icon:SetTexture("Interface\\Icons\\Ability_EyeOfTheOwl")
+	f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.text:SetPoint("LEFT", f.icon, "RIGHT", 8, 0)
+	f.back = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	f.back:SetWidth(110)
+	f.back:SetHeight(22)
+	f.back:SetPoint("RIGHT", -6, 0)
+	f.back:SetScript("OnClick", function() M.Unwatch() end)
+	f.back:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+		GameTooltip:SetText(T("TIP_WATCH_BACK"), 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	f.back:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	if SquidBotsLite_UI.Flatten then SquidBotsLite_UI.Flatten(f.back) end
+	-- Escape closes it too, and closing it ends the view.
+	table.insert(UISpecialFrames, "SquidBotsLiteWatch")
+	f:SetScript("OnHide", function() if M.watching then M.Unwatch() end end)
+	f:Hide()
+	M.bar = f
+	return f
+end
+
+function M.ShowWatchBar(text)
+	local f = M.WatchBar()
+	f.text:SetText(text)
+	f.back:SetText(T("WATCH_BACK"))
+	f:SetWidth(f.text:GetStringWidth() + 160)
+	f:Show()
+end
+
+function M.Watch(name)
+	if M.watching and M.watching ~= name then Whisper(M.watching, "mission unwatch") end
+	M.watching = name
+	Whisper(name, "mission watch")
+	M.ShowWatchBar(string.format(T("WATCH_WAIT"), SquidBotsLite_UI.ClassName(name)))
+	M.RefreshPanel()
+end
+
+-- From here (button, Escape), or because the alt ended it (refused, mission over, other continent).
+function M.Unwatch(silent)
+	local name = M.watching
+	M.watching = nil
+	if name and not silent then Whisper(name, "mission unwatch") end
+	if M.bar and M.bar:IsShown() then M.bar:Hide() end
+	M.RefreshPanel()
+end
+
+function M.OnWatch(name, message)
+	if name ~= M.watching then return end
+	if message:find("^Watch on: ") then
+		local s = M.status[name]
+		M.ShowWatchBar(string.format(T("WATCH_BAR"), SquidBotsLite_UI.ClassName(name)) .. ((s and s.zone) and ("  |cffaaaaaa" .. s.zone .. "|r") or ""))
+	else
+		local reason = (message:match("^Watch %a+: (.-)%.?$") or ""):gsub("%.$", "")
+		local key = message:find("^Watch refused: ") and "WATCH_REFUSED" or "WATCH_OFF"
+		Print(string.format(T(key), name, reason))
+		M.Unwatch(true)
 	end
 end
 
@@ -297,6 +381,14 @@ function M.BuildRow(f, i)
 		if M.OnMission(name) then M.Recall(name) else M.SendMenu(name) end
 	end)
 	row.action:SetPoint("RIGHT", -12, 0)
+	row.watch = UI.IconButton(row, 24, "Interface\\Icons\\Ability_EyeOfTheOwl", function() return T("WATCH"), T("TIP_WATCH") end,
+		function(self)
+			local name = self:GetParent().alt
+			if not name then return end
+			if M.watching == name then M.Unwatch() else M.Watch(name) end
+		end)
+	row.watch:SetPoint("RIGHT", row.action, "LEFT", -8, 0)
+	row.watch:Hide()
 	return row
 end
 
@@ -422,6 +514,8 @@ function M.ShowOut(row, name, s)
 		row.deaths:Hide()
 	end
 	UI.SetIcon(row.action, RECALL_ICON, true)
+	row.watch:Show()
+	row.watch.icon:SetVertexColor(1, 1, M.watching == name and 0.4 or 1)
 end
 
 function M.ShowIdle(row, name, s)
@@ -447,6 +541,7 @@ function M.ShowIdle(row, name, s)
 		row.line:SetText("|cff9d9d9d" .. T("WAIT") .. "|r")
 	end
 	UI.SetIcon(row.action, SEND_ICON, M.Count() < 3)
+	row.watch:Hide()
 end
 
 function M.RefreshPanel()
@@ -493,7 +588,7 @@ function M.BuildBadge(bar)
 	local b = CreateFrame("Button", nil, bar)
 	b:SetHeight(20)
 	b:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 4)
-	-- No frame: an icon and an orange word that breathes, outlined to read on any ground.
+	-- No frame: an icon and an orange word, outlined to read on any ground.
 	b.icon = Icon(b, 16)
 	b.icon:SetPoint("LEFT", 4, 0)
 	b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -502,9 +597,6 @@ function M.BuildBadge(bar)
 	b.icon2:SetPoint("LEFT", b.icon, "RIGHT", 2, 0)
 	b.text:SetPoint("LEFT", b.icon2, "RIGHT", 4, 0)
 	b.text:SetFont(b.text:GetFont(), 10, "OUTLINE")
-	b:SetScript("OnUpdate", function(self)
-		self.text:SetAlpha(0.65 + 0.35 * math.sin(GetTime() * 1.2))
-	end)
 	b.glow = b:CreateTexture(nil, "HIGHLIGHT")
 	b.glow:SetTexture("Interface\\Buttons\\WHITE8X8")
 	b.glow:SetAllPoints()
@@ -561,6 +653,9 @@ function M.RefreshBadge()
 		return
 	end
 	b:SetWidth(b.text:GetStringWidth() + 26 + b.icon2:GetWidth())
+	-- Its right edge on the last button's, not on the bar's (a little wider).
+	b:ClearAllPoints()
+	b:SetPoint("BOTTOMRIGHT", bar.last or bar, "TOPRIGHT", 0, 4)
 	b:Show()
 end
 
@@ -614,10 +709,10 @@ local function IsAlt(name)
 end
 
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", function(_, _, message, name)
-	if message:find("^MISSION;") and IsAlt(name) then return true end
+	if (message:find("^MISSION;") or message:find("^Watch on: ")) and IsAlt(name) then return true end
 end)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message, name)
-	if message == "mission status" and IsAlt(name) then return true end
+	if (message == "mission status" or message == "mission watch" or message == "mission unwatch") and IsAlt(name) then return true end
 end)
 -- A poll to an alt that logged out meanwhile: "No player named 'X' is currently playing."
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
@@ -637,6 +732,8 @@ frame:SetScript("OnEvent", function(_, event, message, name)
 			M.OnStatus(name, message)
 		elseif message:find("^Mission ") then
 			M.OnLine(name, message)
+		elseif message:find("^Watch ") then
+			M.OnWatch(name, message)
 		end
 	elseif event == "CHAT_MSG_SYSTEM" then
 		local gone = message:match("^No player named '(.-)' is currently playing%.$")

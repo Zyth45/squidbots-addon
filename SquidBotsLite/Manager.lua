@@ -7,7 +7,7 @@ local STRINGS = {
 	en = {
 		TITLE = "Bot sheet", GEAR = "Gear", BAGS = "Bags", QUESTS = "Quests", INFO = "Info", REFRESH = "Refresh",
 		BEST_GEAR = "Best gear", TRADE = "Open trade", FOLLOW = "Follow", STAY = "Stay", SUMMON = "Summon",
-		LOGOUT = "Log out", WAIT = "Asking the bot...", NO_REPLY = "No answer: is it one of your bots?",
+		LOGOUT = "Log out", WAIT = "Asking the bot...", WAIT_AGAIN = "Still waiting: asking the bot again...", NO_REPLY = "No answer: is it one of your bots?",
 		NOT_IN_GROUP = "Invite it to your group to see its gear.", OUT_OF_RANGE = "Come closer to see its gear.",
 		EMPTY_BAGS = "Nothing in the bags.", NO_QUESTS = "No quest.",
 		GIVE = "Give it to me", SOULBOUND = "Soulbound: cannot be traded", TRADE_RANGE = "Trade: stand next to the bot (10 yards).", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot next to a vendor)", SELL_GREY = "Sell grey items",
@@ -45,7 +45,7 @@ local STRINGS = {
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
 		BEST_GEAR = "Meilleur équipement", TRADE = "Ouvrir l'échange", FOLLOW = "Suivre", STAY = "Rester", SUMMON = "Appeler",
-		LOGOUT = "Déconnecter", WAIT = "Demande au bot...", NO_REPLY = "Pas de réponse : est-ce bien un de vos bots ?",
+		LOGOUT = "Déconnecter", WAIT = "Demande au bot...", WAIT_AGAIN = "Toujours en attente : je redemande au bot...", NO_REPLY = "Pas de réponse : est-ce bien un de vos bots ?",
 		NOT_IN_GROUP = "Invitez-le dans votre groupe pour voir son équipement.", OUT_OF_RANGE = "Approchez-vous pour voir son équipement.",
 		EMPTY_BAGS = "Rien dans les sacs.", NO_QUESTS = "Aucune quête.",
 		GIVE = "Me le donner", SOULBOUND = "Lié : impossible à échanger", TRADE_RANGE = "Échange : placez-vous à côté du bot (10 mètres).", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot à côté d'un marchand)", SELL_GREY = "Vendre les gris",
@@ -150,7 +150,7 @@ local function Ask(kind, command)
 	local key = current .. ":" .. kind
 	if lastAsked[key] and GetTime() - lastAsked[key] < REPEAT_DELAY then return end
 	lastAsked[key] = GetTime()
-	capture = { name = current, kind = kind, lines = {}, started = GetTime(), last = GetTime() }
+	capture = { name = current, kind = kind, command = command, lines = {}, started = GetTime(), last = GetTime() }
 	sheet.status:SetText(T("WAIT"))
 	Whisper(command)
 end
@@ -267,6 +267,14 @@ end
 local function Finish()
 	local done = capture
 	capture = nil
+	-- Silent the first time (a bot just logged in, a busy server): asked once more before saying so.
+	if #done.lines == 0 and not done.retried and done.name == current and done.command then
+		capture = { name = done.name, kind = done.kind, command = done.command, lines = {}, started = GetTime(),
+			last = GetTime(), retried = true }
+		sheet.status:SetText(T("WAIT_AGAIN"))
+		Whisper(done.command)
+		return
+	end
 	hideFrom[done.name] = GetTime() + 1
 	if done.name ~= current then return end
 	if done.kind == "bags" then
