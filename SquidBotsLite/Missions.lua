@@ -20,6 +20,7 @@ local STRINGS = {
 		TIP_RECALL = "Ends the mission now: the loot comes by mail, the alt waits for you or comes back.",
 		RESUMED = "%s went back to its mission, so it stays out of your group: Recall it from Missions to have it back.",
 		BACK_AT = "back ~%s", RATE = "~%d/h", AGAIN = "Same again: %s, %d min",
+		BAR_OUT = "%d on a mission · %d min", BAR_BACK = "%s is back: loot by mail", TIP_BADGE = "Click: the Missions panel.",
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
@@ -40,6 +41,7 @@ local STRINGS = {
 		TIP_RECALL = "Arrête la mission tout de suite : le butin arrive par courrier, l'alt vous attend ou revient.",
 		RESUMED = "%s a repris sa mission, il reste donc hors de votre groupe : rappelez-le depuis Missions pour le récupérer.",
 		BACK_AT = "retour ~%s", RATE = "~%d/h", AGAIN = "Pareil : %s, %d min",
+		BAR_OUT = "%d en mission · %d min", BAR_BACK = "%s est revenu : butin par courrier", TIP_BADGE = "Clic : le panneau Missions.",
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
@@ -79,7 +81,14 @@ end
 function M.Poll()
 	M.Refresh()
 	M.queue = {}
-	for _, name in ipairs(M.alts) do table.insert(M.queue, name) end
+	local queued = {}
+	for _, name in ipairs(M.alts) do
+		table.insert(M.queue, name)
+		queued[name] = true
+	end
+	for name in pairs(SquidBotsLiteDB.missionOut or {}) do
+		if not queued[name] then table.insert(M.queue, name) end
+	end
 	M.nextPoll = GetTime() + POLL_EVERY
 end
 
@@ -98,6 +107,8 @@ end
 function M.OnStatus(name, message)
 	local parts = {}
 	for field in (message .. ";"):gmatch("([^;]*);") do table.insert(parts, field) end
+	SquidBotsLiteDB.missionOut = SquidBotsLiteDB.missionOut or {}
+	SquidBotsLiteDB.missionOut[name] = parts[2] ~= "NONE" or nil
 	if parts[2] == "NONE" then
 		M.status[name] = { state = "NONE" }
 	else
@@ -120,6 +131,8 @@ function M.OnLine(name, message)
 			SquidBotsLiteDB.missionSkill[name] = skill
 		end
 		M.done[name] = nil
+		SquidBotsLiteDB.missionOut = SquidBotsLiteDB.missionOut or {}
+		SquidBotsLiteDB.missionOut[name] = true
 		table.insert(M.queue, name)
 		-- Logged in again with a mission going on: it goes back to work, out of the group; say why.
 		if message:find("^Mission resumed: ") then
@@ -130,6 +143,8 @@ function M.OnLine(name, message)
 		M.status[name] = { state = "NONE" }
 		local count = tonumber(message:match("(%d+) items sent to you by mail") or "")
 		M.done[name] = count or 0
+		if SquidBotsLiteDB.missionOut then SquidBotsLiteDB.missionOut[name] = nil end
+		M.back, M.backUntil = name, GetTime() + 120
 		if count and count > 0 then M.mail[name] = count end
 		local rest = message:match("^Mission done: (.*)$") or ""
 		if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("DONE"), name, rest), 1, 0.82, 0) end
@@ -435,6 +450,7 @@ function M.ShowIdle(row, name, s)
 end
 
 function M.RefreshPanel()
+	M.RefreshBadge()
 	local f = M.panel
 	if not f or not f:IsShown() then return end
 	f.title:SetText("SquidBots Lite - " .. T("TITLE"))
@@ -468,6 +484,72 @@ function M.RefreshPanel()
 			row:Hide()
 		end
 	end
+end
+
+-- ---------------------------------------------------------------------------
+-- Over the bar, on the right: how many alts are out and the soonest back; a click opens the panel
+-- ---------------------------------------------------------------------------
+function M.BuildBadge(bar)
+	local b = CreateFrame("Button", nil, bar)
+	b:SetHeight(20)
+	b:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 4)
+	b:SetBackdrop(UI.CARD)
+	b:SetBackdropColor(0.06, 0.06, 0.07, 0.9)
+	b:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+	b.icon = Icon(b, 14)
+	b.icon:SetPoint("LEFT", 4, 0)
+	b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	b.text:SetPoint("LEFT", b.icon, "RIGHT", 4, 0)
+	b.glow = b:CreateTexture(nil, "HIGHLIGHT")
+	b.glow:SetTexture("Interface\\Buttons\\WHITE8X8")
+	b.glow:SetAllPoints()
+	b.glow:SetBlendMode("ADD")
+	b.glow:SetVertexColor(1, 0.82, 0, 0.12)
+	b:SetScript("OnClick", function() if not (M.panel and M.panel:IsShown()) then SquidBotsLite_ShowMissions() end end)
+	b:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+		GameTooltip:SetText(T("TITLE"), 1, 0.82, 0)
+		for name, st in pairs(M.status) do
+			if M.OnMission(name) then
+				local where = st.state == "DELIVER" and T("DELIVER") or st.zone
+				GameTooltip:AddDoubleLine(UI.ClassName(name) .. "  |cffaaaaaa" .. where .. "|r",
+					string.format(T("LEFT"), st.minutes) .. ", " .. string.format(T("ITEMS"), st.items), 1, 1, 1, 1, 1, 1)
+			end
+		end
+		GameTooltip:AddLine(T("TIP_BADGE"), 0.4, 0.8, 1)
+		GameTooltip:Show()
+	end)
+	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	b:Hide()
+	M.badge = b
+end
+
+function M.RefreshBadge()
+	local bar = _G.SquidBotsLiteBar
+	if not bar then return end
+	if not M.badge then M.BuildBadge(bar) end
+	local b, out, soonest, skill = M.badge, 0, nil, nil
+	for name, st in pairs(M.status) do
+		if M.OnMission(name) then
+			out = out + 1
+			if not soonest or st.minutes < soonest then soonest, skill = st.minutes, st.skill end
+		end
+	end
+	local back = M.back and GetTime() < (M.backUntil or 0)
+	if out > 0 then
+		b.icon:SetTexture(UI.SKILL_ICON[skill] or UI.SKILL_ICON.mining)
+		b.text:SetText(string.format(T("BAR_OUT"), out, soonest))
+		b:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+	elseif back then
+		b.icon:SetTexture("Interface\\Icons\\INV_Letter_15")
+		b.text:SetText(string.format(T("BAR_BACK"), M.back))
+		b:SetBackdropBorderColor(0.4, 0.7, 1, 0.7)
+	else
+		b:Hide()
+		return
+	end
+	b:SetWidth(b.text:GetStringWidth() + 30)
+	b:Show()
 end
 
 -- For My alts: a gold word on the alts out on a mission.
@@ -535,6 +617,7 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("UPDATE_PENDING_MAIL")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function(_, event, message, name)
 	if event == "CHAT_MSG_WHISPER" then
 		if not IsAlt(name) then return end
@@ -548,6 +631,11 @@ frame:SetScript("OnEvent", function(_, event, message, name)
 		if gone and M.status[gone] then
 			M.status[gone] = nil
 			M.RefreshPanel()
+		end
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		if next(SquidBotsLiteDB.missionOut or {}) and not M.asked then
+			M.asked = true
+			M.loginPoll, M.nextPoll = true, GetTime() + 5
 		end
 	elseif event == "UPDATE_PENDING_MAIL" and HasNewMail() then
 		for alt, count in pairs(M.mail) do
@@ -571,7 +659,13 @@ frame:SetScript("OnUpdate", function(_, delta)
 		M.nextSend = now + POLL_GAP
 	end
 	-- Every minute, while an alt is out or the panel is open.
-	if now >= M.nextPoll and (M.Count() > 0 or (M.panel and M.panel:IsShown())) then
+	if now >= M.nextPoll and (M.Count() > 0 or M.loginPoll or (M.panel and M.panel:IsShown())) then
+		M.loginPoll = nil
 		M.Poll()
+	end
+	-- The "back" word goes after two minutes.
+	if M.back and now >= (M.backUntil or 0) then
+		M.back = nil
+		M.RefreshBadge()
 	end
 end)
