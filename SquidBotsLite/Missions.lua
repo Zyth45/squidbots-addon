@@ -298,7 +298,10 @@ function M.Build()
 	f:SetClampedToScreen(true)
 	f:RegisterForDrag("LeftButton")
 	f:SetScript("OnDragStart", f.StartMoving)
-	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	f:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		self.moved = true
+	end)
 	table.insert(UISpecialFrames, "SquidBotsLiteMissions")
 	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.title:SetPoint("TOP", 0, -14)
@@ -472,10 +475,30 @@ function SquidBotsLite_MissionOf(name)
 	return M.OnMission(name) and M.status[name] or nil
 end
 
+-- Next to My alts, never over it: on its left (the bot sheet opens on its right), else under it. Once the player
+-- has moved the panel, it stays where they put it.
+function M.Place()
+	local f, alts = M.panel, _G.SquidBotsLiteAlts
+	if f.moved then return end
+	f:ClearAllPoints()
+	if not (alts and alts:IsShown() and alts:GetLeft()) then
+		f:SetPoint("CENTER", -200, 40)
+		return
+	end
+	local scale = alts:GetEffectiveScale() / f:GetEffectiveScale()
+	if alts:GetLeft() * scale >= f:GetWidth() + 8 then
+		f:SetPoint("TOPRIGHT", alts, "TOPLEFT", -4, 0)
+	else
+		f:SetPoint("TOPLEFT", alts, "BOTTOMLEFT", 0, -4)
+	end
+end
+
 function SquidBotsLite_ShowMissions()
 	if not M.panel then M.Build() end
 	if M.panel:IsShown() then M.panel:Hide() return end
+	M.Place()
 	M.panel:Show()
+	M.panel:Raise()
 	if SquidBotsLite_AskRoster then SquidBotsLite_AskRoster() end
 	M.Poll()
 	M.RefreshPanel()
