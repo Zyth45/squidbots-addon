@@ -5,6 +5,8 @@
 -- or "MISSION;NONE"; those lines and the polls stay out of the chat.
 -- Watching an alt out (the camera on it, same continent): "mission watch" / "mission unwatch"; it answers
 -- "Watch on: <zone>.", "Watch off: <reason>." or "Watch refused: <reason>.".
+-- An order: "mission order <item id> [count] [minutes]" gathers that ore or herb up to the count, the rest on the way;
+-- it answers "Mission started: order of <n> <name> (<skill>) in <zone>, ..." or "Order refused: <reason>.".
 
 local STRINGS = {
 	en = {
@@ -26,6 +28,9 @@ local STRINGS = {
 		WATCH = "Watch", TIP_WATCH = "The camera follows it while it works (same continent only). Back to me, or Escape, to return.",
 		WATCH_BAR = "Watching %s", WATCH_BACK = "Back to me", WATCH_WAIT = "Asking %s for its view...",
 		WATCH_REFUSED = "%s: no view (%s)", WATCH_OFF = "View of %s closed: %s", TIP_WATCH_BACK = "Your own camera again.",
+		ORDER = "Order", TIP_ORDER = "Ask it for a given ore or herb: it gathers that up to the count, the rest on the way, and mails it all. Or drop an item from your bags on this button.",
+		ORDER_COUNT = "%d of them", ORDER_DEFAULT = "%d of them (default)", ORDER_DROP = "Or drop an ore or herb from your bags on the button.",
+		ORDER_LINE = "Order: %d %s", ORDER_REFUSED = "%s: order refused (%s)",
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
@@ -50,6 +55,9 @@ local STRINGS = {
 		WATCH = "Regarder", TIP_WATCH = "La caméra le suit pendant qu'il travaille (même continent seulement). Revenir à moi, ou Échap, pour revenir.",
 		WATCH_BAR = "Vue de %s", WATCH_BACK = "Revenir à moi", WATCH_WAIT = "Je demande sa vue à %s...",
 		WATCH_REFUSED = "%s : pas de vue (%s)", WATCH_OFF = "Vue de %s fermée : %s", TIP_WATCH_BACK = "Votre caméra à nouveau.",
+		ORDER = "Commander", TIP_ORDER = "Demandez-lui un minerai ou une herbe précis : il en récolte jusqu'au nombre voulu, le reste en route, et vous envoie tout par courrier. Ou déposez un objet de vos sacs sur ce bouton.",
+		ORDER_COUNT = "%d", ORDER_DEFAULT = "%d (par défaut)", ORDER_DROP = "Ou déposez un minerai ou une herbe de vos sacs sur le bouton.",
+		ORDER_LINE = "Commande : %d %s", ORDER_REFUSED = "%s : commande refusée (%s)",
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
@@ -67,6 +75,13 @@ local ROWS, ROW_H, ROWS_TOP = 6, 62, 74
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
 local DURATIONS = { 30, 60, 90, 120 }
+local ORDER_COUNTS, ORDER_DEFAULT = { 10, 20, 40, 60 }, 20
+local ORDERS = {
+	mining = { { 2770, "Copper Ore" }, { 2771, "Tin Ore" }, { 2775, "Silver Ore" }, { 2772, "Iron Ore" }, { 2776, "Gold Ore" },
+		{ 3858, "Mithril Ore" }, { 7911, "Truesilver Ore" }, { 10620, "Thorium Ore" } },
+	herbalism = { { 2447, "Peacebloom" }, { 765, "Silverleaf" }, { 785, "Mageroyal" }, { 2450, "Briarthorn" }, { 2453, "Bruiseweed" },
+		{ 3356, "Kingsblood" }, { 3821, "Goldthorn" }, { 8838, "Sungrass" }, { 13464, "Golden Sansam" }, { 13463, "Dreamfoil" } },
+}
 
 -- done: the alts back from a mission this session, with how many items they mailed.
 local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {} }
@@ -133,7 +148,14 @@ end
 -- The alt's own lines: started (ask its state), done (mail coming), refused or resumed (shown as they are).
 function M.OnLine(name, message)
 	if message:find("^Mission started: ") or message:find("^Mission resumed: ") then
-		local skill = message:match("^Mission %a+: (%a+) in ")
+		local skill = message:match("^Mission %a+: (%a+) in ") or message:match("%((%a+)%) in ")
+		local count, item = message:match("^Mission %a+: order of (%d+) (.-) %(")
+		SquidBotsLiteDB.missionOrder = SquidBotsLiteDB.missionOrder or {}
+		if count then
+			SquidBotsLiteDB.missionOrder[name] = { count = tonumber(count), item = item }
+		elseif message:find("^Mission started: ") then
+			SquidBotsLiteDB.missionOrder[name] = nil
+		end
 		if skill == "mining" or skill == "herbalism" then
 			SquidBotsLiteDB.missionSkill = SquidBotsLiteDB.missionSkill or {}
 			SquidBotsLiteDB.missionSkill[name] = skill
@@ -153,6 +175,7 @@ function M.OnLine(name, message)
 		local count = tonumber(message:match("(%d+) items sent to you by mail") or "")
 		M.done[name] = count or 0
 		if SquidBotsLiteDB.missionOut then SquidBotsLiteDB.missionOut[name] = nil end
+		if SquidBotsLiteDB.missionOrder then SquidBotsLiteDB.missionOrder[name] = nil end
 		M.back, M.backUntil = name, GetTime() + 120
 		if count and count > 0 then M.mail[name] = count end
 		local rest = message:match("^Mission done: (.*)$") or ""
@@ -244,6 +267,45 @@ function M.Send(name, minutes, skill)
 	SquidBotsLiteDB.missionLast = SquidBotsLiteDB.missionLast or {}
 	SquidBotsLiteDB.missionLast[name] = { minutes = minutes, skill = skill }
 	Whisper(name, text)
+end
+
+function M.Order(name, item, count)
+	M.done[name] = nil
+	-- Its length is the server's default: the bar takes it from the first status.
+	if SquidBotsLiteDB.missionTotal then SquidBotsLiteDB.missionTotal[name] = nil end
+	Whisper(name, "mission order " .. item .. " " .. (count or ORDER_DEFAULT))
+end
+
+function M.OrderMenu(name)
+	local known = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
+	local items = { { text = name .. " - " .. T("ORDER"), isTitle = true, notCheckable = true } }
+	for _, skill in ipairs({ "mining", "herbalism" }) do
+		if not known or known == skill then
+			table.insert(items, { text = T(skill == "mining" and "MINING" or "HERBALISM"), isTitle = true, notCheckable = true })
+			for _, def in ipairs(ORDERS[skill]) do
+				local id = def[1]
+				local counts = {}
+				for _, count in ipairs(ORDER_COUNTS) do
+					table.insert(counts, { text = string.format(T(count == ORDER_DEFAULT and "ORDER_DEFAULT" or "ORDER_COUNT"), count), notCheckable = true,
+						func = function() CloseDropDownMenus(); M.Order(name, id, count) end })
+				end
+				table.insert(items, { text = GetItemInfo(id) or def[2], icon = GetItemIcon and GetItemIcon(id), hasArrow = true,
+					notCheckable = true, menuList = counts })
+			end
+		end
+	end
+	table.insert(items, { text = "|cff9d9d9d" .. T("ORDER_DROP") .. "|r", notCheckable = true, disabled = true })
+	M.menu = M.menu or CreateFrame("Frame", "SquidBotsLiteMissionMenu", UIParent, "UIDropDownMenuTemplate")
+	EasyMenu(items, M.menu, "cursor", 0, 0, "MENU")
+end
+
+-- An item dropped on the button (or clicked with it on the cursor): ordered by its id, the default count.
+function M.OrderCursor(name)
+	local kind, id = GetCursorInfo()
+	if kind ~= "item" or not id then return false end
+	ClearCursor()
+	M.Order(name, id)
+	return true
 end
 
 function M.Recall(name)
@@ -389,6 +451,18 @@ function M.BuildRow(f, i)
 		end)
 	row.watch:SetPoint("RIGHT", row.action, "LEFT", -8, 0)
 	row.watch:Hide()
+	row.order = UI.IconButton(row, 24, "Interface\\Icons\\INV_Scroll_03", function() return T("ORDER"), T("TIP_ORDER") end,
+		function(self)
+			local name = self:GetParent().alt
+			if not name or M.OrderCursor(name) then return end
+			M.OrderMenu(name)
+		end)
+	row.order:SetScript("OnReceiveDrag", function(self)
+		local name = self:GetParent().alt
+		if name then M.OrderCursor(name) end
+	end)
+	row.order:SetPoint("RIGHT", row.action, "LEFT", -8, 0)
+	row.order:Hide()
 	return row
 end
 
@@ -513,7 +587,12 @@ function M.ShowOut(row, name, s)
 		row.skull:Hide()
 		row.deaths:Hide()
 	end
+	local order = SquidBotsLiteDB.missionOrder and SquidBotsLiteDB.missionOrder[name]
+	if order and s.state ~= "DELIVER" then
+		row.line:SetText(row.line:GetText() .. "  |cffff9933" .. string.format(T("ORDER_LINE"), order.count, order.item) .. "|r")
+	end
 	UI.SetIcon(row.action, RECALL_ICON, true)
+	row.order:Hide()
 	row.watch:Show()
 	row.watch.icon:SetVertexColor(1, 1, M.watching == name and 0.4 or 1)
 end
@@ -542,6 +621,7 @@ function M.ShowIdle(row, name, s)
 	end
 	UI.SetIcon(row.action, SEND_ICON, M.Count() < 3)
 	row.watch:Hide()
+	if s and M.Count() < 3 then row.order:Show() else row.order:Hide() end
 end
 
 function M.RefreshPanel()
@@ -734,6 +814,9 @@ frame:SetScript("OnEvent", function(_, event, message, name)
 			M.OnLine(name, message)
 		elseif message:find("^Watch ") then
 			M.OnWatch(name, message)
+		elseif message:find("^Order refused: ") then
+			local reason = (message:match("^Order refused: (.-)%.?$") or "")
+			if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("ORDER_REFUSED"), name, reason), 1, 0.4, 0.3) end
 		end
 	elseif event == "CHAT_MSG_SYSTEM" then
 		local gone = message:match("^No player named '(.-)' is currently playing%.$")
