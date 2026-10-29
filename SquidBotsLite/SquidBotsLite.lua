@@ -251,7 +251,7 @@ local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "In
 local ui = {
 	CARD = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
 		insets = { left = 1, right = 1, top = 1, bottom = 1 } },
-	SKILL_ICON = { mining = "Interface\\Icons\\Trade_Mining", herbalism = "Interface\\Icons\\Trade_Herbalism" },
+	SKILL_ICON = { mining = "Interface\\Icons\\Trade_Mining", herbalism = "Interface\\Icons\\INV_Misc_Flower_02" },
 	LOOT_ICON = { mining = "Interface\\Icons\\INV_Ore_Copper_01", herbalism = "Interface\\Icons\\INV_Misc_Herb_07" },
 	UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark", NOBODY = "Interface\\CharacterFrame\\TempPortrait",
 }

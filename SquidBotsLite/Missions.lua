@@ -497,10 +497,13 @@ function M.BuildBadge(bar)
 	b.icon = Icon(b, 16)
 	b.icon:SetPoint("LEFT", 4, 0)
 	b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	b.text:SetPoint("LEFT", b.icon, "RIGHT", 4, 0)
-	b.text:SetFont(b.text:GetFont(), 12, "OUTLINE")
+	-- A second icon when both skills are out.
+	b.icon2 = Icon(b, 16)
+	b.icon2:SetPoint("LEFT", b.icon, "RIGHT", 2, 0)
+	b.text:SetPoint("LEFT", b.icon2, "RIGHT", 4, 0)
+	b.text:SetFont(b.text:GetFont(), 10, "OUTLINE")
 	b:SetScript("OnUpdate", function(self)
-		self.text:SetAlpha(0.6 + 0.4 * math.sin(GetTime() * 2.5))
+		self.text:SetAlpha(0.65 + 0.35 * math.sin(GetTime() * 1.2))
 	end)
 	b.glow = b:CreateTexture(nil, "HIGHLIGHT")
 	b.glow:SetTexture("Interface\\Buttons\\WHITE8X8")
@@ -530,27 +533,34 @@ function M.RefreshBadge()
 	local bar = _G.SquidBotsLiteBar
 	if not bar then return end
 	if not M.badge then M.BuildBadge(bar) end
-	local b, out, soonest, skill = M.badge, 0, nil, nil
+	local b, out, soonest, skills = M.badge, 0, nil, {}
 	for name, st in pairs(M.status) do
 		if M.OnMission(name) then
 			out = out + 1
-			if not soonest or st.minutes < soonest then soonest, skill = st.minutes, st.skill end
+			if not soonest or st.minutes < soonest then soonest = st.minutes end
+			skills[st.skill or "mining"] = true
 		end
 	end
 	local back = M.back and GetTime() < (M.backUntil or 0)
 	if out > 0 then
-		b.icon:SetTexture(UI.SKILL_ICON[skill] or UI.SKILL_ICON.mining)
+		local both = skills.mining and skills.herbalism
+		b.icon:SetTexture(UI.SKILL_ICON[skills.herbalism and not both and "herbalism" or "mining"])
+		b.icon2:SetTexture(UI.SKILL_ICON.herbalism)
+		b.icon2:SetWidth(both and 16 or 0.1)
+		b.icon2:SetAlpha(both and 1 or 0)
 		b.text:SetText(string.format(T("BAR_OUT"), out, soonest))
 		b.text:SetTextColor(1, 0.6, 0.1)
 	elseif back then
 		b.icon:SetTexture("Interface\\Icons\\INV_Letter_15")
+		b.icon2:SetWidth(0.1)
+		b.icon2:SetAlpha(0)
 		b.text:SetText(string.format(T("BAR_BACK"), M.back))
 		b.text:SetTextColor(0.4, 0.75, 1)
 	else
 		b:Hide()
 		return
 	end
-	b:SetWidth(b.text:GetStringWidth() + 26)
+	b:SetWidth(b.text:GetStringWidth() + 26 + b.icon2:GetWidth())
 	b:Show()
 end
 
