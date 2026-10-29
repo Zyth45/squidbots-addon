@@ -19,6 +19,7 @@ local STRINGS = {
 		TIP_SEND = "Choose the skill and how long: up to 120 min, 3 alts at a time.",
 		TIP_RECALL = "Ends the mission now: the loot comes by mail, the alt waits for you or comes back.",
 		RESUMED = "%s went back to its mission, so it stays out of your group: Recall it from Missions to have it back.",
+		BACK_AT = "back ~%s", RATE = "~%d/h", AGAIN = "Same again: %s, %d min",
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
@@ -38,6 +39,7 @@ local STRINGS = {
 		TIP_SEND = "Choisissez le métier et la durée : jusqu'à 120 min, 3 alts à la fois.",
 		TIP_RECALL = "Arrête la mission tout de suite : le butin arrive par courrier, l'alt vous attend ou revient.",
 		RESUMED = "%s a repris sa mission, il reste donc hors de votre groupe : rappelez-le depuis Missions pour le récupérer.",
+		BACK_AT = "retour ~%s", RATE = "~%d/h", AGAIN = "Pareil : %s, %d min",
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
@@ -140,6 +142,8 @@ function M.Send(name, minutes, skill)
 	local text = "mission gather " .. minutes .. (skill and (" " .. skill) or "")
 	SquidBotsLiteDB.missionTotal = SquidBotsLiteDB.missionTotal or {}
 	SquidBotsLiteDB.missionTotal[name] = minutes
+	SquidBotsLiteDB.missionLast = SquidBotsLiteDB.missionLast or {}
+	SquidBotsLiteDB.missionLast[name] = { minutes = minutes, skill = skill }
 	Whisper(name, text)
 end
 
@@ -164,10 +168,18 @@ function M.SendMenu(name)
 	local known = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
 	local items = {
 		{ text = name, isTitle = true, notCheckable = true },
+	}
+	local last = SquidBotsLiteDB.missionLast and SquidBotsLiteDB.missionLast[name]
+	if last then
+		local skill = last.skill and T(last.skill == "mining" and "MINING" or "HERBALISM") or T("AUTO")
+		table.insert(items, { text = "|cff66ff66" .. string.format(T("AGAIN"), skill, last.minutes) .. "|r", notCheckable = true,
+			func = function() CloseDropDownMenus(); M.Send(name, last.minutes, last.skill) end })
+	end
+	for _, item in ipairs({
 		{ text = T("AUTO") .. (known and (" (" .. T("SKILL_" .. known) .. ")") or ""), hasArrow = true, notCheckable = true, menuList = Durations(nil) },
 		{ text = T("MINING"), hasArrow = true, notCheckable = true, menuList = Durations("mining") },
 		{ text = T("HERBALISM"), hasArrow = true, notCheckable = true, menuList = Durations("herbalism") },
-	}
+	}) do table.insert(items, item) end
 	M.menu = M.menu or CreateFrame("Frame", "SquidBotsLiteMissionMenu", UIParent, "UIDropDownMenuTemplate")
 	EasyMenu(items, M.menu, "cursor", 0, 0, "MENU")
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
@@ -227,9 +239,10 @@ function M.BuildRow(f, i)
 	row.line:SetPoint("LEFT", row.phase, "RIGHT", 5, 0)
 	row.line:SetWidth(270)
 	row.line:SetJustifyH("LEFT")
+	row.line:SetTextColor(0.75, 0.75, 0.75)
 	-- The time spent out of the mission's, the minutes left written on it.
 	row.bar = CreateFrame("StatusBar", nil, row)
-	row.bar:SetWidth(200)
+	row.bar:SetWidth(210)
 	row.bar:SetHeight(10)
 	row.bar:SetPoint("TOPLEFT", 56, -43)
 	row.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -247,11 +260,13 @@ function M.BuildRow(f, i)
 	row.loot:SetPoint("LEFT", row.bar, "RIGHT", 10, 0)
 	row.items = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	row.items:SetPoint("LEFT", row.loot, "RIGHT", 3, 0)
+	row.rate = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	row.rate:SetPoint("LEFT", row.items, "RIGHT", 4, 0)
 	row.skull = row:CreateTexture(nil, "ARTWORK")
 	row.skull:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
 	row.skull:SetWidth(14)
 	row.skull:SetHeight(14)
-	row.skull:SetPoint("LEFT", row.items, "RIGHT", 10, 0)
+	row.skull:SetPoint("LEFT", row.rate, "RIGHT", 8, 0)
 	row.deaths = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	row.deaths:SetPoint("LEFT", row.skull, "RIGHT", 2, 0)
 	row.deaths:SetTextColor(1, 0.35, 0.35)
@@ -333,6 +348,7 @@ function M.Build()
 		GameTooltip:Show()
 	end)
 	f.helpArea:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	if UI.FlattenAll then UI.FlattenAll(f) end
 	f:Hide()
 	M.panel = f
 end
@@ -360,16 +376,20 @@ function M.ShowOut(row, name, s)
 	Badge(row, "BADGE_OUT", BADGE_COLOR.OUT)
 	row.phase:SetTexture(s.state == "WORK" and (UI.SKILL_ICON[skill] or UI.UNKNOWN) or PHASE_ICON[s.state] or PHASE_ICON.DELIVER)
 	if s.state == "TRAVEL" then
-		row.line:SetText(string.format(T("TRAVEL"), s.zone))
+		row.line:SetText(string.format(T("TRAVEL"), "|cffffffff" .. s.zone .. "|r"))
 	elseif s.state == "WORK" then
-		row.line:SetText(string.format(T("WORK"), s.zone))
+		row.line:SetText(string.format(T("WORK"), "|cffffffff" .. s.zone .. "|r"))
 	else
 		row.line:SetText(T("DELIVER"))
 	end
 	local total = Total(name, s.minutes)
 	row.bar:SetValue((total - s.minutes) / total)
 	row.bar:SetStatusBarColor(color[1], color[2], color[3])
-	row.bar.text:SetText(string.format(T("LEFT"), s.minutes))
+	row.bar.text:SetText(string.format(T("LEFT"), s.minutes) .. "  ·  " .. string.format(T("BACK_AT"), date("%H:%M", time() + s.minutes * 60)))
+	-- Items an hour, once it has worked a little.
+	local spent = total - s.minutes
+	row.rate:SetText(spent >= 5 and s.items > 0 and string.format(T("RATE"), math.floor(s.items * 60 / spent + 0.5)) or "")
+	row.rate:Show()
 	row.bar:Show()
 	row.loot:SetTexture(UI.LOOT_ICON[skill] or UI.UNKNOWN)
 	row.items:SetText(s.items)
@@ -391,6 +411,7 @@ function M.ShowIdle(row, name, s)
 	row.bar:Hide()
 	row.loot:Hide()
 	row.items:Hide()
+	row.rate:Hide()
 	row.skull:Hide()
 	row.deaths:Hide()
 	local done = M.done[name]
@@ -447,8 +468,8 @@ function M.RefreshPanel()
 end
 
 -- For My alts: a gold word on the alts out on a mission.
-function SquidBotsLite_OnMission(name)
-	return M.OnMission(name)
+function SquidBotsLite_MissionOf(name)
+	return M.OnMission(name) and M.status[name] or nil
 end
 
 function SquidBotsLite_ShowMissions()

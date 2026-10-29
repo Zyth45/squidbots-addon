@@ -1362,7 +1362,7 @@ local function Build()
 	sheet.specText = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	sheet.specText:SetPoint("TOPLEFT", 20, -64)
 	sheet.xp = CreateFrame("StatusBar", nil, sheet)
-	sheet.xp:SetHeight(12)
+	sheet.xp:SetHeight(10)
 	sheet.xp:SetPoint("BOTTOMLEFT", 20, 44)
 	sheet.xp:SetPoint("BOTTOMRIGHT", -20, 44)
 	sheet.xp:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -1375,6 +1375,8 @@ local function Build()
 	sheet.xp.text:SetPoint("CENTER")
 	sheet.status = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sheet.status:SetPoint("BOTTOMLEFT", 18, 20)
+	-- The flat buttons of the other panels (SquidBotsLite.lua).
+	if SquidBotsLite_UI then SquidBotsLite_UI.FlattenAll(sheet) end
 	sheet:Hide()
 end
 

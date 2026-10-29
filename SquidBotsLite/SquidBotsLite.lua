@@ -69,7 +69,7 @@ local STRINGS = {
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
 		ALTS_HELP = "Click a logged-in alt for its sheet. Hover an icon to see what it does.",
-		ALTS_COUNT = "%d / %d logged in", ALTS_ON_MISSION = "on a mission", TIP_ALTS_REFRESH = "Ask the server for your characters again.",
+		ALTS_COUNT = "%d / %d logged in", ALTS_MISSION = "out: %d min, %d items", TIP_ALTS_REFRESH = "Ask the server for your characters again.",
 		TIP_ALT_ADD = "It joins your group as your bot.", TIP_ALT_REMOVE = "Logs it out of the game.",
 		TIP_ALT_SUMMON = "Brings it to you: an alt logs in where it logged out.",
 		ALTS_LOOK = "Keeps its look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
@@ -171,7 +171,7 @@ local STRINGS = {
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
 		ALTS_HELP = "Cliquez sur un alt connecté pour sa fiche. Survolez une icône pour son rôle.",
-		ALTS_COUNT = "%d / %d connectés", ALTS_ON_MISSION = "en mission", TIP_ALTS_REFRESH = "Redemander vos personnages au serveur.",
+		ALTS_COUNT = "%d / %d connectés", ALTS_MISSION = "parti : %d min, %d objets", TIP_ALTS_REFRESH = "Redemander vos personnages au serveur.",
 		TIP_ALT_ADD = "Il rejoint votre groupe comme bot.", TIP_ALT_REMOVE = "Le déconnecte du jeu.",
 		TIP_ALT_SUMMON = "L'amène à vous : un alt se connecte là où il s'était déconnecté.",
 		ALTS_LOOK = "Garde son apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
@@ -330,6 +330,37 @@ function ui.SetIcon(button, icon, enabled)
 	button.icon:SetTexture(icon)
 	button.icon:SetDesaturated(not enabled)
 	if enabled then button:Enable() else button:Disable() end
+end
+
+-- The game's red buttons (UIPanelButtonTemplate) made flat: dark, a thin gold border, a gold glow under the
+-- mouse and when lit (LockHighlight: the open tab, the active mode). Text, clicks and scripts are unchanged.
+local FLAT_EDGE = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
+function ui.Flatten(button)
+	if button.flat then return end
+	button.flat = true
+	for _, def in ipairs({ { "Normal", 0.13, 0.13, 0.15, 0.95 }, { "Pushed", 0.07, 0.07, 0.08, 0.95 },
+		{ "Disabled", 0.09, 0.09, 0.10, 0.8 }, { "Highlight", 1, 0.82, 0, 0.2 } }) do
+		button["Set" .. def[1] .. "Texture"](button, "Interface\\Buttons\\WHITE8X8")
+		local texture = button["Get" .. def[1] .. "Texture"](button)
+		texture:SetTexCoord(0, 1, 0, 1)
+		texture:SetVertexColor(def[2], def[3], def[4], def[5])
+		texture:ClearAllPoints()
+		texture:SetPoint("TOPLEFT", 1, -1)
+		texture:SetPoint("BOTTOMRIGHT", -1, 1)
+	end
+	button:GetHighlightTexture():SetBlendMode("ADD")
+	button:SetBackdrop(FLAT_EDGE)
+	button:SetBackdropBorderColor(1, 0.82, 0, 0.35)
+end
+
+-- Every red button under a frame, its children's too.
+function ui.FlattenAll(frame)
+	for _, child in ipairs({ frame:GetChildren() }) do
+		local normal = child.GetNormalTexture and child:GetNormalTexture()
+		local path = normal and normal:GetTexture()
+		if type(path) == "string" and path:lower():find("ui%-panel%-button%-up") then ui.Flatten(child) end
+		ui.FlattenAll(child)
+	end
 end
 
 -- A thin gold line across a panel, at y from its top.
@@ -2022,7 +2053,7 @@ local function RefreshAlts()
 	if not altsFrame then return end
 	NoteGroup()
 	-- 25 alts for a raid: the list scrolls (wheel or bar), ALT_ROWS at a time.
-	altsFrame:SetHeight(ALT_TOP + math.max(3, math.min(#roster, ALT_ROWS)) * ALT_ROW_H + 44)
+	altsFrame:SetHeight(ALT_TOP + math.max(1, math.min(#roster, ALT_ROWS)) * ALT_ROW_H + 44)
 	FauxScrollFrame_Update(altsFrame.scroll, #roster, ALT_ROWS, ALT_ROW_H)
 	local offset = FauxScrollFrame_GetOffset(altsFrame.scroll)
 	local online = 0
@@ -2038,8 +2069,9 @@ local function RefreshAlts()
 			local line = AltLine(alt.name)
 			local skill = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[alt.name]
 			if skill and ui.SKILL_ICON[skill] then line = line .. "  |T" .. ui.SKILL_ICON[skill] .. ":12:12|t" end
-			if SquidBotsLite_OnMission and SquidBotsLite_OnMission(alt.name) then
-				line = line .. "  |cffffd100" .. L.ALTS_ON_MISSION .. "|r"
+			local mission = SquidBotsLite_MissionOf and SquidBotsLite_MissionOf(alt.name)
+			if mission then
+				line = line .. "  |cffffd100" .. string.format(L.ALTS_MISSION, mission.minutes, mission.items) .. "|r"
 			end
 			row.info:SetText(line)
 			ShowXP(row.xp, alt.name)
@@ -2414,6 +2446,7 @@ local function BuildAlts()
 	altsFrame.help:SetPoint("BOTTOMLEFT", 18, 16)
 	altsFrame.help:SetWidth(430)
 	altsFrame.help:SetJustifyH("LEFT")
+	ui.FlattenAll(altsFrame)
 	altsFrame:Hide()
 	AltsTexts()
 end
@@ -2866,6 +2899,7 @@ function dc.BuildPanel()
 	f.manual = dc.Button(f, 200, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
 	f.manual:SetHeight(18)
 	f.manual:SetPoint("BOTTOM", 0, 14)
+	ui.FlattenAll(f)
 	f:Hide()
 	dc.panel = f
 end
