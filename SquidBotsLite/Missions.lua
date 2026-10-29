@@ -18,6 +18,7 @@ local STRINGS = {
 		MAIL = "Mail from %s has arrived: %d items (at a mailbox).", DONE = "%s: mission over. %s",
 		TIP_SEND = "Choose the skill and how long: up to 120 min, 3 alts at a time.",
 		TIP_RECALL = "Ends the mission now: the loot comes by mail, the alt waits for you or comes back.",
+		RESUMED = "%s went back to its mission, so it stays out of your group: Recall it from Missions to have it back.",
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
@@ -36,6 +37,7 @@ local STRINGS = {
 		MAIL = "Le courrier de %s est arrivé : %d objets (à une boîte aux lettres).", DONE = "%s : mission terminée. %s",
 		TIP_SEND = "Choisissez le métier et la durée : jusqu'à 120 min, 3 alts à la fois.",
 		TIP_RECALL = "Arrête la mission tout de suite : le butin arrive par courrier, l'alt vous attend ou revient.",
+		RESUMED = "%s a repris sa mission, il reste donc hors de votre groupe : rappelez-le depuis Missions pour le récupérer.",
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
@@ -117,6 +119,11 @@ function M.OnLine(name, message)
 		end
 		M.done[name] = nil
 		table.insert(M.queue, name)
+		-- Logged in again with a mission going on: it goes back to work, out of the group; say why.
+		if message:find("^Mission resumed: ") then
+			Print(string.format(T("RESUMED"), name))
+			if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("RESUMED"), name), 1, 0.82, 0) end
+		end
 	elseif message:find("^Mission done: ") then
 		M.status[name] = { state = "NONE" }
 		local count = tonumber(message:match("(%d+) items sent to you by mail") or "")
