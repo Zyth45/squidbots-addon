@@ -487,17 +487,27 @@ local function ItemButton(parent, size)
 	local b = CreateFrame("Button", nil, parent)
 	b:SetWidth(size)
 	b:SetHeight(size)
-	b:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
-	b:GetNormalTexture():SetAllPoints()
+	-- One thin border, in the item's quality colour (the action bar's slot texture drew a frame in the frame).
+	b.edge = b:CreateTexture(nil, "BACKGROUND")
+	b.edge:SetTexture("Interface\\Buttons\\WHITE8X8")
+	b.edge:SetAllPoints()
+	b.edge:SetVertexColor(0, 0, 0, 0.9)
 	b.icon = b:CreateTexture(nil, "ARTWORK")
-	b.icon:SetPoint("TOPLEFT", 2, -2)
-	b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+	b.icon:SetPoint("TOPLEFT", 1, -1)
+	b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+	b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
 	b.count:SetPoint("BOTTOMRIGHT", -2, 2)
 	b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	return b
+end
+
+-- Green and better get their colour on the border; white, grey and an empty slot stay black.
+local function SetQuality(b, quality)
+	local color = quality and quality >= 2 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+	if color then b.edge:SetVertexColor(color.r, color.g, color.b, 1) else b.edge:SetVertexColor(0, 0, 0, 0.9) end
 end
 
 local pages = {}
@@ -1165,8 +1175,12 @@ RenderMounts = function(page)
 	if #mounts > MOUNT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
 end
 
-local TABS = { { "gear", "GEAR", BuildGear }, { "bags", "BAGS", BuildBags }, { "quests", "QUESTS", BuildQuests },
-	{ "talents", "TALENTS", BuildTalents }, { "mounts", "MOUNTS", BuildMounts }, { "info", "INFO", BuildInfo } }
+local TABS = { { "gear", "GEAR", BuildGear, "Interface\\Icons\\INV_Chest_Chain_05" },
+	{ "bags", "BAGS", BuildBags, "Interface\\Icons\\INV_Misc_Bag_08" },
+	{ "quests", "QUESTS", BuildQuests, "Interface\\GossipFrame\\AvailableQuestIcon" },
+	{ "talents", "TALENTS", BuildTalents, "Interface\\Icons\\INV_Misc_Book_11" },
+	{ "mounts", "MOUNTS", BuildMounts, "Interface\\Icons\\Ability_Mount_RidingHorse" },
+	{ "info", "INFO", BuildInfo, "Interface\\Icons\\INV_Misc_Note_01" } }
 -- The Strategies tab (BuildStrats) is kept out for now: too easy to break a bot with it (decision 12/10).
 -- Put { "strats", "STRATS", BuildStrats } back in TABS to show it.
 
@@ -1193,6 +1207,7 @@ local function RenderGear(page)
 		local texture = unit and GetInventoryItemTexture(unit, slot)
 		b.icon:SetTexture(texture)
 		if texture then b.icon:Show() else b.icon:Hide() end
+		SetQuality(b, texture and GetInventoryItemQuality(unit, slot))
 	end
 	-- The model is set once per bot (setting it again would turn it back to the front).
 	if unit and UnitIsVisible(unit) then
@@ -1226,6 +1241,7 @@ local function RenderBags(page)
 		if item then
 			b.icon:SetTexture((GetItemIcon and GetItemIcon(item.id)) or select(10, GetItemInfo(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 			b.icon:Show()
+			SetQuality(b, select(3, GetItemInfo(item.id)))
 			b.count:SetText(item.count > 1 and item.count or "")
 			b:Show()
 		else
@@ -1278,6 +1294,11 @@ Render = function()
 	for _, def in ipairs(TABS) do
 		local key = def[1]
 		sheet.tabs[key]:SetText(T(def[2]))
+		local text = sheet.tabs[key]:GetFontString()
+		if text then
+			text:ClearAllPoints()
+			text:SetPoint("LEFT", sheet.tabs[key].tabIcon, "RIGHT", 4, 0)
+		end
 		if key == tab then sheet.tabs[key]:LockHighlight() else sheet.tabs[key]:UnlockHighlight() end
 		if key == tab then pages[key]:Show() else pages[key]:Hide() end
 	end
@@ -1345,6 +1366,16 @@ local function Build()
 		b:SetHeight(22)
 		b:SetPoint("TOPLEFT", 16 + (i - 1) * 73, -36)
 		b:SetScript("OnClick", function() tab = def[1]; Load() end)
+		-- A small icon before the name, the name a size smaller to make room.
+		b:SetNormalFontObject(GameFontNormalSmall)
+		b:SetHighlightFontObject(GameFontHighlightSmall)
+		b:SetPushedTextOffset(0, 0)
+		b.tabIcon = b:CreateTexture(nil, "OVERLAY")
+		b.tabIcon:SetWidth(14)
+		b.tabIcon:SetHeight(14)
+		b.tabIcon:SetPoint("LEFT", 6, 0)
+		b.tabIcon:SetTexture(def[4])
+		if def[4]:find("Icons") then b.tabIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 		sheet.tabs[def[1]] = b
 		local page = CreateFrame("Frame", nil, sheet)
 		page:SetPoint("TOPLEFT", 8, -86)
