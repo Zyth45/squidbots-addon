@@ -6,7 +6,7 @@
 --   Q <questId> <can_take|in_log|done|missing_prev|exclusive|level|class_race|reputation|skill|other> <detail> <catchable 0|1>
 --   QR <questId> <taken|caught_up|refused|log_full|bags_full|no_giver> <detail>
 --   T_BEGIN <npcEntry> <npc name>, T <spellId> <copper> <name>, T_END <count> <total copper> <its money>
---   L <spellId> <ok|too_expensive|failed>, L_END <learned> <spent copper>
+--   L <spellId> <ok|too_expensive|failed>, L_END <learned> <spent copper>, T_ERR no_trainer (no trainer found)
 -- The addon sends "HELLO\t1" (at login, when an alt comes, then every 5 min): for 15 min the server sends the
 -- repetitive lines ("Can't take", "Quest Available", trainer lists) as these messages instead of whispers.
 --   TEAM <level> <hp %> <follow|stay|mission|dead|far> <free bag slots> <zoneId>   (on change, at least once a minute)
@@ -44,7 +44,7 @@ local STRINGS = {
 		QR_refused = "%s cannot take %s: %s.", QR_log_full = "%s: quest log full, %s not taken.",
 		QR_bags_full = "%s: bags full, %s not taken.", QR_no_giver = "%s: no quest giver in range for %s, and you do not have it to share.",
 		Q_BLOCKED = "%s cannot take %s: %s.",
-		TRAINER_OF = "%s", TRAIN_NOTHING = "Nothing to learn here", TRAIN_SUM = "%d to learn: %s", TRAIN_HAS = "has %s",
+		TRAINER_OF = "%s", TRAIN_NOTHING = "Nothing to learn here", ERR_no_trainer = "Talk to the trainer first", TRAIN_SUM = "%d to learn: %s", TRAIN_HAS = "has %s",
 		TRAIN_MORE = "+ %d more", LEARN_ALL = "Learn all", TIP_LEARN_ALL = "It learns everything listed, in order, while its money lasts.",
 		TIP_LEARN_ONE = "Click: learn only this one.", TIP_REFRESH_T = "Ask again. The server lists what the trainer you target teaches.",
 		TRAIN_WAIT = "Asking your alts what they can learn here...", POOR = "Not enough money for all of it.",
@@ -88,7 +88,7 @@ local STRINGS = {
 		QR_refused = "%s ne peut pas prendre %s : %s.", QR_log_full = "%s : journal de quêtes plein, %s non prise.",
 		QR_bags_full = "%s : sacs pleins, %s non prise.", QR_no_giver = "%s : pas de donneur à portée pour %s, et vous ne l'avez pas à partager.",
 		Q_BLOCKED = "%s ne peut pas prendre %s : %s.",
-		TRAINER_OF = "%s", TRAIN_NOTHING = "Rien à apprendre ici", TRAIN_SUM = "%d à apprendre : %s", TRAIN_HAS = "a %s",
+		TRAINER_OF = "%s", TRAIN_NOTHING = "Rien à apprendre ici", ERR_no_trainer = "Parle d'abord à l'entraîneur", TRAIN_SUM = "%d à apprendre : %s", TRAIN_HAS = "a %s",
 		TRAIN_MORE = "+ %d autres", LEARN_ALL = "Tout apprendre", TIP_LEARN_ALL = "Il apprend toute la liste, dans l'ordre, tant que son argent suffit.",
 		TIP_LEARN_ONE = "Clic : apprendre seulement celle-ci.", TIP_REFRESH_T = "Redemander. Le serveur liste ce qu'enseigne l'entraîneur que vous ciblez.",
 		TRAIN_WAIT = "Je demande à vos alts ce qu'ils peuvent apprendre ici...", POOR = "Pas assez d'argent pour tout.",
@@ -856,6 +856,9 @@ function A.RefreshTrainer()
 			if not data then
 				card.sum:SetText("|cff9d9d9d" .. T("ASKING") .. "|r")
 				card.learn:Hide()
+			elseif data.err then
+				card.sum:SetText("|cffff9933" .. T("ERR_" .. data.err) .. "|r")
+				card.learn:Hide()
 			elseif data.count == 0 then
 				card.sum:SetText("|cff9d9d9d" .. T("TRAIN_NOTHING") .. "|r  " .. string.format(T("TRAIN_HAS"), Money(data.money)))
 				card.learn:Hide()
@@ -1315,6 +1318,16 @@ function Handle.T_END(name, f)
 	A.train[name] = { list = b.list, count = tonumber(f[2]) or #b.list, total = tonumber(f[3]) or 0, money = tonumber(f[4]) or 0,
 		at = GetTime() }
 	if A.trainerOpen or (GossipFrame and GossipFrame:IsShown()) or (A.trainPanel and A.trainPanel:IsShown()) then A.ShowTrainer() end
+	A.RefreshTrainer()
+end
+
+-- "train" / "learn" with no trainer found: said on its card instead of a list.
+function Handle.T_ERR(name, f)
+	local err = (f[2] and f[2] ~= "") and f[2] or "no_trainer"
+	if T("ERR_" .. err) == "ERR_" .. err then err = "no_trainer" end
+	if A.building then A.building[name] = nil end
+	A.train[name] = { err = err, list = {}, count = 0, total = 0, money = 0, at = GetTime() }
+	if not (A.trainPanel and A.trainPanel:IsShown()) then A.ShowTrainer() end
 	A.RefreshTrainer()
 end
 
