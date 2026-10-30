@@ -132,7 +132,7 @@ end
 local function Whisper(text)
 	if not current then return end
 	hideFrom[current] = GetTime() + QUIET + 1
-	SendChatMessage(text, "WHISPER", nil, current)
+	SquidBotsLite_QuietWhisper(text, current)
 end
 
 -- ---------------------------------------------------------------------------

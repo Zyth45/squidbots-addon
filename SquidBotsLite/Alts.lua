@@ -926,7 +926,7 @@ end
 local PORTRAITS = 9
 
 local function WhisperAll(text)
-	for _, name in ipairs(A.Online()) do SendChatMessage(text, "WHISPER", nil, name) end
+	for _, name in ipairs(A.Online()) do SquidBotsLite_QuietWhisper(text, name) end
 end
 
 function A.AltStatus(name)
@@ -1348,7 +1348,8 @@ function Handle.L(name, f)
 end
 
 function Handle.L_END(name, f)
-	A.Log(string.format(T("L_END"), UI.ClassName(name), tonumber(f[2]) or 0, Money(f[3])), true, 1, 0.82, 0)
+	local learned = tonumber(f[2]) or 0
+	A.Log(string.format(T("L_END"), UI.ClassName(name), learned, Money(f[3])), learned > 0, 1, 0.82, 0)
 end
 
 -- ---------------------------------------------------------------------------

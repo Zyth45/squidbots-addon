@@ -112,7 +112,7 @@ end
 
 local function Whisper(name, text)
 	M.polled[name] = GetTime()
-	SendChatMessage(text, "WHISPER", nil, name)
+	SquidBotsLite_QuietWhisper(text, name)
 end
 
 -- The online alts, from the My alts roster (".playerbots bot list").

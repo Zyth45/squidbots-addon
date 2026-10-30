@@ -417,8 +417,22 @@ local function SendGroup(...)
 	return true
 end
 
+-- Orders the addon whispers to a bot ("s junk", "repair", "mission status"...) stay out of the chat frame: the
+-- player clicked a button, the "To [Alt]: ..." echo only adds noise. Typed whispers are never hidden.
+local quietSent = {}
+function SquidBotsLite_QuietWhisper(text, name)
+	quietSent[string.lower(name) .. "" .. text] = GetTime() + 10
+	SendChatMessage(text, "WHISPER", nil, name)
+end
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message, target)
+	local key = string.lower(target or "") .. "" .. (message or "")
+	local until_ = quietSent[key]
+	if until_ and GetTime() <= until_ then return true end
+	quietSent[key] = nil
+end)
+
 local function Whisper(name, message)
-	SendChatMessage(message, "WHISPER", nil, name)
+	SquidBotsLite_QuietWhisper(message, name)
 end
 
 local function SetRoleIcon(texture, role)
