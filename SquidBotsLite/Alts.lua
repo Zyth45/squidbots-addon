@@ -211,10 +211,11 @@ end
 local function Money(copper)
 	copper = tonumber(copper) or 0
 	local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+	-- Short on purpose (one line on a card): copper only below 1 gold, silver only below 100 gold.
 	local parts = {}
-	if g > 0 then table.insert(parts, g .. "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t") end
-	if s > 0 then table.insert(parts, s .. "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t") end
-	if c > 0 or #parts == 0 then table.insert(parts, c .. "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t") end
+	if g > 0 then table.insert(parts, g .. "|TInterface\\MoneyFrame\\UI-GoldIcon:10:10:1:0|t") end
+	if s > 0 and g < 100 then table.insert(parts, s .. "|TInterface\\MoneyFrame\\UI-SilverIcon:10:10:1:0|t") end
+	if (c > 0 and g == 0) or #parts == 0 then table.insert(parts, c .. "|TInterface\\MoneyFrame\\UI-CopperIcon:10:10:1:0|t") end
 	return table.concat(parts, " ")
 end
 
