@@ -1,6 +1,8 @@
 -- SquidBots Lite, missions: send a logged-in alt gathering on its own (mining or herbalism) while you play,
 -- follow it, call it back; what it gathers comes by mail. Everything goes through what a player can whisper to
 -- their own alt: "mission gather [minutes] [mining|herbalism]", "mission status", "mission stop" (CoA Bots 2.8.2).
+-- An alt in High Risk refuses "Mission refused: I am in High Risk (add "risk" to accept)."; "mission gather <minutes>
+-- [skill] risk" sends it anyway, after a red warning here (CoA Bots 2.8.3). MISSION;... gains an 8th field, risk 0|1.
 -- "mission status" answers "MISSION;<TRAVEL|WORK|DELIVER>;<zone>;<minutes left>;<items>;<mining|herbalism>;<deaths>"
 -- or "MISSION;NONE"; those lines and the polls stay out of the chat.
 -- Watching an alt out (the camera on it, same continent): "mission watch" / "mission unwatch"; it answers
@@ -35,6 +37,13 @@ local STRINGS = {
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
 		TIP_FULL = "Three alts are already out: recall one or wait for it.", TIP_REFRESH = "Ask your alts where they are now.",
+		RISK = "High Risk", RISK_ASK = "%s is in High Risk.
+
+|cffff3333Your alt can lose its loot if it dies.|r
+
+Send it gathering anyway (%s, %d min)?",
+		RISK_SEND = "Send in High Risk", RISK_LINE = "In High Risk: you will be asked to confirm.",
+		RECALL_ALL_ASK = "Call back the %d alts on a mission now? What they gathered so far comes by mail.",
 	},
 	fr = {
 		TITLE = "Missions", REFRESH = "Actualiser", SEND = "Envoyer", RECALL = "Rappeler", NONE = "Libre",
@@ -62,6 +71,13 @@ local STRINGS = {
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
 		TIP_FULL = "Trois alts sont déjà partis : rappelez-en un ou attendez son retour.", TIP_REFRESH = "Redemander à vos alts où ils en sont.",
+		RISK = "High Risk", RISK_ASK = "%s est en High Risk.
+
+|cffff3333Votre alt peut perdre son butin s'il meurt.|r
+
+L'envoyer récolter quand même (%s, %d min) ?",
+		RISK_SEND = "Envoyer en High Risk", RISK_LINE = "En High Risk : une confirmation vous sera demandée.",
+		RECALL_ALL_ASK = "Rappeler maintenant les %d alts en mission ? Ce qu'ils ont déjà récolté arrive par courrier.",
 	},
 }
 local function T(key)
@@ -84,7 +100,11 @@ local ORDERS = {
 }
 
 -- done: the alts back from a mission this session, with how many items they mailed.
-local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {} }
+-- risk: the alts seen in High Risk (its aura in the group, the 8th field of MISSION;..., or a refusal); tried: the
+-- last mission asked of each, offered again in High Risk after a refusal.
+local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {}, risk = {}, tried = {} }
+-- CoA's High Risk ruleset aura (mod-playerbots CoaMissionAction.cpp, MISSION_HIGH_RISK_AURA).
+local HIGH_RISK_AURA = 1004019
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -126,7 +146,27 @@ function M.Count()
 	return n
 end
 
--- "MISSION;WORK;Elwynn Forest;42;17;mining;0" or "MISSION;NONE".
+-- In the group, its aura tells; else what the alt said last.
+function M.InHighRisk(name)
+	local units = {}
+	for i = 1, 4 do table.insert(units, "party" .. i) end
+	for i = 1, GetNumRaidMembers() do table.insert(units, "raid" .. i) end
+	for _, unit in ipairs(units) do
+		if UnitName(unit) == name then
+			for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
+				for i = 1, 40 do
+					local aura, _, _, _, _, _, _, _, _, _, spell = UnitAura(unit, i, filter)
+					if not aura then break end
+					if spell == HIGH_RISK_AURA then return true end
+				end
+			end
+			return M.risk[name] or false
+		end
+	end
+	return M.risk[name] or false
+end
+
+-- "MISSION;WORK;Elwynn Forest;42;17;mining;0;1" (8th field from 2.8.3: risk 0|1) or "MISSION;NONE".
 function M.OnStatus(name, message)
 	local parts = {}
 	for field in (message .. ";"):gmatch("([^;]*);") do table.insert(parts, field) end
@@ -137,6 +177,7 @@ function M.OnStatus(name, message)
 	else
 		M.status[name] = { state = parts[2], zone = parts[3] or "?", minutes = tonumber(parts[4] or "") or 0,
 			items = tonumber(parts[5] or "") or 0, skill = parts[6], deaths = tonumber(parts[7] or "") or 0 }
+		if parts[8] == "1" then M.risk[name] = true end
 		if parts[6] == "mining" or parts[6] == "herbalism" then
 			SquidBotsLiteDB.missionSkill = SquidBotsLiteDB.missionSkill or {}
 			SquidBotsLiteDB.missionSkill[name] = parts[6]
@@ -181,6 +222,11 @@ function M.OnLine(name, message)
 		local rest = message:match("^Mission done: (.*)$") or ""
 		if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("DONE"), name, rest), 1, 0.82, 0) end
 		M.RefreshPanel()
+	elseif message:find("^Mission refused: I am in High Risk") then
+		-- Asked without "risk": the same mission again, once the player has read the warning.
+		M.risk[name] = true
+		local tried = M.tried[name]
+		if tried then M.ConfirmRisk(name, tried.minutes, tried.skill) end
 	end
 end
 
@@ -259,9 +305,10 @@ function M.OnWatch(name, message)
 	end
 end
 
-function M.Send(name, minutes, skill)
+function M.Send(name, minutes, skill, risk)
 	M.done[name] = nil
-	local text = "mission gather " .. minutes .. (skill and (" " .. skill) or "")
+	M.tried[name] = { minutes = minutes, skill = skill }
+	local text = "mission gather " .. minutes .. (skill and (" " .. skill) or "") .. (risk and " risk" or "")
 	SquidBotsLiteDB.missionTotal = SquidBotsLiteDB.missionTotal or {}
 	SquidBotsLiteDB.missionTotal[name] = minutes
 	SquidBotsLiteDB.missionLast = SquidBotsLiteDB.missionLast or {}
@@ -317,12 +364,42 @@ function M.Recall(name)
 	if dialog then dialog.data = name end
 end
 
+-- High Risk: a red warning first; Accept sends "mission gather <minutes> [skill] risk".
+function M.ConfirmRisk(name, minutes, skill)
+	StaticPopupDialogs.SQUIDBOTSLITE_MISSION_RISK = {
+		text = "%s", button1 = T("RISK_SEND"), button2 = CANCEL, timeout = 0, whileDead = true, hideOnEscape = true,
+		showAlert = true,
+		OnAccept = function(_, data) M.Send(data.name, data.minutes, data.skill, true) end,
+	}
+	local what = skill and T(skill == "mining" and "MINING" or "HERBALISM") or T("AUTO")
+	local dialog = StaticPopup_Show("SQUIDBOTSLITE_MISSION_RISK", string.format(T("RISK_ASK"), name, what, minutes))
+	if dialog then dialog.data = { name = name, minutes = minutes, skill = skill } end
+end
+
+-- Sent as it is, or through the warning when the alt is in High Risk.
+function M.Go(name, minutes, skill)
+	if M.InHighRisk(name) then M.ConfirmRisk(name, minutes, skill) else M.Send(name, minutes, skill) end
+end
+
+-- Team bar and key binding: every alt out, after one question.
+function SquidBotsLite_RecallAll()
+	local out = {}
+	for name in pairs(M.status) do if M.OnMission(name) then table.insert(out, name) end end
+	if #out == 0 then return end
+	StaticPopupDialogs.SQUIDBOTSLITE_MISSION_RECALL_ALL = {
+		text = T("RECALL_ALL_ASK"), button1 = YES, button2 = NO, timeout = 0, whileDead = true, hideOnEscape = true,
+		OnAccept = function(_, data) for _, name in ipairs(data) do Whisper(name, "mission stop") end end,
+	}
+	local dialog = StaticPopup_Show("SQUIDBOTSLITE_MISSION_RECALL_ALL", #out)
+	if dialog then dialog.data = out end
+end
+
 function M.SendMenu(name)
 	local function Durations(skill)
 		local list = {}
 		for _, minutes in ipairs(DURATIONS) do
 			table.insert(list, { text = string.format(T("MIN"), minutes), notCheckable = true,
-				func = function() CloseDropDownMenus(); M.Send(name, minutes, skill) end })
+				func = function() CloseDropDownMenus(); M.Go(name, minutes, skill) end })
 		end
 		return list
 	end
@@ -330,11 +407,14 @@ function M.SendMenu(name)
 	local items = {
 		{ text = name, isTitle = true, notCheckable = true },
 	}
+	if M.InHighRisk(name) then
+		table.insert(items, { text = "|cffff3333" .. T("RISK") .. "|r - " .. T("RISK_LINE"), notCheckable = true, disabled = true })
+	end
 	local last = SquidBotsLiteDB.missionLast and SquidBotsLiteDB.missionLast[name]
 	if last then
 		local skill = last.skill and T(last.skill == "mining" and "MINING" or "HERBALISM") or T("AUTO")
 		table.insert(items, { text = "|cff66ff66" .. string.format(T("AGAIN"), skill, last.minutes) .. "|r", notCheckable = true,
-			func = function() CloseDropDownMenus(); M.Send(name, last.minutes, last.skill) end })
+			func = function() CloseDropDownMenus(); M.Go(name, last.minutes, last.skill) end })
 	end
 	for _, item in ipairs({
 		{ text = T("AUTO") .. (known and (" (" .. T("SKILL_" .. known) .. ")") or ""), hasArrow = true, notCheckable = true, menuList = Durations(nil) },

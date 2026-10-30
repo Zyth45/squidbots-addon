@@ -7,14 +7,15 @@ SquidBotsLiteDB = SquidBotsLiteDB or {}
 local STRINGS = {
 	en = {
 		FOLLOW = "Follow", STAY = "Stay", ATTACK = "Target", PASSIVE = "Passive", ACTIVE = "Active", DUNGEON = "Dungeon", ALTS_BAR = "Alts", RECRUIT = "Bots",
-		TIP_FOLLOW = "Bots follow you.", TIP_STAY = "Bots stay where they are.", TIP_ATTACK = "Bots attack your target.",
-		TIP_ACTIVE = "Bots fight normally. Click to make them passive: no fights, and the tank stops pulling on its own.",
+		TIP_FOLLOW = "Bots follow you.", TIP_STAY = "Bots stay where they are.", TIP_ATTACK = "Target: your bots attack your target. Only the tank first: the \"Tank pulls my target\" key binding, or right click > Orders by role.",
+		TIP_ACTIVE = "Active: bots fight normally. Click to make them passive: no fights, and the tank stops pulling on its own.",
 		TIP_PASSIVE = "Bots are passive: no fights, no auto pull. Click, or give any order, to wake them.",
-		TOGGLE_PASSIVE = "Passive / Active",
+		TOGGLE_PASSIVE = "Passive / Active", BIND_TANKPULL = "Tank pulls my target", BIND_RECALL = "Recall all alts from missions",
+		KEY = "Shortcut: %s", NO_KEY = "Shortcut: none yet (Esc > Key Bindings > SquidBots Lite).",
 		PULL_ON = "Auto pull", PULL_OFF = "No pull", TOGGLE_PULL = "Tank auto pull on / off",
 		RAIDFRAMES_ON = "Role icons and bot menus on the raid-style frames: on.",
 		RAIDFRAMES_OFF = "Role icons and bot menus on the raid-style frames: off.",
-		TIP_PULL_ON = "The tank pulls on its own. Click so it waits: it only fights what you or the group attack.",
+		TIP_PULL_ON = "Auto pull: the tank engages nearby monsters on its own. Click so it waits: it only fights what you or the group attack.",
 		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
 		TIP_PULL_DC = "Dungeon clear is running: it chooses the pulls (pull mode in its panel). Auto pull comes back when the clear stops.",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
@@ -109,14 +110,15 @@ local STRINGS = {
 	},
 	fr = {
 		FOLLOW = "Suivre", STAY = "Rester", ATTACK = "Cible", PASSIVE = "Passif", ACTIVE = "Actif", DUNGEON = "Donjon", ALTS_BAR = "Alts", RECRUIT = "Bots",
-		TIP_FOLLOW = "Les bots vous suivent.", TIP_STAY = "Les bots restent sur place.", TIP_ATTACK = "Les bots attaquent votre cible.",
-		TIP_ACTIVE = "Les bots combattent normalement. Cliquez pour les rendre passifs : plus de combat, et le tank arrête de tirer seul.",
+		TIP_FOLLOW = "Les bots vous suivent.", TIP_STAY = "Les bots restent sur place.", TIP_ATTACK = "Cible : vos bots attaquent votre cible. Seul le tank d'abord : le raccourci « Le tank pull ma cible », ou clic droit > Ordres par rôle.",
+		TIP_ACTIVE = "Actif : les bots combattent normalement. Cliquez pour les rendre passifs : plus de combat, et le tank arrête de tirer seul.",
 		TIP_PASSIVE = "Les bots sont passifs : pas de combat, pas de pull auto. Cliquez, ou donnez n'importe quel ordre, pour les réveiller.",
-		TOGGLE_PASSIVE = "Passif / Actif",
+		TOGGLE_PASSIVE = "Passif / Actif", BIND_TANKPULL = "Le tank pull ma cible", BIND_RECALL = "Rappeler tous les alts en mission",
+		KEY = "Raccourci : %s", NO_KEY = "Raccourci : aucun pour l'instant (Échap > Raccourcis > SquidBots Lite).",
 		PULL_ON = "Pull auto", PULL_OFF = "Pas de pull", TOGGLE_PULL = "Pull auto du tank oui / non",
 		RAIDFRAMES_ON = "Icônes de rôle et menus des bots sur les cadres de style raid : activés.",
 		RAIDFRAMES_OFF = "Icônes de rôle et menus des bots sur les cadres de style raid : désactivés.",
-		TIP_PULL_ON = "Le tank tire tout seul. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
+		TIP_PULL_ON = "Pull auto : le tank engage tout seul les monstres proches. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
 		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
 		TIP_PULL_DC = "Dungeon clear est en cours : c'est lui qui choisit les pulls (mode de pull dans son panneau). Le pull auto revient quand le clear s'arrête.",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
@@ -399,6 +401,8 @@ local function SetLanguage(lang)
 		_G["BINDING_NAME_SQUIDBOTSLITE_" .. string.upper(binding[1])] = L[binding[2]]
 	end
 	BINDING_NAME_SQUIDBOTSLITE_SPECS = L.SPECS
+	BINDING_NAME_SQUIDBOTSLITE_TANKPULL = L.BIND_TANKPULL
+	BINDING_NAME_SQUIDBOTSLITE_RECALLALL = L.BIND_RECALL
 end
 
 local function SendGroup(...)
@@ -641,6 +645,11 @@ local function SendOrder(...)
 		Highlight()
 	end
 	return SendGroup(...)
+end
+
+-- Key binding: only the tank attacks the player's target (the "Orders by role" menu's first line).
+function SquidBotsLite_TankPull()
+	SendOrder("@tank attack")
 end
 
 local function ProfileMenu()
@@ -1492,6 +1501,15 @@ local function BarButton(key, icon, label, tip, onClick)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
 		GameTooltip:SetText(L[self.label])
 		GameTooltip:AddLine(L[self.tip], 1, 1, 1, true)
+		-- Its key binding, when it has one in the game's Key Bindings window.
+		if key == "follow" or key == "stay" or key == "attack" or key == "pull" or key == "summon" then
+			local bound = GetBindingKey("SQUIDBOTSLITE_" .. string.upper(key))
+			if bound then
+				GameTooltip:AddLine(string.format(L.KEY, bound), 0.4, 0.8, 1)
+			else
+				GameTooltip:AddLine(L.NO_KEY, 0.4, 0.8, 1, true)
+			end
+		end
 		GameTooltip:AddLine(L.TIP_PROFILES, 0.6, 0.6, 0.6, true)
 		GameTooltip:AddLine(L.TIP_MOVE, 0.6, 0.6, 0.6, true)
 		GameTooltip:Show()
@@ -2298,13 +2316,15 @@ local function BuildAlts()
 		-- Missions.lua: send a logged-in alt gathering on its own.
 		{ "missions", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end } }) do
 		local button = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
-		button:SetWidth(92)
+		button:SetWidth(84)
 		button:SetHeight(22)
 		button:SetPoint("TOPLEFT", x, -36)
 		button:SetScript("OnClick", def[2])
 		altsFrame[def[1]] = button
-		x = x + 96
+		x = x + 88
 	end
+	-- Alts.lua: the alts' quests and trainers panel and their log, two icons after the menus.
+	if SquidBotsLite_AltsButtons then SquidBotsLite_AltsButtons(altsFrame, x) end
 	altsFrame.refresh = ui.IconButton(altsFrame, 22, "Interface\\Buttons\\UI-RefreshButton",
 		function() return L.ALTS_REFRESH, L.TIP_ALTS_REFRESH end, function() AskRoster() end)
 	altsFrame.refresh.icon:SetTexCoord(0, 1, 0, 1)
