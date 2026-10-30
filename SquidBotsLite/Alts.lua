@@ -57,9 +57,9 @@ local STRINGS = {
 		HELLO_ON = "Server: quiet mode on%s.", HELLO_CATCH = ", chains caught up automatically",
 		HELLO_NONE = "The server has not answered the handshake: it needs CoA Bots 2.8.3.", HELLO_OFF = "Handshake off: chat mode.",
 		CLEAR = "Clear",
-		T_SUMMON = "Regroup", T_FOLLOW = "Recall all", T_LEARN = "Learn all", T_REPAIR = "Repair, sell grey",
+		T_SUMMON = "Regroup", T_FOLLOW = "Recall all", T_LEARN = "Learn all", T_REPAIR = "Repair, sell junk",
 		TIP_T_SUMMON = "Each logged-in alt teleports next to you.", TIP_T_FOLLOW = "Calls back every alt out on a mission (after a question).",
-		TIP_T_LEARN = "At a trainer: each alt learns all it can here.", TIP_T_REPAIR = "At a vendor: each alt repairs and sells its grey items.",
+		TIP_T_LEARN = "At a trainer: each alt learns all it can here.", TIP_T_REPAIR = "At a vendor: each alt repairs and sells its junk (grey items, gear it cannot use).",
 		ST_follow = "Follows", ST_stay = "Stays", ST_far = "Far", ST_bags = "Bags full", ST_mission = "Mission %d min", ST_quest = "Quest missing", ST_dead = "Dead", ST_away = "Away", BADGE_MISSION = "On a mission",
 		TEAM_EMPTY = "No alt logged in", TIP_TEAM_DRAG = "Drag to move. Click a portrait: its bot sheet.",
 	},
@@ -101,9 +101,9 @@ local STRINGS = {
 		HELLO_ON = "Serveur : mode silencieux actif%s.", HELLO_CATCH = ", chaînes rattrapées automatiquement",
 		HELLO_NONE = "Le serveur n'a pas répondu à la poignée de main : il faut CoA Bots 2.8.3.", HELLO_OFF = "Poignée de main coupée : mode chat.",
 		CLEAR = "Effacer",
-		T_SUMMON = "Regrouper", T_FOLLOW = "Rappeler tous", T_LEARN = "Tout apprendre", T_REPAIR = "Réparer, vendre gris",
+		T_SUMMON = "Regrouper", T_FOLLOW = "Rappeler tous", T_LEARN = "Tout apprendre", T_REPAIR = "Réparer, vendre la camelote",
 		TIP_T_SUMMON = "Chaque alt connecté se téléporte près de vous.", TIP_T_FOLLOW = "Rappelle tous les alts partis en mission (après une question).",
-		TIP_T_LEARN = "Chez un entraîneur : chaque alt apprend tout ce qu'il peut ici.", TIP_T_REPAIR = "Chez un marchand : chaque alt répare et vend ses objets gris.",
+		TIP_T_LEARN = "Chez un entraîneur : chaque alt apprend tout ce qu'il peut ici.", TIP_T_REPAIR = "Chez un marchand : chaque alt répare et vend sa camelote (objets gris, équipement qu'il ne peut pas porter).",
 		ST_follow = "Suit", ST_stay = "Reste", ST_far = "Loin", ST_bags = "Sacs pleins", ST_mission = "Mission %d min", ST_quest = "Quête manquante", ST_dead = "Mort", ST_away = "Absent", BADGE_MISSION = "En mission",
 		TEAM_EMPTY = "Aucun alt connecté", TIP_TEAM_DRAG = "Glisser pour déplacer. Clic sur un portrait : sa fiche de bot.",
 	},
@@ -1045,7 +1045,7 @@ function A.BuildTeam()
 		end },
 		{ "Interface\\Icons\\Trade_BlackSmithing", "T_REPAIR", "TIP_T_REPAIR", function()
 			WhisperAll("repair")
-			WhisperAll("s gray")
+			WhisperAll("s junk")
 		end },
 	}) do
 		local button = UI.IconButton(f, 24, def[1], function() return T(def[2]), T(def[3]) end, def[4])
