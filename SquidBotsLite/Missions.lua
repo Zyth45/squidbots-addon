@@ -37,11 +37,7 @@ local STRINGS = {
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
 		TIP_FULL = "Three alts are already out: recall one or wait for it.", TIP_REFRESH = "Ask your alts where they are now.",
-		RISK = "High Risk", RISK_ASK = "%s is in High Risk.
-
-|cffff3333Your alt can lose its loot if it dies.|r
-
-Send it gathering anyway (%s, %d min)?",
+		RISK = "High Risk", RISK_ASK = "%s is in High Risk.\n\n|cffff3333Your alt can lose its loot if it dies.|r\n\nSend it gathering anyway (%s, %d min)?",
 		RISK_SEND = "Send in High Risk", RISK_LINE = "In High Risk: you will be asked to confirm.",
 		RECALL_ALL_ASK = "Call back the %d alts on a mission now? What they gathered so far comes by mail.",
 	},
@@ -71,11 +67,7 @@ Send it gathering anyway (%s, %d min)?",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
 		TIP_FULL = "Trois alts sont déjà partis : rappelez-en un ou attendez son retour.", TIP_REFRESH = "Redemander à vos alts où ils en sont.",
-		RISK = "High Risk", RISK_ASK = "%s est en High Risk.
-
-|cffff3333Votre alt peut perdre son butin s'il meurt.|r
-
-L'envoyer récolter quand même (%s, %d min) ?",
+		RISK = "High Risk", RISK_ASK = "%s est en High Risk.\n\n|cffff3333Votre alt peut perdre son butin s'il meurt.|r\n\nL'envoyer récolter quand même (%s, %d min) ?",
 		RISK_SEND = "Envoyer en High Risk", RISK_LINE = "En High Risk : une confirmation vous sera demandée.",
 		RECALL_ALL_ASK = "Rappeler maintenant les %d alts en mission ? Ce qu'ils ont déjà récolté arrive par courrier.",
 	},
