@@ -464,7 +464,10 @@ function D.BuildCard(i)
 	end
 	c:RegisterForClicks("LeftButtonUp")
 	c:SetScript("OnClick", function(self)
-		if self.alt and self.online and SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(self.alt) end
+		if self.alt and self.online and SquidBotsLite_OpenSheet then
+			D.frame:Hide()
+			SquidBotsLite_OpenSheet(self.alt)
+		end
 	end)
 	c:SetScript("OnMouseWheel", function(_, delta) D.Scroll(delta) end)
 	c:EnableMouseWheel(true)
@@ -775,6 +778,8 @@ function SquidBotsLite_ShowDashboard()
 	A, M = A or SquidBotsLite_Alts, M or SquidBotsLite_Missions
 	if not D.frame then D.Build() end
 	if D.frame:IsShown() then D.frame:Hide() return end
+	-- The Alts window shares the DIALOG strata and its rows sit at higher frame levels: it would cover the cards.
+	if SquidBotsLiteAlts and SquidBotsLiteAlts:IsShown() then SquidBotsLiteAlts:Hide() end
 	D.frame:Show()
 	D.frame:Raise()
 	if SquidBotsLite_AskRoster then SquidBotsLite_AskRoster() end
