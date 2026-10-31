@@ -553,6 +553,8 @@ function D.Build()
 	f.empty:SetWidth(width - 60)
 	f.more = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.more:SetPoint("BOTTOMRIGHT", -18, 10)
+	-- The cards take D.frame as their parent: set it before they are built, or they hang off nothing.
+	D.frame = f
 	for i = 1, COLS * ROWS do
 		local c = D.BuildCard(i)
 		c:SetPoint("TOPLEFT", f, "TOPLEFT", 16 + ((i - 1) % COLS) * (CARD_W + GAP), -TOP - math.floor((i - 1) / COLS) * (CARD_H + GAP))
@@ -684,7 +686,7 @@ function D.FillCard(c, name, online)
 		end
 	end
 	if #profs == 0 then
-		c.empty:SetText(e.at and "" or T("NO_DATA"))
+		c.empty:SetText("")
 		c.empty:Show()
 	else
 		c.empty:Hide()
