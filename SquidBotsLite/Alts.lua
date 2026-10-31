@@ -1283,7 +1283,15 @@ end
 
 function A.SettingsMenu()
 	local ench = A.ench or {}
-	if not A.ench then AskEnchanter("enchanter") end
+	-- Each alt tells its own Enchanting in its ENCH answer: ask every one not heard yet, not only the first.
+	local waiting = false
+	for _, name in ipairs(A.Online()) do
+		if A.enchSkill[name] == nil then
+			Send(name, "enchanter")
+			waiting = true
+		end
+	end
+	if waiting then A.ench = nil end
 	local items = { { text = T("SETTINGS"), isTitle = true, notCheckable = true } }
 	if ench.enabled == false then
 		table.insert(items, { text = "|cff9d9d9d" .. T("ENCH_OFF") .. "|r", notCheckable = true, disabled = true })
