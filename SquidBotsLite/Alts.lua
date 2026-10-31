@@ -11,9 +11,11 @@
 -- repetitive lines ("Can't take", "Quest Available", trainer lists) as these messages instead of whispers.
 --   TEAM <level> <hp %> <follow|stay|mission|dead|far> <free bag slots> <zoneId>   (on change, at least once a minute)
 --   OBJ <questId> <incomplete|complete|failed|done|none> <current>/<needed>,...   (each quest of the player's log)
---   ENCH <enchanter|-> <mail|bank> <this alt's Enchanting> <AltDisenchant 0|1>   (CoA Bots 2.8.4, after HELLO and each change)
+--   ENCH <enchanter|-> <mail|bank> <this alt's Enchanting> <AltDisenchant 0|1> <limits>   (CoA Bots 2.8.4, after HELLO
+--   and each change; limits: 1 alts' greens, 2 guild bank greens, 4 blue bind on equip, 8 even what an alt could wear)
 -- Commands: "quest <id>", "take <id>", "catchup <id>", "train", "learn all", "learn <spellId>",
--- "enchanter [set <name>|clear|mode mail|mode bank]" (2.8.4, release/v2.8.4/CONTRAT-ALTS-2.8.4.md).
+-- "enchanter [set <name>|clear|mode mail|mode bank|limit <altgreens|bankgreens|blues|wearable> on|off]"
+-- (2.8.4, release/v2.8.4/CONTRAT-ALTS-2.8.4.md).
 -- In quiet mode the alts no longer take a quest the player accepts: they send their Q and wait for "take".
 
 local PREFIX, VERSION = "SQBA", 1
@@ -71,6 +73,13 @@ local STRINGS = {
 		TIP_MODE_MAIL = "Your alts mail it their unused greens; it disenchants them and mails you the dusts, or puts them in the guild bank near a vault.",
 		TIP_MODE_BANK = "Your alts put their unused greens in the guild bank; near the vault it takes them out, disenchants them and puts the dusts back. Their ranks need the tab rights.",
 		ENCH_OFF = "Turned off on this server", ENCH_LINE = "Disenchanter of the team: %s", ENCH_WAIT = "Asking your alts...",
+		LIMITS = "What it may disenchant", LIMIT_altgreens = "Greens sent by my alts", LIMIT_bankgreens = "Greens from the guild bank",
+		LIMIT_blues = "Blue bind on equip (alts and bank)", LIMIT_wearable = "Gear an alt of the team could wear", LIMIT_EPICS = "Epics: never",
+		TIP_LIMIT_altgreens = "The green gear your alts have no use for, mailed to it or put in the bank, and its own.",
+		TIP_LIMIT_bankgreens = "Green gear it takes out of the guild bank tab (bank mode). Anything of that kind in the tab, a guildmate's too.",
+		TIP_LIMIT_blues = "Blue gear that binds when equipped, from your alts and the bank.",
+		TIP_LIMIT_wearable = "Off: an item an alt of the team logged in could wear is kept. On: disenchanted too.",
+		TIP_LIMIT_BANK = "The guild bank mode works only with greens or blues from the bank allowed.",
 	},
 	fr = {
 		QUESTS = "Prendre pour l'équipe", TRAINER = "Entraîneur", LOG = "Journal des alts", TEAM = "Équipe",
@@ -122,6 +131,13 @@ local STRINGS = {
 		TIP_MODE_MAIL = "Vos alts lui postent leurs verts inutiles ; il les désenchante et vous poste les poussières, ou les met en banque de guilde près d'un coffre.",
 		TIP_MODE_BANK = "Vos alts déposent leurs verts inutiles en banque de guilde ; près du coffre il les retire, les désenchante et redépose les poussières. Leurs rangs ont besoin des droits de l'onglet.",
 		ENCH_OFF = "Désactivé sur ce serveur", ENCH_LINE = "Désenchanteur de l'équipe : %s", ENCH_WAIT = "Je demande à vos alts...",
+		LIMITS = "Ce qu'il peut désenchanter", LIMIT_altgreens = "Verts envoyés par mes alts", LIMIT_bankgreens = "Verts de la banque de guilde",
+		LIMIT_blues = "Bleus liés quand équipés (alts et banque)", LIMIT_wearable = "Objets qu'un alt de l'équipe pourrait porter", LIMIT_EPICS = "Épiques : jamais",
+		TIP_LIMIT_altgreens = "L'équipement vert dont vos alts n'ont pas l'usage, posté ou déposé en banque, et le sien.",
+		TIP_LIMIT_bankgreens = "L'équipement vert qu'il retire de l'onglet de la banque de guilde (mode banque). Tout objet de ce genre dans l'onglet, celui d'un membre de la guilde aussi.",
+		TIP_LIMIT_blues = "L'équipement bleu lié quand équipé, de vos alts et de la banque.",
+		TIP_LIMIT_wearable = "Désactivé : un objet qu'un alt connecté de l'équipe pourrait porter est gardé. Activé : désenchanté aussi.",
+		TIP_LIMIT_BANK = "Le mode banque de guilde ne marche qu'avec les verts ou les bleus de la banque autorisés.",
 	},
 }
 local function T(key)
@@ -1275,8 +1291,20 @@ function A.SettingsMenu()
 	table.insert(items, { text = T("ENCH_MODE"), isTitle = true, notCheckable = true })
 	table.insert(items, { text = T("MODE_MAIL"), checked = ench.mode ~= "bank", tooltipTitle = T("MODE_MAIL"), tooltipText = T("TIP_MODE_MAIL"),
 		tooltipOnButton = true, func = function() AskEnchanter("enchanter mode mail") end })
-	table.insert(items, { text = T("MODE_BANK"), checked = ench.mode == "bank", tooltipTitle = T("MODE_BANK"), tooltipText = T("TIP_MODE_BANK"),
-		tooltipOnButton = true, func = function() AskEnchanter("enchanter mode bank") end })
+	table.insert(items, { text = T("MODE_BANK"), checked = ench.mode == "bank", tooltipTitle = T("MODE_BANK"),
+		tooltipText = T("TIP_MODE_BANK") .. "\n" .. T("TIP_LIMIT_BANK"), tooltipOnButton = true,
+		func = function() AskEnchanter("enchanter mode bank") end })
+	-- The limits: each one a box, switched on the server; epics never.
+	local limits = ench.limits or 1
+	table.insert(items, { text = T("LIMITS"), isTitle = true, notCheckable = true })
+	for _, def in ipairs({ { "altgreens", 1 }, { "bankgreens", 2 }, { "blues", 4 }, { "wearable", 8 } }) do
+		local key, bit = def[1], def[2]
+		local on = math.floor(limits / bit) % 2 == 1
+		table.insert(items, { text = T("LIMIT_" .. key), checked = on, isNotRadio = true,
+			tooltipTitle = T("LIMIT_" .. key), tooltipText = T("TIP_LIMIT_" .. key), tooltipOnButton = true,
+			func = function() AskEnchanter("enchanter limit " .. key .. (on and " off" or " on")) end })
+	end
+	table.insert(items, { text = "|cff9d9d9d" .. T("LIMIT_EPICS") .. "|r", notCheckable = true, disabled = true })
 	A.menu = A.menu or CreateFrame("Frame", "SquidBotsLiteTeamSettings", UIParent, "UIDropDownMenuTemplate")
 	EasyMenu(items, A.menu, "cursor", 0, 0, "MENU")
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
@@ -1294,7 +1322,7 @@ end
 
 function Handle.ENCH(name, f)
 	A.ench = { name = (f[2] and f[2] ~= "" and f[2] ~= "-") and f[2] or nil, mode = f[3] == "bank" and "bank" or "mail",
-		enabled = f[5] ~= "0", at = GetTime() }
+		enabled = f[5] ~= "0", limits = tonumber(f[6] or "") or 1, at = GetTime() }
 	A.enchSkill[name] = tonumber(f[4] or "") or 0
 	A.RefreshTeam()
 end
