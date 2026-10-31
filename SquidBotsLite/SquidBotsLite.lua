@@ -2308,7 +2308,7 @@ end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
-	altsFrame:SetWidth(500)
+	altsFrame:SetWidth(548)
 	altsFrame:SetHeight(ALT_TOP + ALT_ROWS * ALT_ROW_H + 44)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
@@ -2356,7 +2356,7 @@ local function BuildAlts()
 	altsFrame.status:SetJustifyH("LEFT")
 	for i = 1, ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
-		row:SetWidth(444)
+		row:SetWidth(492)
 		row:SetHeight(ALT_ROW_H - 4)
 		row:SetPoint("TOPLEFT", 16, -ALT_TOP - (i - 1) * ALT_ROW_H)
 		-- Its portrait or class icon, with the friends list's dot: green logged in, grey offline.

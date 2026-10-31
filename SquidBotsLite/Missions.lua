@@ -104,7 +104,7 @@ end
 
 local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
-local ROWS, ROW_H, ROWS_TOP = 6, 62, 74
+local ROWS, ROW_H, ROWS_TOP = 6, 70, 74
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
 local DURATIONS = { 30, 60, 120 }
@@ -736,7 +736,7 @@ end
 function M.BuildRow(f, i)
 	local row = CreateFrame("Frame", nil, f)
 	row:SetWidth(408)
-	row:SetHeight(ROW_H - 4)
+	row:SetHeight(ROW_H - 8)
 	row:SetPoint("TOPLEFT", 16, -ROWS_TOP - (i - 1) * ROW_H)
 	UI.Card(row)
 	-- Its portrait or class icon, its gathering skill in the corner.
@@ -745,7 +745,7 @@ function M.BuildRow(f, i)
 	row.skill = Icon(row, 16, "OVERLAY")
 	row.skill:SetPoint("BOTTOMRIGHT", row.icon, "BOTTOMRIGHT", 4, -4)
 	row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	row.name:SetPoint("TOPLEFT", 56, -7)
+	row.name:SetPoint("TOPLEFT", 56, -8)
 	row.name:SetJustifyH("LEFT")
 	-- The state, as a small coloured pill after the name: free, on a mission, done.
 	row.badge = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -756,7 +756,7 @@ function M.BuildRow(f, i)
 	row.pill:SetPoint("BOTTOMRIGHT", row.badge, "BOTTOMRIGHT", 5, -2)
 	-- The phase: its icon and where.
 	row.phase = Icon(row, 14)
-	row.phase:SetPoint("TOPLEFT", 56, -25)
+	row.phase:SetPoint("TOPLEFT", 56, -27)
 	row.line = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	row.line:SetPoint("LEFT", row.phase, "RIGHT", 5, 0)
 	row.line:SetWidth(270)
@@ -766,7 +766,7 @@ function M.BuildRow(f, i)
 	row.bar = CreateFrame("StatusBar", nil, row)
 	row.bar:SetWidth(210)
 	row.bar:SetHeight(10)
-	row.bar:SetPoint("TOPLEFT", 56, -43)
+	row.bar:SetPoint("TOPLEFT", 56, -46)
 	row.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
 	row.bar:SetMinMaxValues(0, 1)
 	row.bar.bg = row.bar:CreateTexture(nil, "BACKGROUND")
@@ -828,7 +828,7 @@ function M.BuildRow(f, i)
 			GameTooltip:Show()
 		end)
 		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		b:SetPoint("TOPLEFT", 58 + (a - 1) * 22, -40)
+		b:SetPoint("TOPLEFT", 58 + (a - 1) * 22, -44)
 		row.acts[a] = b
 	end
 	row.lengths = {}
@@ -858,7 +858,7 @@ function M.BuildRow(f, i)
 			GameTooltip:Show()
 		end)
 		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		b:SetPoint("TOPLEFT", 58 + #ACTIVITIES * 22 + 8 + (d - 1) * 30, -41)
+		b:SetPoint("TOPLEFT", 58 + #ACTIVITIES * 22 + 8 + (d - 1) * 30, -45)
 		row.lengths[d] = b
 	end
 	row.send = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
