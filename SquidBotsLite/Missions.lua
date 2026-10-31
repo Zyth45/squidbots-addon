@@ -148,6 +148,9 @@ local KNOWN_SKILL = { mining = true, herbalism = true, skinning = true, fishing 
 -- last mission asked of each, offered again in High Risk after a refusal.
 local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {}, risk = {}, tried = {},
 	can = {} }
+-- Read by Dashboard.lua: the missions of each alt, Go and Recall; M.watcher() true keeps the polls going.
+SquidBotsLite_Missions = M
+M.MAX_OUT = MAX_OUT
 -- CoA's High Risk ruleset aura (mod-playerbots CoaMissionAction.cpp, MISSION_HIGH_RISK_AURA).
 local HIGH_RISK_AURA = 1004019
 
@@ -1346,7 +1349,7 @@ frame:SetScript("OnUpdate", function(_, delta)
 		M.nextSend = now + POLL_GAP
 	end
 	-- Every minute, while an alt is out or the panel is open.
-	if now >= M.nextPoll and (M.Count() > 0 or M.loginPoll or (M.panel and M.panel:IsShown())) then
+	if now >= M.nextPoll and (M.Count() > 0 or M.loginPoll or (M.panel and M.panel:IsShown()) or (M.watcher and M.watcher())) then
 		M.loginPoll = nil
 		M.Poll()
 	end

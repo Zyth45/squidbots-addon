@@ -17,6 +17,7 @@
 -- "enchanter [set <name>|clear|mode mail|mode bank|limit <altgreens|bankgreens|blues|wearable> on|off]"
 -- (2.8.4, release/v2.8.4/CONTRAT-ALTS-2.8.4.md).
 -- In quiet mode the alts no longer take a quest the player accepts: they send their Q and wait for "take".
+-- STAT, PROF and the "sheet" command (2.8.4, HELLO's 5th field = 1): the team dashboard, Dashboard.lua.
 
 local PREFIX, VERSION = "SQBA", 1
 local HELLO_EVERY, HELLO_RETRY, SEEN_FOR, OFFLINE_WAIT, TRAIN_WAIT, ACCEPT_WINDOW = 300, 15, 600, 3, 1.5, 6
@@ -62,6 +63,7 @@ local STRINGS = {
 		HELLO_NONE = "The server has not answered the handshake: it needs CoA Bots 2.8.3.", HELLO_OFF = "Handshake off: chat mode.",
 		CLEAR = "Clear",
 		T_SUMMON = "Regroup", T_FOLLOW = "Recall all", T_LEARN = "Learn all", T_MISSIONS = "Missions", T_REPAIR = "Repair, sell junk",
+		T_DASHBOARD = "Alts Dashboard", TIP_T_DASHBOARD = "The whole team in one window: levels, gold, missions, professions and what needs doing.",
 		TIP_T_SUMMON = "Each logged-in alt teleports next to you.", TIP_T_FOLLOW = "Calls back every alt out on a mission (after a question).",
 		TIP_T_LEARN = "At a trainer: each alt learns all it can here.", TIP_T_MISSIONS = "Send your alts gathering on their own (opens Missions).", TIP_T_REPAIR = "At a vendor: each alt repairs and sells its junk (grey items, gear it cannot use).",
 		ST_follow = "Follows", ST_stay = "Stays", ST_far = "Far", ST_bags = "Bags full", ST_mission = "Mission %d min", ST_quest = "Quest missing", ST_dead = "Dead", ST_away = "Away", BADGE_MISSION = "On a mission",
@@ -120,6 +122,7 @@ local STRINGS = {
 		HELLO_NONE = "Le serveur n'a pas répondu à la poignée de main : il faut CoA Bots 2.8.3.", HELLO_OFF = "Poignée de main coupée : mode chat.",
 		CLEAR = "Effacer",
 		T_SUMMON = "Regrouper", T_FOLLOW = "Rappeler tous", T_LEARN = "Tout apprendre", T_MISSIONS = "Missions", T_REPAIR = "Réparer, vendre la camelote",
+		T_DASHBOARD = "Dashboard Alts", TIP_T_DASHBOARD = "Toute l'équipe dans une fenêtre : niveaux, or, missions, métiers et ce qu'il reste à faire.",
 		TIP_T_SUMMON = "Chaque alt connecté se téléporte près de vous.", TIP_T_FOLLOW = "Rappelle tous les alts partis en mission (après une question).",
 		TIP_T_LEARN = "Chez un entraîneur : chaque alt apprend tout ce qu'il peut ici.", TIP_T_MISSIONS = "Envoyer tes alts récolter seuls (ouvre Missions).", TIP_T_REPAIR = "Chez un marchand : chaque alt répare et vend sa camelote (objets gris, équipement qu'il ne peut pas porter).",
 		ST_follow = "Suit", ST_stay = "Reste", ST_far = "Loin", ST_bags = "Sacs pleins", ST_mission = "Mission %d min", ST_quest = "Quête manquante", ST_dead = "Mort", ST_away = "Absent", BADGE_MISSION = "En mission",
@@ -179,6 +182,9 @@ local A = { seen = {}, gone = {}, sent = {}, quests = {}, asked = {}, titles = {
 -- An alt that sent TEAM and has been silent this long is gone (TEAM comes at least once a minute).
 local TEAM_SILENT = 150
 local UI = SquidBotsLite_UI
+-- Read by Dashboard.lua: the alts online, their TEAM, the enchanter, the messages (A.Handle) and Send.
+SquidBotsLite_Alts = A
+A.SKILLS = SKILLS
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -234,6 +240,7 @@ local function Send(name, text)
 	A.sent[name] = GetTime()
 	SendAddonMessage(PREFIX, text, "WHISPER", name)
 end
+A.Send = Send
 
 local function Split(message)
 	local fields = {}
@@ -1086,6 +1093,9 @@ function A.BuildTeam()
 		{ "Interface\\Icons\\INV_Pick_02", "T_MISSIONS", "TIP_T_MISSIONS", function()
 			if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end
 		end },
+		{ "Interface\\Icons\\INV_Misc_Book_09", "T_DASHBOARD", "TIP_T_DASHBOARD", function()
+			if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end
+		end },
 		{ "Interface\\Icons\\Trade_BlackSmithing", "T_REPAIR", "TIP_T_REPAIR", function()
 			WhisperAll("repair")
 			WhisperAll("s junk")
@@ -1150,7 +1160,7 @@ function A.RefreshTeam()
 		button:SetPoint("TOPLEFT", x + math.floor((i - 1) / 2) * 28, -6 - ((i - 1) % 2) * 28)
 	end
 	f.empty:SetText("")
-	f:SetWidth(x + 2 * 28 + 10)
+	f:SetWidth(x + math.ceil(#f.actions / 2) * 28 + 10)
 	f:Show()
 end
 
@@ -1259,6 +1269,10 @@ function SquidBotsLite_AltsButtons(frame, x)
 		return T("SETTINGS"), line
 	end, function() A.SettingsMenu() end)
 	settings:SetPoint("LEFT", team, "RIGHT", 4, 0)
+	local dashboard = UI.IconButton(frame, 22, "Interface\\Icons\\INV_Misc_Book_09",
+		function() return T("T_DASHBOARD"), T("TIP_T_DASHBOARD") end,
+		function() if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end end)
+	dashboard:SetPoint("LEFT", settings, "RIGHT", 4, 0)
 end
 
 -- The team settings: who disenchants for the team (an alt with Enchanting), and how the greens reach it.
@@ -1314,9 +1328,10 @@ end
 -- The alts' messages
 -- ---------------------------------------------------------------------------
 local Handle = {}
+A.Handle = Handle
 
 function Handle.HELLO(name, f)
-	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", at = GetTime() }
+	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", at = GetTime() }
 	A.RefreshLog()
 end
 

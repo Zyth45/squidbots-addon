@@ -12,3 +12,4 @@ SquidBotsLite.lua
 Manager.lua
 Missions.lua
 Alts.lua
+Dashboard.lua
