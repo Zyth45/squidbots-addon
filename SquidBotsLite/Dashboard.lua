@@ -16,7 +16,7 @@ local STRINGS = {
 		TIP_REFRESH = "Ask each alt logged in for its level, gold, bags and professions again.",
 		ONLINE = "Logged in", OUT = "On a mission", GOLD = "Team gold", ALERTS = "To do",
 		TIP_GOLD = "Your alts' gold: the last amount each one sent for those logged out.", NONE = "Nothing",
-		ALERT_COUNT = "%d bags  ·  %d gear  ·  %d trainer",
+		ALERT_BAGS = "%d bags", ALERT_GEAR = "%d gear", ALERT_TRAIN = "%d trainer",
 		EMPTY = "No alt known yet: open My alts (or log one in) and your alts appear here.",
 		MORE = "Mouse wheel: %d more", NO_DATA = "No data yet: log it in once",
 		ST_follow = "Follows", ST_stay = "Stays", ST_far = "Far", ST_dead = "Dead", ST_mission = "On a mission",
@@ -38,7 +38,7 @@ local STRINGS = {
 		TIP_REFRESH = "Redemander à chaque alt connecté son niveau, son or, ses sacs et ses métiers.",
 		ONLINE = "Connectés", OUT = "En mission", GOLD = "Or de l'équipe", ALERTS = "À faire",
 		TIP_GOLD = "L'or de vos alts : le dernier montant connu pour ceux qui sont déconnectés.", NONE = "Rien",
-		ALERT_COUNT = "%d sacs  ·  %d équip.  ·  %d entraîneur",
+		ALERT_BAGS = "%d sacs", ALERT_GEAR = "%d équip.", ALERT_TRAIN = "%d entraîneur",
 		EMPTY = "Aucun alt connu : ouvrez Mes alts (ou connectez-en un) et vos alts apparaissent ici.",
 		MORE = "Molette : %d de plus", NO_DATA = "Pas encore de données : connectez-le une fois",
 		ST_follow = "Suit", ST_stay = "Reste", ST_far = "Loin", ST_dead = "Mort", ST_mission = "En mission",
@@ -704,6 +704,7 @@ function D.Refresh()
 	-- The band.
 	local store = D.Store()
 	local count, out, gold, bags, gear, train = 0, 0, 0, 0, 0, 0
+	local todo = {}
 	for _, name in ipairs(names) do
 		local e = store[name] or {}
 		if online[name] then count = count + 1 end
@@ -713,6 +714,10 @@ function D.Refresh()
 			if alert.kind == "bags" then bags = bags + 1
 			elseif alert.kind == "dura" then gear = gear + 1
 			elseif alert.kind == "train" then train = train + 1 end
+			-- The tile's tooltip names the alt of each alert.
+			if alert.kind == "bags" or alert.kind == "dura" or alert.kind == "train" then
+				table.insert(todo, { UI.ClassName(name) .. "|r : " .. alert.text, alert.color })
+			end
 		end
 	end
 	local tiles = f.tiles
@@ -731,7 +736,13 @@ function D.Refresh()
 	tiles[4].value:SetText(alerts > 0 and alerts or T("NONE"))
 	local alertColor = alerts > 0 and RED or GREEN
 	tiles[4].value:SetTextColor(alertColor[1], alertColor[2], alertColor[3])
-	tiles[4].detail:SetText(alerts > 0 and string.format(T("ALERT_COUNT"), bags, gear, train) or "")
+	-- Only the kinds there are: "1 bags · 1 trainer", not "0 gear" in between.
+	local parts = {}
+	if bags > 0 then table.insert(parts, string.format(T("ALERT_BAGS"), bags)) end
+	if gear > 0 then table.insert(parts, string.format(T("ALERT_GEAR"), gear)) end
+	if train > 0 then table.insert(parts, string.format(T("ALERT_TRAIN"), train)) end
+	tiles[4].detail:SetText(table.concat(parts, "  ·  "))
+	tiles[4].tip = alerts > 0 and todo or nil
 	tiles[4].detail:SetTextColor(RED[1], RED[2], RED[3])
 	-- The cards.
 	local rows = math.ceil(#names / COLS)
