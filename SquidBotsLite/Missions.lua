@@ -764,7 +764,7 @@ function M.BuildRow(f, i)
 	row.line:SetTextColor(0.75, 0.75, 0.75)
 	-- The time spent out of the mission's, the minutes left written on it.
 	row.bar = CreateFrame("StatusBar", nil, row)
-	row.bar:SetWidth(210)
+	row.bar:SetWidth(170)
 	row.bar:SetHeight(10)
 	row.bar:SetPoint("TOPLEFT", 56, -46)
 	row.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
