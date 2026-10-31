@@ -62,7 +62,7 @@ local STRINGS = {
 		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
 		T_SAVED = "Team %s saved: %d characters.", T_STARTED = "Team %s: logging in %d characters, one a second.",
 		T_EMPTY = "Nobody to save: invite or log in your alts first.",
-		ACCOUNTS = "Accounts", A_SHOW = "Show my linked accounts", A_LINK = "Link an account...", A_KEY = "Set this account's key...",
+		DASHBOARD = "Dashboard", ACCOUNTS = "Accounts", A_SHOW = "Show my linked accounts", A_LINK = "Link an account...", A_KEY = "Set this account's key...",
 		A_LOGIN_ALL = "Log in all its characters", A_UNLINK = "Unlink", A_NAME = "Account name to link:",
 		A_KEYFOR = "Security key of %s (set on that account with Set this account's key):", A_MYKEY = "Key for this account (letters and digits):",
 		A_BAD = "Letters, digits and _ only.", A_NONE = "No linked account known yet: Show my linked accounts.",
@@ -165,7 +165,7 @@ local STRINGS = {
 		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
 		T_SAVED = "Équipe %s enregistrée : %d personnages.", T_STARTED = "Équipe %s : connexion de %d personnages, un par seconde.",
 		T_EMPTY = "Personne à enregistrer : invitez ou connectez d'abord vos alts.",
-		ACCOUNTS = "Comptes", A_SHOW = "Voir mes comptes liés", A_LINK = "Lier un compte...", A_KEY = "Définir la clé de ce compte...",
+		DASHBOARD = "Dashboard", ACCOUNTS = "Comptes", A_SHOW = "Voir mes comptes liés", A_LINK = "Lier un compte...", A_KEY = "Définir la clé de ce compte...",
 		A_LOGIN_ALL = "Connecter tous ses personnages", A_UNLINK = "Délier", A_NAME = "Nom du compte à lier :",
 		A_KEYFOR = "Clé de sécurité de %s (définie sur ce compte avec Définir la clé de ce compte) :", A_MYKEY = "Clé de ce compte (lettres et chiffres) :",
 		A_BAD = "Lettres, chiffres et _ seulement.", A_NONE = "Aucun compte lié connu : Voir mes comptes liés.",
@@ -2137,7 +2137,7 @@ local function AltsTexts()
 	if not altsFrame then return end
 	altsFrame.title:SetText("SquidBots Lite - " .. L.ALTS)
 	altsFrame.teams:SetText(L.TEAMS)
-	altsFrame.accounts:SetText(L.ACCOUNTS)
+	altsFrame.dashboard:SetText(L.DASHBOARD)
 	altsFrame.missions:SetText(L.MISSIONS)
 	altsFrame.help:SetText(L.ALTS_HELP)
 end
@@ -2330,7 +2330,10 @@ local function BuildAlts()
 	close:SetPoint("TOPRIGHT", -4, -4)
 	-- The menus on the left, the count of alts logged in and Refresh on the right.
 	local x = 16
-	for _, def in ipairs({ { "teams", TeamsMenu }, { "accounts", AccountsMenu },
+	-- The Alts Dashboard first, then the teams and the missions; the accounts are an icon after the others (Alts.lua).
+	SquidBotsLite_AccountsMenu = AccountsMenu
+	for _, def in ipairs({ { "dashboard", function() if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end end },
+		{ "teams", TeamsMenu },
 		-- Missions.lua: send a logged-in alt gathering on its own.
 		{ "missions", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end } }) do
 		local button = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")

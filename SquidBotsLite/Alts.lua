@@ -63,6 +63,7 @@ local STRINGS = {
 		HELLO_NONE = "The server has not answered the handshake: it needs CoA Bots 2.8.3.", HELLO_OFF = "Handshake off: chat mode.",
 		CLEAR = "Clear",
 		T_SUMMON = "Regroup", T_FOLLOW = "Recall all", T_LEARN = "Learn all", T_MISSIONS = "Missions", T_REPAIR = "Repair, sell junk",
+		T_ACCOUNTS = "Accounts", TIP_T_ACCOUNTS = "Your linked accounts: show them, link one, set this account's key.",
 		T_DASHBOARD = "Alts Dashboard", TIP_T_DASHBOARD = "The whole team in one window: levels, gold, missions, professions and what needs doing.",
 		TIP_T_SUMMON = "Each logged-in alt teleports next to you.", TIP_T_FOLLOW = "Calls back every alt out on a mission (after a question).",
 		TIP_T_LEARN = "At a trainer: each alt learns all it can here.", TIP_T_MISSIONS = "Send your alts gathering on their own (opens Missions).", TIP_T_REPAIR = "At a vendor: each alt repairs and sells its junk (grey items, gear it cannot use).",
@@ -122,6 +123,7 @@ local STRINGS = {
 		HELLO_NONE = "Le serveur n'a pas répondu à la poignée de main : il faut CoA Bots 2.8.3.", HELLO_OFF = "Poignée de main coupée : mode chat.",
 		CLEAR = "Effacer",
 		T_SUMMON = "Regrouper", T_FOLLOW = "Rappeler tous", T_LEARN = "Tout apprendre", T_MISSIONS = "Missions", T_REPAIR = "Réparer, vendre la camelote",
+		T_ACCOUNTS = "Comptes", TIP_T_ACCOUNTS = "Vos comptes liés : les voir, en lier un, définir la clé de ce compte.",
 		T_DASHBOARD = "Dashboard Alts", TIP_T_DASHBOARD = "Toute l'équipe dans une fenêtre : niveaux, or, missions, métiers et ce qu'il reste à faire.",
 		TIP_T_SUMMON = "Chaque alt connecté se téléporte près de vous.", TIP_T_FOLLOW = "Rappelle tous les alts partis en mission (après une question).",
 		TIP_T_LEARN = "Chez un entraîneur : chaque alt apprend tout ce qu'il peut ici.", TIP_T_MISSIONS = "Envoyer tes alts récolter seuls (ouvre Missions).", TIP_T_REPAIR = "Chez un marchand : chaque alt répare et vend sa camelote (objets gris, équipement qu'il ne peut pas porter).",
@@ -1269,10 +1271,10 @@ function SquidBotsLite_AltsButtons(frame, x)
 		return T("SETTINGS"), line
 	end, function() A.SettingsMenu() end)
 	settings:SetPoint("LEFT", team, "RIGHT", 4, 0)
-	local dashboard = UI.IconButton(frame, 22, "Interface\\Icons\\INV_Misc_Book_09",
-		function() return T("T_DASHBOARD"), T("TIP_T_DASHBOARD") end,
-		function() if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end end)
-	dashboard:SetPoint("LEFT", settings, "RIGHT", 4, 0)
+	local accounts = UI.IconButton(frame, 22, "Interface\\Icons\\INV_Misc_GroupLooking",
+		function() return T("T_ACCOUNTS"), T("TIP_T_ACCOUNTS") end,
+		function() if SquidBotsLite_AccountsMenu then SquidBotsLite_AccountsMenu() end end)
+	accounts:SetPoint("LEFT", settings, "RIGHT", 4, 0)
 end
 
 -- The team settings: who disenchants for the team (an alt with Enchanting), and how the greens reach it.
