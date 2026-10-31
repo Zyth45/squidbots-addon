@@ -2330,12 +2330,12 @@ local function BuildAlts()
 	close:SetPoint("TOPRIGHT", -4, -4)
 	-- The menus on the left, the count of alts logged in and Refresh on the right.
 	local x = 16
-	-- The Alts Dashboard first, then the teams and the missions; the accounts are an icon after the others (Alts.lua).
+	-- The Alts Dashboard first, then the missions and the teams; the accounts are an icon after the others (Alts.lua).
 	SquidBotsLite_AccountsMenu = AccountsMenu
 	for _, def in ipairs({ { "dashboard", function() if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end end },
-		{ "teams", TeamsMenu },
 		-- Missions.lua: send a logged-in alt gathering on its own.
-		{ "missions", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end } }) do
+		{ "missions", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end },
+		{ "teams", TeamsMenu } }) do
 		local button = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
 		button:SetWidth(84)
 		button:SetHeight(22)
