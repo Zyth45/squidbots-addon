@@ -9,6 +9,9 @@
 -- "Watch on: <zone>.", "Watch off: <reason>." or "Watch refused: <reason>.".
 -- An order: "mission order <item id> [count] [minutes]" gathers that ore or herb up to the count, the rest on the way;
 -- it answers "Mission started: order of <n> <name> (<skill>) in <zone>, ..." or "Order refused: <reason>.".
+-- CoA Bots 2.8.4: skinning, fishing and cloth too (the 6th field of MISSION;...), 4 alts at a time, and
+-- "mission can" answers "MISSIONCAN;<level>;<suggested>;<activity>:<skill>:<ok|nopick|noknife|nopole>,..." (the
+-- activities the alt can be sent to, cloth always): the card shows only those, the suggested one chosen first.
 
 local STRINGS = {
 	en = {
@@ -22,7 +25,7 @@ local STRINGS = {
 		SKILL_mining = "mining", SKILL_herbalism = "herbalism",
 		RECALL_ASK = "Call %s back now? What it gathered so far comes by mail.",
 		MAIL = "Mail from %s has arrived: %d items (at a mailbox).", DONE = "%s: mission over. %s",
-		TIP_SEND = "Choose the skill and how long: up to 120 min, 4 alts at a time.",
+		TIP_SEND = "Choose the activity and how long, then Send: 4 alts at a time.",
 		TIP_RECALL = "Ends the mission now: the loot comes by mail, the alt waits for you or comes back.",
 		RESUMED = "%s went back to its mission, so it stays out of your group: Recall it from Missions to have it back.",
 		BACK_AT = "back ~%s", RATE = "~%d/h", AGAIN = "Same again: %s, %d min",
@@ -30,8 +33,8 @@ local STRINGS = {
 		WATCH = "Watch", TIP_WATCH = "The camera follows it while it works (same continent only). Back to me, or Escape, to return.",
 		WATCH_BAR = "Watching %s", WATCH_BACK = "Back to me", WATCH_WAIT = "Asking %s for its view...",
 		WATCH_REFUSED = "%s: no view (%s)", WATCH_OFF = "View of %s closed: %s", TIP_WATCH_BACK = "Your own camera again.",
-		ORDER = "Order", TIP_ORDER = "Ask it for a given ore or herb: it gathers that up to the count, the rest on the way, and mails it all. Or drop an item from your bags on this button.",
-		ORDER_COUNT = "%d of them", ORDER_DEFAULT = "%d of them (default)", ORDER_DROP = "Or drop an ore or herb from your bags on the button.",
+		ORDER = "Order", TIP_ORDER = "Ask it for a given material: it gathers that up to the count, the rest on the way, and mails it all. Search by name, or drop an item from your bags on this button.",
+		ORDER_COUNT = "%d of them", ORDER_DEFAULT = "%d of them (default)", ORDER_DROP = "Or drop a material from your bags here.",
 		ORDER_LINE = "Order: %d %s", ORDER_REFUSED = "%s: order refused (%s)",
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
@@ -40,6 +43,17 @@ local STRINGS = {
 		RISK = "High Risk", RISK_ASK = "%s is in High Risk.\n\n|cffff3333Your alt can lose its loot if it dies.|r\n\nSend it gathering anyway (%s, %d min)?",
 		RISK_SEND = "Send in High Risk", RISK_LINE = "In High Risk: you will be asked to confirm.",
 		RECALL_ALL_ASK = "Call back the %d alts on a mission now? What they gathered so far comes by mail.",
+		SKINNING = "Skinning", FISHING = "Fishing", CLOTH = "Cloth",
+		SKILL_skinning = "skinning", SKILL_fishing = "fishing", SKILL_cloth = "cloth",
+		TIP_mining = "Mines the ore of its skill.", TIP_herbalism = "Picks the herbs of its skill.",
+		TIP_skinning = "Kills beasts of its level and skins them.", TIP_fishing = "Fishes by a water of its skill.",
+		TIP_cloth = "Kills humanoids of its level for their cloth: no profession needed.",
+		TIP_AUTO = "The server picks its best gathering skill.", SUGGESTED = "Suggested for its level and skills.",
+		WHY_nopick = "No mining pick in its bags.", WHY_noknife = "No skinning knife in its bags.", WHY_nopole = "No fishing pole in its bags.",
+		SEND_BTN = "Send", TIP_SEND_BTN = "Sends it now: %s, %d min. The loot comes by mail.", TIP_MINUTES = "How long it stays out.",
+		ORDER_TITLE = "Order: %s", SEARCH = "Search: copper, peace, wool...", ORDER_SUGGEST = "Suggested for it",
+		ORDER_NONE = "Nothing found.", ORDER_QTY = "How many:", WHY_SKILL = "needs %s %d", WHY_NOSKILL = "does not know %s",
+		WHY_LEVEL = "levels %d-%d", TIP_ORDER_ROW = "Click: order it.",
 	},
 	fr = {
 		TITLE = "Missions", REFRESH = "Actualiser", SEND = "Envoyer", RECALL = "Rappeler", NONE = "Libre",
@@ -52,7 +66,7 @@ local STRINGS = {
 		SKILL_mining = "minage", SKILL_herbalism = "herboristerie",
 		RECALL_ASK = "Rappeler %s maintenant ? Ce qu'il a déjà récolté arrive par courrier.",
 		MAIL = "Le courrier de %s est arrivé : %d objets (à une boîte aux lettres).", DONE = "%s : mission terminée. %s",
-		TIP_SEND = "Choisissez le métier et la durée : jusqu'à 120 min, 4 alts à la fois.",
+		TIP_SEND = "Choisissez l'activité et la durée, puis Envoyer : 4 alts à la fois.",
 		TIP_RECALL = "Arrête la mission tout de suite : le butin arrive par courrier, l'alt vous attend ou revient.",
 		RESUMED = "%s a repris sa mission, il reste donc hors de votre groupe : rappelez-le depuis Missions pour le récupérer.",
 		BACK_AT = "retour ~%s", RATE = "~%d/h", AGAIN = "Pareil : %s, %d min",
@@ -60,8 +74,8 @@ local STRINGS = {
 		WATCH = "Regarder", TIP_WATCH = "La caméra le suit pendant qu'il travaille (même continent seulement). Revenir à moi, ou Échap, pour revenir.",
 		WATCH_BAR = "Vue de %s", WATCH_BACK = "Revenir à moi", WATCH_WAIT = "Je demande sa vue à %s...",
 		WATCH_REFUSED = "%s : pas de vue (%s)", WATCH_OFF = "Vue de %s fermée : %s", TIP_WATCH_BACK = "Votre caméra à nouveau.",
-		ORDER = "Commander", TIP_ORDER = "Demandez-lui un minerai ou une herbe précis : il en récolte jusqu'au nombre voulu, le reste en route, et vous envoie tout par courrier. Ou déposez un objet de vos sacs sur ce bouton.",
-		ORDER_COUNT = "%d", ORDER_DEFAULT = "%d (par défaut)", ORDER_DROP = "Ou déposez un minerai ou une herbe de vos sacs sur le bouton.",
+		ORDER = "Commander", TIP_ORDER = "Demandez-lui un matériau précis : il en récolte jusqu'au nombre voulu, le reste en route, et vous envoie tout par courrier. Cherchez par nom, ou déposez un objet de vos sacs sur ce bouton.",
+		ORDER_COUNT = "%d", ORDER_DEFAULT = "%d (par défaut)", ORDER_DROP = "Ou déposez un matériau de vos sacs ici.",
 		ORDER_LINE = "Commande : %d %s", ORDER_REFUSED = "%s : commande refusée (%s)",
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
@@ -70,6 +84,17 @@ local STRINGS = {
 		RISK = "High Risk", RISK_ASK = "%s est en High Risk.\n\n|cffff3333Votre alt peut perdre son butin s'il meurt.|r\n\nL'envoyer récolter quand même (%s, %d min) ?",
 		RISK_SEND = "Envoyer en High Risk", RISK_LINE = "En High Risk : une confirmation vous sera demandée.",
 		RECALL_ALL_ASK = "Rappeler maintenant les %d alts en mission ? Ce qu'ils ont déjà récolté arrive par courrier.",
+		SKINNING = "Dépeçage", FISHING = "Pêche", CLOTH = "Tissu",
+		SKILL_skinning = "dépeçage", SKILL_fishing = "pêche", SKILL_cloth = "tissu",
+		TIP_mining = "Extrait le minerai de son niveau de métier.", TIP_herbalism = "Cueille les herbes de son niveau de métier.",
+		TIP_skinning = "Tue des bêtes de son niveau et les dépèce.", TIP_fishing = "Pêche dans une eau de son niveau de métier.",
+		TIP_cloth = "Tue des humanoïdes de son niveau pour leur tissu : aucun métier requis.",
+		TIP_AUTO = "Le serveur choisit son meilleur métier de récolte.", SUGGESTED = "Conseillé pour son niveau et ses métiers.",
+		WHY_nopick = "Pas de pioche dans ses sacs.", WHY_noknife = "Pas de couteau à dépecer dans ses sacs.", WHY_nopole = "Pas de canne à pêche dans ses sacs.",
+		SEND_BTN = "Envoyer", TIP_SEND_BTN = "L'envoie maintenant : %s, %d min. Le butin arrive par courrier.", TIP_MINUTES = "Combien de temps il reste parti.",
+		ORDER_TITLE = "Commande : %s", SEARCH = "Chercher : cuivre, paix, laine...", ORDER_SUGGEST = "Suggestions pour lui",
+		ORDER_NONE = "Rien trouvé.", ORDER_QTY = "Combien :", WHY_SKILL = "demande %s %d", WHY_NOSKILL = "ne connaît pas %s",
+		WHY_LEVEL = "niveaux %d-%d", TIP_ORDER_ROW = "Clic : le commander.",
 	},
 }
 local function T(key)
@@ -82,21 +107,47 @@ local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interfac
 local ROWS, ROW_H, ROWS_TOP = 6, 62, 74
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
-local DURATIONS = { 30, 60, 90, 120 }
+local DURATIONS = { 30, 60, 120 }
 -- Alts out at the same time: AiPlayerbot.Missions.MaxPerPlayer (4 from CoA Bots 2.8.4, a group of 5).
 local MAX_OUT = 4
-local ORDER_COUNTS, ORDER_DEFAULT = { 10, 20, 40, 60 }, 20
-local ORDERS = {
-	mining = { { 2770, "Copper Ore" }, { 2771, "Tin Ore" }, { 2775, "Silver Ore" }, { 2772, "Iron Ore" }, { 2776, "Gold Ore" },
-		{ 3858, "Mithril Ore" }, { 7911, "Truesilver Ore" }, { 10620, "Thorium Ore" } },
-	herbalism = { { 2447, "Peacebloom" }, { 765, "Silverleaf" }, { 785, "Mageroyal" }, { 2450, "Briarthorn" }, { 2453, "Bruiseweed" },
-		{ 3356, "Kingsblood" }, { 3821, "Goldthorn" }, { 8838, "Sungrass" }, { 13464, "Golden Sansam" }, { 13463, "Dreamfoil" } },
+local ORDER_COUNTS, ORDER_DEFAULT = { 10, 20, 40 }, 20
+-- The activities a card can show, in this order (MISSIONCAN lists those of the alt).
+local ACTIVITIES = { "mining", "herbalism", "skinning", "fishing", "cloth" }
+local ACTIVITY_NAME = { mining = "MINING", herbalism = "HERBALISM", skinning = "SKINNING", fishing = "FISHING", cloth = "CLOTH" }
+-- The classic materials to order: id, activity, from (the skill it needs; cloth: the humanoids' levels from-to),
+-- English name (searched too, and shown until the client knows the item).
+local MATERIALS = {
+	{ 2770, "mining", 1, "Copper Ore" }, { 2835, "mining", 1, "Rough Stone" }, { 2771, "mining", 65, "Tin Ore" },
+	{ 2836, "mining", 65, "Coarse Stone" }, { 2775, "mining", 75, "Silver Ore" }, { 2772, "mining", 125, "Iron Ore" },
+	{ 2838, "mining", 125, "Heavy Stone" }, { 2776, "mining", 155, "Gold Ore" }, { 3858, "mining", 175, "Mithril Ore" },
+	{ 7912, "mining", 175, "Solid Stone" }, { 7911, "mining", 230, "Truesilver Ore" }, { 10620, "mining", 245, "Thorium Ore" },
+	{ 12365, "mining", 245, "Dense Stone" },
+	{ 2447, "herbalism", 1, "Peacebloom" }, { 765, "herbalism", 1, "Silverleaf" }, { 2449, "herbalism", 15, "Earthroot" },
+	{ 785, "herbalism", 50, "Mageroyal" }, { 2450, "herbalism", 70, "Briarthorn" }, { 2453, "herbalism", 100, "Bruiseweed" },
+	{ 3355, "herbalism", 115, "Wild Steelbloom" }, { 3356, "herbalism", 125, "Kingsblood" }, { 3357, "herbalism", 150, "Liferoot" },
+	{ 3818, "herbalism", 160, "Fadeleaf" }, { 3821, "herbalism", 170, "Goldthorn" }, { 3358, "herbalism", 185, "Khadgar's Whisker" },
+	{ 8838, "herbalism", 230, "Sungrass" }, { 13464, "herbalism", 260, "Golden Sansam" }, { 13463, "herbalism", 270, "Dreamfoil" },
+	{ 13465, "herbalism", 280, "Mountain Silversage" }, { 13466, "herbalism", 285, "Plaguebloom" }, { 13468, "herbalism", 300, "Black Lotus" },
+	{ 2934, "skinning", 1, "Ruined Leather Scraps" }, { 2318, "skinning", 1, "Light Leather" }, { 783, "skinning", 1, "Light Hide" },
+	{ 2319, "skinning", 100, "Medium Leather" }, { 4232, "skinning", 100, "Medium Hide" }, { 4234, "skinning", 150, "Heavy Leather" },
+	{ 4235, "skinning", 150, "Heavy Hide" }, { 4304, "skinning", 200, "Thick Leather" }, { 8169, "skinning", 200, "Thick Hide" },
+	{ 8170, "skinning", 250, "Rugged Leather" }, { 8171, "skinning", 250, "Rugged Hide" },
+	{ 6291, "fishing", 1, "Raw Brilliant Smallfish" }, { 6303, "fishing", 1, "Raw Slitherskin Mackerel" },
+	{ 6289, "fishing", 1, "Raw Longjaw Mud Snapper" }, { 6522, "fishing", 50, "Deviate Fish" },
+	{ 6308, "fishing", 75, "Raw Bristle Whisker Catfish" }, { 6358, "fishing", 75, "Oily Blackmouth" },
+	{ 6359, "fishing", 100, "Firefin Snapper" }, { 8365, "fishing", 175, "Raw Mithril Head Trout" },
+	{ 4603, "fishing", 225, "Raw Spotted Yellowtail" }, { 13422, "fishing", 275, "Stonescale Eel" },
+	{ 13889, "fishing", 275, "Raw Whitescale Salmon" },
+	{ 2589, "cloth", 5, "Linen Cloth", 20 }, { 2592, "cloth", 15, "Wool Cloth", 30 }, { 4306, "cloth", 25, "Silk Cloth", 40 },
+	{ 4338, "cloth", 35, "Mageweave Cloth", 50 }, { 14047, "cloth", 45, "Runecloth", 60 }, { 14256, "cloth", 55, "Felcloth", 60 },
 }
+local KNOWN_SKILL = { mining = true, herbalism = true, skinning = true, fishing = true, cloth = true }
 
 -- done: the alts back from a mission this session, with how many items they mailed.
 -- risk: the alts seen in High Risk (its aura in the group, the 8th field of MISSION;..., or a refusal); tried: the
 -- last mission asked of each, offered again in High Risk after a refusal.
-local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {}, risk = {}, tried = {} }
+local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {}, risk = {}, tried = {},
+	can = {} }
 -- CoA's High Risk ruleset aura (mod-playerbots CoaMissionAction.cpp, MISSION_HIGH_RISK_AURA).
 local HIGH_RISK_AURA = 1004019
 
@@ -120,13 +171,50 @@ function M.Poll()
 	M.queue = {}
 	local queued = {}
 	for _, name in ipairs(M.alts) do
-		table.insert(M.queue, name)
+		table.insert(M.queue, { name, "mission status" })
 		queued[name] = true
+		-- What it can be sent to: once, then again every 5 minutes (a new skill, a pick bought).
+		local can = M.can[name]
+		if not can or GetTime() - can.at > 300 then table.insert(M.queue, { name, "mission can" }) end
 	end
 	for name in pairs(SquidBotsLiteDB.missionOut or {}) do
-		if not queued[name] then table.insert(M.queue, name) end
+		if not queued[name] then table.insert(M.queue, { name, "mission status" }) end
 	end
 	M.nextPoll = GetTime() + POLL_EVERY
+end
+
+-- "MISSIONCAN;32;skinning;fishing:80:nopole,skinning:150:ok,cloth:32:ok"
+function M.OnCan(name, message)
+	local level, suggested, list = message:match("^MISSIONCAN;(%d+);(%a*);(.*)$")
+	if not level then return end
+	local can = { level = tonumber(level), suggested = suggested, list = {}, by = {}, at = GetTime() }
+	for activity, skill, state in list:gmatch("(%a+):(%d+):(%a+)") do
+		if KNOWN_SKILL[activity] then
+			local entry = { activity = activity, skill = tonumber(skill), state = state }
+			table.insert(can.list, entry)
+			can.by[activity] = entry
+		end
+	end
+	M.can[name] = can
+	M.RefreshPanel()
+end
+
+-- The activity chosen on its card: the player's last choice if it still can, else the suggested one.
+function M.Pick(name)
+	local can = M.can[name]
+	local picked = SquidBotsLiteDB.missionPick and SquidBotsLiteDB.missionPick[name]
+	if not can then return picked end
+	local entry = picked and can.by[picked]
+	if entry and entry.state == "ok" then return picked end
+	return can.suggested ~= "" and can.suggested or nil
+end
+
+function M.Minutes(name)
+	return SquidBotsLiteDB.missionMinutes and SquidBotsLiteDB.missionMinutes[name] or 60
+end
+
+function M.ActivityName(skill)
+	return skill and T(ACTIVITY_NAME[skill] or "AUTO") or T("AUTO")
 end
 
 function M.OnMission(name)
@@ -172,7 +260,7 @@ function M.OnStatus(name, message)
 		M.status[name] = { state = parts[2], zone = parts[3] or "?", minutes = tonumber(parts[4] or "") or 0,
 			items = tonumber(parts[5] or "") or 0, skill = parts[6], deaths = tonumber(parts[7] or "") or 0 }
 		if parts[8] == "1" then M.risk[name] = true end
-		if parts[6] == "mining" or parts[6] == "herbalism" then
+		if KNOWN_SKILL[parts[6]] then
 			SquidBotsLiteDB.missionSkill = SquidBotsLiteDB.missionSkill or {}
 			SquidBotsLiteDB.missionSkill[name] = parts[6]
 		end
@@ -191,14 +279,14 @@ function M.OnLine(name, message)
 		elseif message:find("^Mission started: ") then
 			SquidBotsLiteDB.missionOrder[name] = nil
 		end
-		if skill == "mining" or skill == "herbalism" then
+		if KNOWN_SKILL[skill] then
 			SquidBotsLiteDB.missionSkill = SquidBotsLiteDB.missionSkill or {}
 			SquidBotsLiteDB.missionSkill[name] = skill
 		end
 		M.done[name] = nil
 		SquidBotsLiteDB.missionOut = SquidBotsLiteDB.missionOut or {}
 		SquidBotsLiteDB.missionOut[name] = true
-		table.insert(M.queue, name)
+		table.insert(M.queue, { name, "mission status" })
 		-- Logged in again with a mission going on: it goes back to work, out of the group; say why.
 		if message:find("^Mission resumed: ") then
 			Print(string.format(T("RESUMED"), name))
@@ -315,37 +403,15 @@ function M.Order(name, item, count)
 	-- Its length is the server's default: the bar takes it from the first status.
 	if SquidBotsLiteDB.missionTotal then SquidBotsLiteDB.missionTotal[name] = nil end
 	Whisper(name, "mission order " .. item .. " " .. (count or ORDER_DEFAULT))
+	if M.orderFrame then M.orderFrame:Hide() end
 end
 
-function M.OrderMenu(name)
-	local known = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
-	local items = { { text = name .. " - " .. T("ORDER"), isTitle = true, notCheckable = true } }
-	for _, skill in ipairs({ "mining", "herbalism" }) do
-		if not known or known == skill then
-			table.insert(items, { text = T(skill == "mining" and "MINING" or "HERBALISM"), isTitle = true, notCheckable = true })
-			for _, def in ipairs(ORDERS[skill]) do
-				local id = def[1]
-				local counts = {}
-				for _, count in ipairs(ORDER_COUNTS) do
-					table.insert(counts, { text = string.format(T(count == ORDER_DEFAULT and "ORDER_DEFAULT" or "ORDER_COUNT"), count), notCheckable = true,
-						func = function() CloseDropDownMenus(); M.Order(name, id, count) end })
-				end
-				table.insert(items, { text = GetItemInfo(id) or def[2], icon = GetItemIcon and GetItemIcon(id), hasArrow = true,
-					notCheckable = true, menuList = counts })
-			end
-		end
-	end
-	table.insert(items, { text = "|cff9d9d9d" .. T("ORDER_DROP") .. "|r", notCheckable = true, disabled = true })
-	M.menu = M.menu or CreateFrame("Frame", "SquidBotsLiteMissionMenu", UIParent, "UIDropDownMenuTemplate")
-	EasyMenu(items, M.menu, "cursor", 0, 0, "MENU")
-end
-
--- An item dropped on the button (or clicked with it on the cursor): ordered by its id, the default count.
+-- An item dropped on the button or the order window (or clicked with it on the cursor): ordered by its id.
 function M.OrderCursor(name)
 	local kind, id = GetCursorInfo()
-	if kind ~= "item" or not id then return false end
+	if not name or kind ~= "item" or not id then return false end
 	ClearCursor()
-	M.Order(name, id)
+	M.Order(name, id, M.orderFrame and M.orderFrame:IsShown() and M.OrderCount() or nil)
 	return true
 end
 
@@ -365,7 +431,7 @@ function M.ConfirmRisk(name, minutes, skill)
 		showAlert = true,
 		OnAccept = function(_, data) M.Send(data.name, data.minutes, data.skill, true) end,
 	}
-	local what = skill and T(skill == "mining" and "MINING" or "HERBALISM") or T("AUTO")
+	local what = M.ActivityName(skill)
 	local dialog = StaticPopup_Show("SQUIDBOTSLITE_MISSION_RISK", string.format(T("RISK_ASK"), name, what, minutes))
 	if dialog then dialog.data = { name = name, minutes = minutes, skill = skill } end
 end
@@ -386,38 +452,6 @@ function SquidBotsLite_RecallAll()
 	}
 	local dialog = StaticPopup_Show("SQUIDBOTSLITE_MISSION_RECALL_ALL", #out)
 	if dialog then dialog.data = out end
-end
-
-function M.SendMenu(name)
-	local function Durations(skill)
-		local list = {}
-		for _, minutes in ipairs(DURATIONS) do
-			table.insert(list, { text = string.format(T("MIN"), minutes), notCheckable = true,
-				func = function() CloseDropDownMenus(); M.Go(name, minutes, skill) end })
-		end
-		return list
-	end
-	local known = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
-	local items = {
-		{ text = name, isTitle = true, notCheckable = true },
-	}
-	if M.InHighRisk(name) then
-		table.insert(items, { text = "|cffff3333" .. T("RISK") .. "|r - " .. T("RISK_LINE"), notCheckable = true, disabled = true })
-	end
-	local last = SquidBotsLiteDB.missionLast and SquidBotsLiteDB.missionLast[name]
-	if last then
-		local skill = last.skill and T(last.skill == "mining" and "MINING" or "HERBALISM") or T("AUTO")
-		table.insert(items, { text = "|cff66ff66" .. string.format(T("AGAIN"), skill, last.minutes) .. "|r", notCheckable = true,
-			func = function() CloseDropDownMenus(); M.Go(name, last.minutes, last.skill) end })
-	end
-	for _, item in ipairs({
-		{ text = T("AUTO") .. (known and (" (" .. T("SKILL_" .. known) .. ")") or ""), hasArrow = true, notCheckable = true, menuList = Durations(nil) },
-		{ text = T("MINING"), hasArrow = true, notCheckable = true, menuList = Durations("mining") },
-		{ text = T("HERBALISM"), hasArrow = true, notCheckable = true, menuList = Durations("herbalism") },
-	}) do table.insert(items, item) end
-	M.menu = M.menu or CreateFrame("Frame", "SquidBotsLiteMissionMenu", UIParent, "UIDropDownMenuTemplate")
-	EasyMenu(items, M.menu, "cursor", 0, 0, "MENU")
-	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -444,6 +478,256 @@ local function Rule(f, point, y)
 	rule:SetHeight(1)
 	rule:SetPoint(point .. "LEFT", 16, y)
 	rule:SetPoint(point .. "RIGHT", -16, y)
+end
+
+-- ---------------------------------------------------------------------------
+-- Order: a small window, a search field over the classic materials, at most 6 suggestions for the activity
+-- chosen and the alt's level, a quantity, and an item of the bags dropped on it
+-- ---------------------------------------------------------------------------
+local ORDER_ROWS, ORDER_ROW_H = 8, 22
+local FOLD = { ["à"] = "a", ["â"] = "a", ["ä"] = "a", ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e", ["î"] = "i",
+	["ï"] = "i", ["ô"] = "o", ["ö"] = "o", ["ù"] = "u", ["û"] = "u", ["ü"] = "u", ["ç"] = "c", ["À"] = "a", ["Â"] = "a",
+	["É"] = "e", ["È"] = "e", ["Ê"] = "e", ["Î"] = "i", ["Ô"] = "o", ["Û"] = "u", ["Ç"] = "c", ["œ"] = "oe", ["Œ"] = "oe" }
+
+-- Lower case, without accents, so that "peche" finds "Pêche".
+local function Fold(text)
+	-- Accents first: lower() may change the bytes of a UTF-8 letter.
+	text = (text or ""):gsub("[\195\197][\128-\191]", function(c) return FOLD[c] or c end)
+	return text:lower()
+end
+
+local function MaterialName(def)
+	return (GetItemInfo(def[1])) or def[4]
+end
+
+-- Why this alt cannot gather it, or nil when it can.
+local function Unreachable(name, def)
+	local can = M.can[name]
+	if not can then return nil end
+	local activity = def[2]
+	if activity == "cloth" then
+		local level = can.level or 0
+		if level < def[3] then return string.format(T("WHY_LEVEL"), def[3], def[5] or def[3]) end
+		return nil
+	end
+	local entry = can.by[activity]
+	if not entry then return string.format(T("WHY_NOSKILL"), T(ACTIVITY_NAME[activity])) end
+	if entry.state ~= "ok" then return T("WHY_" .. entry.state) end
+	if entry.skill < def[3] then return string.format(T("WHY_SKILL"), T(ACTIVITY_NAME[activity]), def[3]) end
+	return nil
+end
+
+-- The list shown: what the search finds (all activities), else the 6 best of the activity chosen it can gather.
+function M.OrderList(name, search)
+	local list = {}
+	local wanted = Fold(search)
+	if wanted ~= "" then
+		for _, def in ipairs(MATERIALS) do
+			if Fold(MaterialName(def)):find(wanted, 1, true) or Fold(def[4]):find(wanted, 1, true) then table.insert(list, def) end
+		end
+		return list
+	end
+	local activity = M.Pick(name) or SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name] or "cloth"
+	local can = M.can[name]
+	for i = #MATERIALS, 1, -1 do
+		local def = MATERIALS[i]
+		if def[2] == activity and not Unreachable(name, def) then
+			-- Cloth: the cloth of humanoids around its level, not those far below it.
+			if activity ~= "cloth" or not can or (def[5] or 60) + 8 >= (can.level or 0) then table.insert(list, def) end
+		end
+		if #list >= 6 then break end
+	end
+	return list
+end
+
+function M.BuildOrder()
+	local f = CreateFrame("Frame", "SquidBotsLiteOrder", UIParent)
+	f:SetWidth(280)
+	f:SetHeight(84 + ORDER_ROWS * ORDER_ROW_H + 40)
+	f:SetBackdrop(BACKDROP)
+	f:SetBackdropColor(0.04, 0.04, 0.05, 0.97)
+	f:SetFrameStrata("DIALOG")
+	f:SetToplevel(true)
+	f:SetMovable(true)
+	f:EnableMouse(true)
+	f:SetClampedToScreen(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	table.insert(UISpecialFrames, "SquidBotsLiteOrder")
+	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.title:SetPoint("TOP", 0, -14)
+	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+	close:SetPoint("TOPRIGHT", -4, -4)
+	f.search = CreateFrame("EditBox", "SquidBotsLiteOrderSearch", f, "InputBoxTemplate")
+	f.search:SetWidth(232)
+	f.search:SetHeight(20)
+	f.search:SetPoint("TOPLEFT", 24, -38)
+	f.search:SetAutoFocus(false)
+	f.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	f.search:SetScript("OnTextChanged", function() M.RefreshOrder() end)
+	f.search:SetScript("OnEditFocusGained", function() f.typing = true; M.RefreshOrder() end)
+	f.search:SetScript("OnEditFocusLost", function() f.typing = nil; M.RefreshOrder() end)
+	f.hint = f.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.hint:SetPoint("LEFT", 4, 0)
+	f.caption = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	f.caption:SetPoint("TOPLEFT", 20, -64)
+	f.scroll = CreateFrame("ScrollFrame", "SquidBotsLiteOrderScroll", f, "FauxScrollFrameTemplate")
+	f.scroll:SetPoint("TOPLEFT", 16, -78)
+	f.scroll:SetWidth(232)
+	f.scroll:SetHeight(ORDER_ROWS * ORDER_ROW_H)
+	f.scroll:SetScript("OnVerticalScroll", function(self, offset)
+		FauxScrollFrame_OnVerticalScroll(self, offset, ORDER_ROW_H, M.RefreshOrder)
+	end)
+	f.rows = {}
+	for i = 1, ORDER_ROWS do
+		local row = CreateFrame("Button", nil, f)
+		row:SetWidth(232)
+		row:SetHeight(ORDER_ROW_H - 2)
+		row:SetPoint("TOPLEFT", 18, -78 - (i - 1) * ORDER_ROW_H)
+		row:SetHighlightTexture("Interface\\Buttons\\WHITE8X8", "ADD")
+		row:GetHighlightTexture():SetVertexColor(1, 0.82, 0, 0.12)
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(18)
+		row.icon:SetHeight(18)
+		row.icon:SetPoint("LEFT", 2, 0)
+		row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+		row.text:SetWidth(200)
+		row.text:SetJustifyH("LEFT")
+		row:SetScript("OnClick", function(self)
+			if self.def and not self.why then M.Order(f.alt, self.def[1], M.OrderCount()) end
+		end)
+		row:SetScript("OnEnter", function(self)
+			if not self.def then return end
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetHyperlink("item:" .. self.def[1])
+			GameTooltip:AddLine(self.why and ("|cffff6666" .. self.why .. "|r") or T("TIP_ORDER_ROW"), 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		f.rows[i] = row
+	end
+	-- How many: 10 / 20 / 40, or typed.
+	f.qtyLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	f.qtyLabel:SetPoint("BOTTOMLEFT", 20, 46)
+	f.qtyLabel:SetText(T("ORDER_QTY"))
+	f.counts = {}
+	for i, count in ipairs(ORDER_COUNTS) do
+		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+		b:SetWidth(34)
+		b:SetHeight(18)
+		b:SetText(count)
+		b:SetPoint("LEFT", f.qtyLabel, "RIGHT", 6 + (i - 1) * 38, 0)
+		b:SetScript("OnClick", function()
+			f.count = count
+			f.qty:SetText("")
+			M.RefreshOrder()
+		end)
+		f.counts[i] = b
+	end
+	f.qty = CreateFrame("EditBox", "SquidBotsLiteOrderQty", f, "InputBoxTemplate")
+	f.qty:SetWidth(40)
+	f.qty:SetHeight(18)
+	f.qty:SetPoint("LEFT", f.counts[#f.counts], "RIGHT", 12, 0)
+	f.qty:SetAutoFocus(false)
+	f.qty:SetNumeric(true)
+	f.qty:SetMaxLetters(4)
+	f.qty:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	f.qty:SetScript("OnTextChanged", function() M.RefreshOrder() end)
+	f.drop = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.drop:SetPoint("BOTTOMLEFT", 20, 20)
+	f.drop:SetWidth(240)
+	f.drop:SetJustifyH("LEFT")
+	-- An item of the bags dropped anywhere on the window.
+	f:SetScript("OnReceiveDrag", function() M.OrderCursor(f.alt) end)
+	f:SetScript("OnMouseUp", function() M.OrderCursor(f.alt) end)
+	-- Names the client did not know yet come with the item's data.
+	f:SetScript("OnUpdate", function(self, delta)
+		self.wait = (self.wait or 0) + delta
+		if self.missing and self.wait > 1 then
+			self.wait = 0
+			M.RefreshOrder()
+		end
+	end)
+	if UI.FlattenAll then UI.FlattenAll(f) end
+	f:Hide()
+	M.orderFrame = f
+end
+
+function M.OrderCount()
+	local f = M.orderFrame
+	local typed = f and tonumber(f.qty:GetText() or "")
+	if typed and typed > 0 then return math.min(typed, 1000) end
+	return f and f.count or ORDER_DEFAULT
+end
+
+function M.RefreshOrder()
+	local f = M.orderFrame
+	if not f or not f:IsShown() or not f.alt then return end
+	local name = f.alt
+	f.title:SetText(string.format(T("ORDER_TITLE"), UI.ClassName(name)))
+	local search = f.search:GetText() or ""
+	f.hint:SetText(search == "" and not f.typing and T("SEARCH") or "")
+	f.caption:SetText(search == "" and T("ORDER_SUGGEST") or "")
+	f.drop:SetText(T("ORDER_DROP"))
+	local typed = tonumber(f.qty:GetText() or "")
+	for i, b in ipairs(f.counts) do
+		if not typed and ORDER_COUNTS[i] == (f.count or ORDER_DEFAULT) then b:LockHighlight() else b:UnlockHighlight() end
+	end
+	local list = M.OrderList(name, search)
+	FauxScrollFrame_Update(f.scroll, #list, ORDER_ROWS, ORDER_ROW_H)
+	local offset = FauxScrollFrame_GetOffset(f.scroll)
+	f.missing = false
+	for i, row in ipairs(f.rows) do
+		local def = list[offset + i]
+		row.def = def
+		if def then
+			local known = GetItemInfo(def[1])
+			if not known then
+				f.missing = true
+				-- Asks the server for it: the name comes a moment later.
+				M.cacheTip = M.cacheTip or CreateFrame("GameTooltip", "SquidBotsLiteOrderCache", UIParent, "GameTooltipTemplate")
+				M.cacheTip:SetOwner(UIParent, "ANCHOR_NONE")
+				M.cacheTip:SetHyperlink("item:" .. def[1])
+			end
+			row.why = Unreachable(name, def)
+			row.icon:SetTexture((GetItemIcon and GetItemIcon(def[1])) or UI.LOOT_ICON[def[2]] or UI.UNKNOWN)
+			row.icon:SetDesaturated(row.why ~= nil)
+			local label = MaterialName(def)
+			if row.why then
+				row.text:SetText("|cff808080" .. label .. "  (" .. row.why .. ")|r")
+			else
+				row.text:SetText(label)
+			end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	if #list == 0 then
+		f.rows[1].def = nil
+		f.rows[1].why = nil
+		f.rows[1].icon:SetTexture(nil)
+		f.rows[1].text:SetText("|cff808080" .. T("ORDER_NONE") .. "|r")
+		f.rows[1]:Show()
+	end
+end
+
+function M.OrderWindow(name)
+	if not M.orderFrame then M.BuildOrder() end
+	local f = M.orderFrame
+	f.alt = name
+	f.count = f.count or ORDER_DEFAULT
+	f.search:SetText("")
+	f.qty:SetText("")
+	f:ClearAllPoints()
+	if M.panel and M.panel:IsShown() then f:SetPoint("TOPLEFT", M.panel, "TOPRIGHT", 4, 0) else f:SetPoint("CENTER") end
+	f:Show()
+	f:Raise()
+	if not M.can[name] then Whisper(name, "mission can") end
+	M.RefreshOrder()
 end
 
 function M.BuildRow(f, i)
@@ -505,18 +789,97 @@ function M.BuildRow(f, i)
 	row.deaths = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	row.deaths:SetPoint("LEFT", row.skull, "RIGHT", 2, 0)
 	row.deaths:SetTextColor(1, 0.35, 0.35)
-	-- Send (skill and length from a menu) or Recall.
-	row.action = UI.IconButton(row, 32, SEND_ICON, function(self)
+	-- Recall, while it is out.
+	row.action = UI.IconButton(row, 32, RECALL_ICON, function() return T("RECALL"), T("TIP_RECALL") end, function(self)
 		local name = self:GetParent().alt
-		if name and M.OnMission(name) then return T("RECALL"), T("TIP_RECALL") end
-		if M.Count() >= MAX_OUT then return T("SEND"), T("TIP_FULL") end
-		return T("SEND"), T("TIP_SEND")
-	end, function(self)
-		local name = self:GetParent().alt
-		if not name then return end
-		if M.OnMission(name) then M.Recall(name) else M.SendMenu(name) end
+		if name and M.OnMission(name) then M.Recall(name) end
 	end)
 	row.action:SetPoint("RIGHT", -12, 0)
+	-- At home: the activities it can be sent to (small icons, the chosen one framed in gold), the length, Send.
+	row.acts = {}
+	for a = 1, #ACTIVITIES do
+		local b = CreateFrame("Button", nil, row)
+		b:SetWidth(18)
+		b:SetHeight(18)
+		b.frame = b:CreateTexture(nil, "BACKGROUND")
+		b.frame:SetTexture("Interface\\Buttons\\WHITE8X8")
+		b.frame:SetPoint("TOPLEFT", -2, 2)
+		b.frame:SetPoint("BOTTOMRIGHT", 2, -2)
+		b.icon = b:CreateTexture(nil, "ARTWORK")
+		b.icon:SetAllPoints()
+		b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+		b:SetScript("OnClick", function(self)
+			local name = row.alt
+			if not name or self.why then return end
+			SquidBotsLiteDB.missionPick = SquidBotsLiteDB.missionPick or {}
+			SquidBotsLiteDB.missionPick[name] = self.activity
+			M.RefreshPanel()
+		end)
+		b:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_TOP")
+			GameTooltip:SetText(M.ActivityName(self.activity), 1, 0.82, 0)
+			GameTooltip:AddLine(T(self.activity and ("TIP_" .. self.activity) or "TIP_AUTO"), 1, 1, 1, true)
+			if self.why then GameTooltip:AddLine(self.why, 1, 0.4, 0.4, true)
+			elseif self.suggested then GameTooltip:AddLine(T("SUGGESTED"), 0.4, 1, 0.4, true) end
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		b:SetPoint("TOPLEFT", 58 + (a - 1) * 22, -40)
+		row.acts[a] = b
+	end
+	row.lengths = {}
+	for d, minutes in ipairs(DURATIONS) do
+		local b = CreateFrame("Button", nil, row)
+		b:SetWidth(28)
+		b:SetHeight(16)
+		b.bg = b:CreateTexture(nil, "BACKGROUND")
+		b.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+		b.bg:SetAllPoints()
+		b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		b.text:SetPoint("CENTER", 0, 0)
+		b.text:SetText(minutes)
+		b:SetHighlightTexture("Interface\\Buttons\\WHITE8X8", "ADD")
+		b:GetHighlightTexture():SetVertexColor(1, 0.82, 0, 0.15)
+		b:SetScript("OnClick", function()
+			local name = row.alt
+			if not name then return end
+			SquidBotsLiteDB.missionMinutes = SquidBotsLiteDB.missionMinutes or {}
+			SquidBotsLiteDB.missionMinutes[name] = minutes
+			M.RefreshPanel()
+		end)
+		b:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_TOP")
+			GameTooltip:SetText(string.format(T("MIN"), minutes), 1, 0.82, 0)
+			GameTooltip:AddLine(T("TIP_MINUTES"), 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		b:SetPoint("TOPLEFT", 58 + #ACTIVITIES * 22 + 8 + (d - 1) * 30, -41)
+		row.lengths[d] = b
+	end
+	row.send = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+	row.send:SetWidth(76)
+	row.send:SetHeight(24)
+	row.send:SetPoint("RIGHT", -10, 0)
+	row.send:SetScript("OnClick", function()
+		local name = row.alt
+		if name and not M.OnMission(name) and M.Count() < MAX_OUT then M.Go(name, M.Minutes(name), M.Pick(name)) end
+	end)
+	row.send:SetScript("OnEnter", function(self)
+		local name = row.alt
+		if not name then return end
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(T("SEND"), 1, 0.82, 0)
+		if M.Count() >= MAX_OUT then
+			GameTooltip:AddLine(T("TIP_FULL"), 1, 0.4, 0.4, true)
+		else
+			GameTooltip:AddLine(string.format(T("TIP_SEND_BTN"), M.ActivityName(M.Pick(name)), M.Minutes(name)), 1, 1, 1, true)
+		end
+		GameTooltip:Show()
+	end)
+	row.send:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	if UI.Flatten then UI.Flatten(row.send) end
 	row.watch = UI.IconButton(row, 24, "Interface\\Icons\\Ability_EyeOfTheOwl", function() return T("WATCH"), T("TIP_WATCH") end,
 		function(self)
 			local name = self:GetParent().alt
@@ -529,13 +892,13 @@ function M.BuildRow(f, i)
 		function(self)
 			local name = self:GetParent().alt
 			if not name or M.OrderCursor(name) then return end
-			M.OrderMenu(name)
+			M.OrderWindow(name)
 		end)
 	row.order:SetScript("OnReceiveDrag", function(self)
 		local name = self:GetParent().alt
 		if name then M.OrderCursor(name) end
 	end)
-	row.order:SetPoint("RIGHT", row.action, "LEFT", -8, 0)
+	row.order:SetPoint("RIGHT", row.send, "LEFT", -8, 0)
 	row.order:Hide()
 	return row
 end
@@ -666,13 +1029,17 @@ function M.ShowOut(row, name, s)
 		row.line:SetText(row.line:GetText() .. "  |cffff9933" .. string.format(T("ORDER_LINE"), order.count, order.item) .. "|r")
 	end
 	UI.SetIcon(row.action, RECALL_ICON, true)
+	row.action:Show()
+	row.send:Hide()
+	for _, b in ipairs(row.acts) do b:Hide() end
+	for _, b in ipairs(row.lengths) do b:Hide() end
 	row.order:Hide()
 	row.watch:Show()
 	row.watch.icon:SetVertexColor(1, 1, M.watching == name and 0.4 or 1)
 end
 
 function M.ShowIdle(row, name, s)
-	local skill = SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name]
+	local skill = M.Pick(name) or (SquidBotsLiteDB.missionSkill and SquidBotsLiteDB.missionSkill[name])
 	row.bar:Hide()
 	row.loot:Hide()
 	row.items:Hide()
@@ -693,9 +1060,53 @@ function M.ShowIdle(row, name, s)
 		row.phase:SetTexture(SEND_ICON)
 		row.line:SetText("|cff9d9d9d" .. T("WAIT") .. "|r")
 	end
-	UI.SetIcon(row.action, SEND_ICON, M.Count() < MAX_OUT)
+	row.action:Hide()
 	row.watch:Hide()
-	if s and M.Count() < MAX_OUT then row.order:Show() else row.order:Hide() end
+	local free = M.Count() < MAX_OUT
+	if s and free then row.order:Show() else row.order:Hide() end
+	row.send:SetText(T("SEND_BTN"))
+	if free and s then row.send:Enable() else row.send:Disable() end
+	row.send:Show()
+	M.ShowActivities(row, name)
+end
+
+-- The activities of its card: what MISSIONCAN listed (cloth always), the impossible ones greyed with why; before
+-- the answer (or with an older server), one icon: its gathering skill, chosen by the server.
+function M.ShowActivities(row, name)
+	local can = M.can[name]
+	local picked = M.Pick(name)
+	local shown = {}
+	if can then
+		for _, activity in ipairs(ACTIVITIES) do
+			local entry = can.by[activity]
+			if entry then table.insert(shown, entry) end
+		end
+	else
+		table.insert(shown, { activity = nil, state = "ok" })
+	end
+	for a, b in ipairs(row.acts) do
+		local entry = shown[a]
+		if entry then
+			b.activity = entry.activity
+			b.why = entry.state ~= "ok" and T("WHY_" .. entry.state) or nil
+			b.suggested = can and entry.activity == can.suggested
+			b.icon:SetTexture(entry.activity and UI.SKILL_ICON[entry.activity] or SEND_ICON)
+			b.icon:SetDesaturated(b.why ~= nil)
+			b.icon:SetAlpha(b.why and 0.6 or 1)
+			if entry.activity == picked then b.frame:SetVertexColor(1, 0.82, 0, 1) else b.frame:SetVertexColor(0, 0, 0, 0.9) end
+			b:Show()
+		else
+			b.activity = nil
+			b:Hide()
+		end
+	end
+	local minutes = M.Minutes(name)
+	for d, b in ipairs(row.lengths) do
+		local on = DURATIONS[d] == minutes
+		b.bg:SetVertexColor(on and 1 or 1, on and 0.82 or 1, on and 0 or 1, on and 0.35 or 0.08)
+		b.text:SetTextColor(on and 1 or 0.8, on and 0.82 or 0.8, on and 0 or 0.8)
+		b:Show()
+	end
 end
 
 function M.RefreshPanel()
@@ -789,9 +1200,15 @@ function M.RefreshBadge()
 	end
 	local back = M.back and GetTime() < (M.backUntil or 0)
 	if out > 0 then
-		local both = skills.mining and skills.herbalism
-		b.icon:SetTexture(UI.SKILL_ICON[skills.herbalism and not both and "herbalism" or "mining"])
-		b.icon2:SetTexture(UI.SKILL_ICON.herbalism)
+		local first, second
+		for _, activity in ipairs(ACTIVITIES) do
+			if skills[activity] then
+				if not first then first = activity elseif not second then second = activity end
+			end
+		end
+		local both = second ~= nil
+		b.icon:SetTexture(UI.SKILL_ICON[first or "mining"])
+		b.icon2:SetTexture(UI.SKILL_ICON[second or first or "mining"])
 		b.icon2:SetWidth(both and 16 or 0.1)
 		b.icon2:SetAlpha(both and 1 or 0)
 		b.text:SetText(string.format(T("BAR_OUT"), out, soonest))
@@ -863,10 +1280,11 @@ local function IsAlt(name)
 end
 
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", function(_, _, message, name)
-	if (message:find("^MISSION;") or message:find("^Watch on: ")) and IsAlt(name) then return true end
+	if (message:find("^MISSION;") or message:find("^MISSIONCAN;") or message:find("^Watch on: ")) and IsAlt(name) then return true end
 end)
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message, name)
-	if (message == "mission status" or message == "mission watch" or message == "mission unwatch") and IsAlt(name) then return true end
+	if (message == "mission status" or message == "mission can" or message == "mission watch" or message == "mission unwatch")
+		and IsAlt(name) then return true end
 end)
 -- A poll to an alt that logged out meanwhile: "No player named 'X' is currently playing."
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
@@ -882,7 +1300,9 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:SetScript("OnEvent", function(_, event, message, name)
 	if event == "CHAT_MSG_WHISPER" then
 		if not IsAlt(name) then return end
-		if message:find("^MISSION;") then
+		if message:find("^MISSIONCAN;") then
+			M.OnCan(name, message)
+		elseif message:find("^MISSION;") then
 			M.OnStatus(name, message)
 		elseif message:find("^Mission ") then
 			M.OnLine(name, message)
@@ -921,7 +1341,8 @@ frame:SetScript("OnUpdate", function(_, delta)
 	local now = GetTime()
 	-- Polls go out one a second.
 	if #M.queue > 0 and now >= M.nextSend then
-		Whisper(table.remove(M.queue, 1), "mission status")
+		local poll = table.remove(M.queue, 1)
+		Whisper(poll[1], poll[2])
 		M.nextSend = now + POLL_GAP
 	end
 	-- Every minute, while an alt is out or the panel is open.

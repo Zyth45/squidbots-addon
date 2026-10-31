@@ -253,8 +253,12 @@ local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "In
 local ui = {
 	CARD = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
 		insets = { left = 1, right = 1, top = 1, bottom = 1 } },
-	SKILL_ICON = { mining = "Interface\\Icons\\Trade_Mining", herbalism = "Interface\\Icons\\INV_Misc_Flower_02" },
-	LOOT_ICON = { mining = "Interface\\Icons\\INV_Ore_Copper_01", herbalism = "Interface\\Icons\\INV_Misc_Herb_07" },
+	SKILL_ICON = { mining = "Interface\\Icons\\Trade_Mining", herbalism = "Interface\\Icons\\INV_Misc_Flower_02",
+		skinning = "Interface\\Icons\\INV_Misc_Pelt_Wolf_01", fishing = "Interface\\Icons\\Trade_Fishing",
+		cloth = "Interface\\Icons\\INV_Fabric_Linen_01" },
+	LOOT_ICON = { mining = "Interface\\Icons\\INV_Ore_Copper_01", herbalism = "Interface\\Icons\\INV_Misc_Herb_07",
+		skinning = "Interface\\Icons\\INV_Misc_LeatherScrap_03", fishing = "Interface\\Icons\\INV_Misc_Fish_02",
+		cloth = "Interface\\Icons\\INV_Fabric_Linen_01" },
 	UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark", NOBODY = "Interface\\CharacterFrame\\TempPortrait",
 }
 SquidBotsLite_UI = ui
