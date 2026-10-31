@@ -15,14 +15,14 @@ local STRINGS = {
 		TITLE = "Missions", REFRESH = "Refresh", SEND = "Send", RECALL = "Recall", NONE = "Free",
 		HINT = "Send a logged-in alt gathering on its own while you play: it leaves the group, gathers, and mails you what it found. You stay logged in (on any character).",
 		NO_ALTS = "No alt logged in: log one in from My alts, then Refresh.",
-		COUNT = "On a mission: %d / 3", WAIT = "Asking your alts...",
+		COUNT = "On a mission: %d / 4", WAIT = "Asking your alts...",
 		AUTO = "Its gathering skill", MINING = "Mining", HERBALISM = "Herbalism", MIN = "%d min",
 		TRAVEL = "On the way to %s", WORK = "Gathering in %s", DELIVER = "Mailing the loot",
 		LEFT = "%d min left", ITEMS = "%d items", DEATHS = "%d deaths", DEATH = "1 death",
 		SKILL_mining = "mining", SKILL_herbalism = "herbalism",
 		RECALL_ASK = "Call %s back now? What it gathered so far comes by mail.",
 		MAIL = "Mail from %s has arrived: %d items (at a mailbox).", DONE = "%s: mission over. %s",
-		TIP_SEND = "Choose the skill and how long: up to 120 min, 3 alts at a time.",
+		TIP_SEND = "Choose the skill and how long: up to 120 min, 4 alts at a time.",
 		TIP_RECALL = "Ends the mission now: the loot comes by mail, the alt waits for you or comes back.",
 		RESUMED = "%s went back to its mission, so it stays out of your group: Recall it from Missions to have it back.",
 		BACK_AT = "back ~%s", RATE = "~%d/h", AGAIN = "Same again: %s, %d min",
@@ -36,7 +36,7 @@ local STRINGS = {
 		OUT = "On a mission", HELP = "The loot comes by mail. Hover here for more, or an icon to see what it does.",
 		BADGE_FREE = "Free", BADGE_OUT = "On a mission", BADGE_DONE = "Done", BADGE_WAIT = "...",
 		READY = "Ready to go", READY_SKILL = "Ready to go: %s", DONE_LINE = "Back: %d items mailed to you", DONE_NOTHING = "Back: nothing gathered",
-		TIP_FULL = "Three alts are already out: recall one or wait for it.", TIP_REFRESH = "Ask your alts where they are now.",
+		TIP_FULL = "Four alts are already out: recall one or wait for it.", TIP_REFRESH = "Ask your alts where they are now.",
 		RISK = "High Risk", RISK_ASK = "%s is in High Risk.\n\n|cffff3333Your alt can lose its loot if it dies.|r\n\nSend it gathering anyway (%s, %d min)?",
 		RISK_SEND = "Send in High Risk", RISK_LINE = "In High Risk: you will be asked to confirm.",
 		RECALL_ALL_ASK = "Call back the %d alts on a mission now? What they gathered so far comes by mail.",
@@ -45,14 +45,14 @@ local STRINGS = {
 		TITLE = "Missions", REFRESH = "Actualiser", SEND = "Envoyer", RECALL = "Rappeler", NONE = "Libre",
 		HINT = "Envoyez un alt connecté récolter seul pendant que vous jouez : il quitte le groupe, récolte, et vous envoie sa récolte par courrier. Vous restez connecté (sur n'importe quel personnage).",
 		NO_ALTS = "Aucun alt connecté : connectez-en un depuis Mes alts, puis Actualiser.",
-		COUNT = "En mission : %d / 3", WAIT = "Je demande à vos alts...",
+		COUNT = "En mission : %d / 4", WAIT = "Je demande à vos alts...",
 		AUTO = "Son métier de récolte", MINING = "Minage", HERBALISM = "Herboristerie", MIN = "%d min",
 		TRAVEL = "En route vers %s", WORK = "Récolte à %s", DELIVER = "Envoi du butin",
 		LEFT = "%d min restantes", ITEMS = "%d objets", DEATHS = "%d morts", DEATH = "1 mort",
 		SKILL_mining = "minage", SKILL_herbalism = "herboristerie",
 		RECALL_ASK = "Rappeler %s maintenant ? Ce qu'il a déjà récolté arrive par courrier.",
 		MAIL = "Le courrier de %s est arrivé : %d objets (à une boîte aux lettres).", DONE = "%s : mission terminée. %s",
-		TIP_SEND = "Choisissez le métier et la durée : jusqu'à 120 min, 3 alts à la fois.",
+		TIP_SEND = "Choisissez le métier et la durée : jusqu'à 120 min, 4 alts à la fois.",
 		TIP_RECALL = "Arrête la mission tout de suite : le butin arrive par courrier, l'alt vous attend ou revient.",
 		RESUMED = "%s a repris sa mission, il reste donc hors de votre groupe : rappelez-le depuis Missions pour le récupérer.",
 		BACK_AT = "retour ~%s", RATE = "~%d/h", AGAIN = "Pareil : %s, %d min",
@@ -66,7 +66,7 @@ local STRINGS = {
 		OUT = "En mission", HELP = "Le butin arrive par courrier. Survolez ici pour en savoir plus, ou une icône pour son rôle.",
 		BADGE_FREE = "Libre", BADGE_OUT = "En mission", BADGE_DONE = "Terminé", BADGE_WAIT = "...",
 		READY = "Prêt à partir", READY_SKILL = "Prêt à partir : %s", DONE_LINE = "De retour : %d objets envoyés par courrier", DONE_NOTHING = "De retour : rien récolté",
-		TIP_FULL = "Trois alts sont déjà partis : rappelez-en un ou attendez son retour.", TIP_REFRESH = "Redemander à vos alts où ils en sont.",
+		TIP_FULL = "Quatre alts sont déjà partis : rappelez-en un ou attendez son retour.", TIP_REFRESH = "Redemander à vos alts où ils en sont.",
 		RISK = "High Risk", RISK_ASK = "%s est en High Risk.\n\n|cffff3333Votre alt peut perdre son butin s'il meurt.|r\n\nL'envoyer récolter quand même (%s, %d min) ?",
 		RISK_SEND = "Envoyer en High Risk", RISK_LINE = "En High Risk : une confirmation vous sera demandée.",
 		RECALL_ALL_ASK = "Rappeler maintenant les %d alts en mission ? Ce qu'ils ont déjà récolté arrive par courrier.",
@@ -83,6 +83,8 @@ local ROWS, ROW_H, ROWS_TOP = 6, 62, 74
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
 local DURATIONS = { 30, 60, 90, 120 }
+-- Alts out at the same time: AiPlayerbot.Missions.MaxPerPlayer (4 from CoA Bots 2.8.4, a group of 5).
+local MAX_OUT = 4
 local ORDER_COUNTS, ORDER_DEFAULT = { 10, 20, 40, 60 }, 20
 local ORDERS = {
 	mining = { { 2770, "Copper Ore" }, { 2771, "Tin Ore" }, { 2775, "Silver Ore" }, { 2772, "Iron Ore" }, { 2776, "Gold Ore" },
@@ -507,7 +509,7 @@ function M.BuildRow(f, i)
 	row.action = UI.IconButton(row, 32, SEND_ICON, function(self)
 		local name = self:GetParent().alt
 		if name and M.OnMission(name) then return T("RECALL"), T("TIP_RECALL") end
-		if M.Count() >= 3 then return T("SEND"), T("TIP_FULL") end
+		if M.Count() >= MAX_OUT then return T("SEND"), T("TIP_FULL") end
 		return T("SEND"), T("TIP_SEND")
 	end, function(self)
 		local name = self:GetParent().alt
@@ -560,11 +562,11 @@ function M.Build()
 	f.title:SetPoint("TOP", 0, -14)
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", -4, -4)
-	-- How many alts are out: three slots, lit gold when taken.
+	-- How many alts are out: one slot each, lit gold when taken.
 	f.count = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	f.count:SetPoint("TOPLEFT", 20, -44)
 	f.slots = {}
-	for i = 1, 3 do
+	for i = 1, MAX_OUT do
 		local slot = f:CreateTexture(nil, "ARTWORK")
 		slot:SetTexture("Interface\\Buttons\\WHITE8X8")
 		slot:SetWidth(10)
@@ -691,9 +693,9 @@ function M.ShowIdle(row, name, s)
 		row.phase:SetTexture(SEND_ICON)
 		row.line:SetText("|cff9d9d9d" .. T("WAIT") .. "|r")
 	end
-	UI.SetIcon(row.action, SEND_ICON, M.Count() < 3)
+	UI.SetIcon(row.action, SEND_ICON, M.Count() < MAX_OUT)
 	row.watch:Hide()
-	if s and M.Count() < 3 then row.order:Show() else row.order:Hide() end
+	if s and M.Count() < MAX_OUT then row.order:Show() else row.order:Hide() end
 end
 
 function M.RefreshPanel()
