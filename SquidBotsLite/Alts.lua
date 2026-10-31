@@ -11,7 +11,9 @@
 -- repetitive lines ("Can't take", "Quest Available", trainer lists) as these messages instead of whispers.
 --   TEAM <level> <hp %> <follow|stay|mission|dead|far> <free bag slots> <zoneId>   (on change, at least once a minute)
 --   OBJ <questId> <incomplete|complete|failed|done|none> <current>/<needed>,...   (each quest of the player's log)
--- Commands: "quest <id>", "take <id>", "catchup <id>", "train", "learn all", "learn <spellId>".
+--   ENCH <enchanter|-> <mail|bank> <this alt's Enchanting> <AltDisenchant 0|1>   (CoA Bots 2.8.4, after HELLO and each change)
+-- Commands: "quest <id>", "take <id>", "catchup <id>", "train", "learn all", "learn <spellId>",
+-- "enchanter [set <name>|clear|mode mail|mode bank]" (2.8.4, release/v2.8.4/CONTRAT-ALTS-2.8.4.md).
 -- In quiet mode the alts no longer take a quest the player accepts: they send their Q and wait for "take".
 
 local PREFIX, VERSION = "SQBA", 1
@@ -62,6 +64,13 @@ local STRINGS = {
 		TIP_T_LEARN = "At a trainer: each alt learns all it can here.", TIP_T_MISSIONS = "Send your alts gathering on their own (opens Missions).", TIP_T_REPAIR = "At a vendor: each alt repairs and sells its junk (grey items, gear it cannot use).",
 		ST_follow = "Follows", ST_stay = "Stays", ST_far = "Far", ST_bags = "Bags full", ST_mission = "Mission %d min", ST_quest = "Quest missing", ST_dead = "Dead", ST_away = "Away", BADGE_MISSION = "On a mission",
 		TEAM_EMPTY = "No alt logged in", TIP_TEAM_DRAG = "Drag to move. Click a portrait: its bot sheet.",
+		SETTINGS = "Team settings", TIP_SETTINGS = "The disenchanter of the team, and how your alts' unused greens reach it.",
+		ENCH_TITLE = "Disenchanter of the team", ENCH_NONE = "Nobody (the greens are sold)",
+		ENCH_NOBODY = "No alt with Enchanting logged in", ENCH_SKILL = "%s (Enchanting %d)",
+		ENCH_MODE = "The greens go to it", MODE_MAIL = "By mail", MODE_BANK = "Through the guild bank",
+		TIP_MODE_MAIL = "Your alts mail it their unused greens; it disenchants them and mails you the dusts, or puts them in the guild bank near a vault.",
+		TIP_MODE_BANK = "Your alts put their unused greens in the guild bank; near the vault it takes them out, disenchants them and puts the dusts back. Their ranks need the tab rights.",
+		ENCH_OFF = "Turned off on this server", ENCH_LINE = "Disenchanter of the team: %s", ENCH_WAIT = "Asking your alts...",
 	},
 	fr = {
 		QUESTS = "Prendre pour l'équipe", TRAINER = "Entraîneur", LOG = "Journal des alts", TEAM = "Équipe",
@@ -106,6 +115,13 @@ local STRINGS = {
 		TIP_T_LEARN = "Chez un entraîneur : chaque alt apprend tout ce qu'il peut ici.", TIP_T_MISSIONS = "Envoyer tes alts récolter seuls (ouvre Missions).", TIP_T_REPAIR = "Chez un marchand : chaque alt répare et vend sa camelote (objets gris, équipement qu'il ne peut pas porter).",
 		ST_follow = "Suit", ST_stay = "Reste", ST_far = "Loin", ST_bags = "Sacs pleins", ST_mission = "Mission %d min", ST_quest = "Quête manquante", ST_dead = "Mort", ST_away = "Absent", BADGE_MISSION = "En mission",
 		TEAM_EMPTY = "Aucun alt connecté", TIP_TEAM_DRAG = "Glisser pour déplacer. Clic sur un portrait : sa fiche de bot.",
+		SETTINGS = "Réglages de l'équipe", TIP_SETTINGS = "Le désenchanteur de l'équipe, et comment les verts inutiles de vos alts lui parviennent.",
+		ENCH_TITLE = "Désenchanteur de l'équipe", ENCH_NONE = "Personne (les verts sont vendus)",
+		ENCH_NOBODY = "Aucun alt avec Enchantement connecté", ENCH_SKILL = "%s (Enchantement %d)",
+		ENCH_MODE = "Les verts lui parviennent", MODE_MAIL = "Par courrier", MODE_BANK = "Par la banque de guilde",
+		TIP_MODE_MAIL = "Vos alts lui postent leurs verts inutiles ; il les désenchante et vous poste les poussières, ou les met en banque de guilde près d'un coffre.",
+		TIP_MODE_BANK = "Vos alts déposent leurs verts inutiles en banque de guilde ; près du coffre il les retire, les désenchante et redépose les poussières. Leurs rangs ont besoin des droits de l'onglet.",
+		ENCH_OFF = "Désactivé sur ce serveur", ENCH_LINE = "Désenchanteur de l'équipe : %s", ENCH_WAIT = "Je demande à vos alts...",
 	},
 }
 local function T(key)
@@ -141,8 +157,9 @@ local STATE = {
 -- quests[id][alt] = { state, detail, catchable, at }; asked[id][alt] = when asked.
 -- train[alt] = { npc, list = { { id, cost, name } }, count, total, money, at }.
 -- members[alt] = the last TEAM; obj[questId][alt] = { state, done, needed } from OBJ.
+-- ench: the team's disenchanter and mode (ENCH); enchSkill[alt] = its Enchanting.
 local A = { seen = {}, gone = {}, sent = {}, quests = {}, asked = {}, titles = {}, recent = {}, train = {}, journal = {},
-	nextHello = 0, members = {}, obj = {} }
+	nextHello = 0, members = {}, obj = {}, enchSkill = {} }
 -- An alt that sent TEAM and has been silent this long is gone (TEAM comes at least once a minute).
 local TEAM_SILENT = 150
 local UI = SquidBotsLite_UI
@@ -979,6 +996,7 @@ function A.BuildTeam()
 	f:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
 		GameTooltip:SetText(T("TEAM"), 1, 0.82, 0)
+		if A.ench and A.ench.name then GameTooltip:AddLine(string.format(T("ENCH_LINE"), UI.ClassName(A.ench.name)), 0.4, 0.8, 1) end
 		GameTooltip:AddLine(T("TIP_TEAM_DRAG"), 1, 1, 1, true)
 		GameTooltip:Show()
 	end)
@@ -995,6 +1013,13 @@ function A.BuildTeam()
 		p.icon:SetWidth(26)
 		p.icon:SetHeight(26)
 		p.icon:SetPoint("TOP", 0, -1)
+		p.ench = p:CreateTexture(nil, "OVERLAY")
+		p.ench:SetWidth(12)
+		p.ench:SetHeight(12)
+		p.ench:SetPoint("TOPLEFT", p.icon, "TOPLEFT", -5, 4)
+		p.ench:SetTexture("Interface\\Icons\\Trade_Engraving")
+		p.ench:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		p.ench:Hide()
 		p.level = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		p.level:SetPoint("BOTTOMRIGHT", p.icon, "BOTTOMRIGHT", 6, -2)
 		p.level:SetFont(p.level:GetFont(), 9, "OUTLINE")
@@ -1029,6 +1054,7 @@ function A.BuildTeam()
 			GameTooltip:SetText(UI.ClassName(self.alt))
 			local text, color = A.AltStatus(self.alt)
 			GameTooltip:AddLine(text, color[1], color[2], color[3])
+			if A.ench and A.ench.name == self.alt then GameTooltip:AddLine(T("ENCH_TITLE"), 0.4, 0.8, 1) end
 			GameTooltip:Show()
 		end)
 		p:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1095,6 +1121,7 @@ function A.RefreshTeam()
 			local text, color = A.AltStatus(name)
 			p.state:SetText(text)
 			p.state:SetTextColor(color[1], color[2], color[3])
+			if A.ench and A.ench.name == name then p.ench:Show() else p.ench:Hide() end
 			p:Show()
 		else
 			p.alt = nil
@@ -1207,6 +1234,52 @@ function SquidBotsLite_AltsButtons(frame, x)
 		function() return T("TEAM"), T("TIP_TEAM") end, function() SquidBotsLite_ToggleTeam() end)
 	team.icon:SetTexture("Interface\\Icons\\INV_Misc_GroupNeedMore")
 	team:SetPoint("LEFT", log, "RIGHT", 4, 0)
+	local settings = UI.IconButton(frame, 22, "Interface\\Icons\\INV_Misc_Gear_01", function()
+		local line = T("TIP_SETTINGS")
+		if A.ench then
+			line = line .. "\n\n" .. string.format(T("ENCH_LINE"), A.ench.name and UI.ClassName(A.ench.name) or "-") ..
+				"\n" .. T(A.ench.mode == "bank" and "MODE_BANK" or "MODE_MAIL")
+		end
+		return T("SETTINGS"), line
+	end, function() A.SettingsMenu() end)
+	settings:SetPoint("LEFT", team, "RIGHT", 4, 0)
+end
+
+-- The team settings: who disenchants for the team (an alt with Enchanting), and how the greens reach it.
+local function AskEnchanter(command)
+	local alts = A.Online()
+	if alts[1] then Send(alts[1], command) end
+end
+
+function A.SettingsMenu()
+	local ench = A.ench or {}
+	if not A.ench then AskEnchanter("enchanter") end
+	local items = { { text = T("SETTINGS"), isTitle = true, notCheckable = true } }
+	if ench.enabled == false then
+		table.insert(items, { text = "|cff9d9d9d" .. T("ENCH_OFF") .. "|r", notCheckable = true, disabled = true })
+	end
+	table.insert(items, { text = T("ENCH_TITLE"), isTitle = true, notCheckable = true })
+	local any = false
+	for _, name in ipairs(A.Online()) do
+		local skill = A.enchSkill[name] or 0
+		if skill > 0 then
+			any = true
+			table.insert(items, { text = string.format(T("ENCH_SKILL"), UI.ClassName(name), skill), checked = ench.name == name,
+				func = function() AskEnchanter("enchanter set " .. name) end })
+		end
+	end
+	if not any then
+		table.insert(items, { text = "|cff9d9d9d" .. (A.ench and T("ENCH_NOBODY") or T("ENCH_WAIT")) .. "|r", notCheckable = true, disabled = true })
+	end
+	table.insert(items, { text = T("ENCH_NONE"), checked = A.ench ~= nil and not ench.name, func = function() AskEnchanter("enchanter clear") end })
+	table.insert(items, { text = T("ENCH_MODE"), isTitle = true, notCheckable = true })
+	table.insert(items, { text = T("MODE_MAIL"), checked = ench.mode ~= "bank", tooltipTitle = T("MODE_MAIL"), tooltipText = T("TIP_MODE_MAIL"),
+		tooltipOnButton = true, func = function() AskEnchanter("enchanter mode mail") end })
+	table.insert(items, { text = T("MODE_BANK"), checked = ench.mode == "bank", tooltipTitle = T("MODE_BANK"), tooltipText = T("TIP_MODE_BANK"),
+		tooltipOnButton = true, func = function() AskEnchanter("enchanter mode bank") end })
+	A.menu = A.menu or CreateFrame("Frame", "SquidBotsLiteTeamSettings", UIParent, "UIDropDownMenuTemplate")
+	EasyMenu(items, A.menu, "cursor", 0, 0, "MENU")
+	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -1217,6 +1290,13 @@ local Handle = {}
 function Handle.HELLO(name, f)
 	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", at = GetTime() }
 	A.RefreshLog()
+end
+
+function Handle.ENCH(name, f)
+	A.ench = { name = (f[2] and f[2] ~= "" and f[2] ~= "-") and f[2] or nil, mode = f[3] == "bank" and "bank" or "mail",
+		enabled = f[5] ~= "0", at = GetTime() }
+	A.enchSkill[name] = tonumber(f[4] or "") or 0
+	A.RefreshTeam()
 end
 
 function Handle.TEAM(name, f)
