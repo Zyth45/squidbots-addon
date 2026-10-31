@@ -942,6 +942,8 @@ function M.Build()
 	end
 	f.refresh = UI.IconButton(f, 22, "Interface\\Buttons\\UI-RefreshButton", function() return T("REFRESH"), T("TIP_REFRESH") end, function()
 		if SquidBotsLite_AskRoster then SquidBotsLite_AskRoster() end
+		-- A click asks again what each alt can do (a skill just learned, a pick just bought), not after 5 minutes.
+		M.can = {}
 		M.Poll()
 		M.RefreshPanel()
 	end)
