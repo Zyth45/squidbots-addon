@@ -104,7 +104,7 @@ end
 
 local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
-local ROWS, ROW_H, ROWS_TOP = 6, 70, 74
+local ROWS, ROW_H, ROWS_TOP = 6, 80, 74
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
 local DURATIONS = { 30, 60, 120 }
@@ -828,7 +828,7 @@ function M.BuildRow(f, i)
 			GameTooltip:Show()
 		end)
 		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		b:SetPoint("TOPLEFT", 58 + (a - 1) * 22, -44)
+		b:SetPoint("TOPLEFT", 66 + (a - 1) * 24, -50)
 		row.acts[a] = b
 	end
 	row.lengths = {}
@@ -858,7 +858,7 @@ function M.BuildRow(f, i)
 			GameTooltip:Show()
 		end)
 		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		b:SetPoint("TOPLEFT", 58 + #ACTIVITIES * 22 + 8 + (d - 1) * 30, -45)
+		b:SetPoint("TOPLEFT", 66 + #ACTIVITIES * 24 + 10 + (d - 1) * 30, -51)
 		row.lengths[d] = b
 	end
 	row.send = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
