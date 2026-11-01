@@ -18,7 +18,7 @@ local STRINGS = {
 		TITLE = "Missions", REFRESH = "Refresh", SEND = "Send", RECALL = "Recall", NONE = "Free",
 		HINT = "Send a logged-in alt gathering on its own while you play: it leaves the group, gathers, and mails you what it found. You stay logged in (on any character).",
 		NO_ALTS = "No alt logged in: log one in from My alts, then Refresh.",
-		COUNT = "On a mission: %d / 4", WAIT = "Asking your alts...",
+		COUNT = "On a mission: %d / 4", WAIT = "Asking your alts...", NO_MODULE = "No answer: this server has no CoA Bots missions",
 		AUTO = "Its gathering skill", MINING = "Mining", HERBALISM = "Herbalism", MIN = "%d min",
 		TRAVEL = "On the way to %s", WORK = "Gathering in %s", DELIVER = "Mailing the loot",
 		LEFT = "%d min left", ITEMS = "%d items", DEATHS = "%d deaths", DEATH = "1 death",
@@ -59,7 +59,7 @@ local STRINGS = {
 		TITLE = "Missions", REFRESH = "Actualiser", SEND = "Envoyer", RECALL = "Rappeler", NONE = "Libre",
 		HINT = "Envoyez un alt connecté récolter seul pendant que vous jouez : il quitte le groupe, récolte, et vous envoie sa récolte par courrier. Vous restez connecté (sur n'importe quel personnage).",
 		NO_ALTS = "Aucun alt connecté : connectez-en un depuis Mes alts, puis Actualiser.",
-		COUNT = "En mission : %d / 4", WAIT = "Je demande à vos alts...",
+		COUNT = "En mission : %d / 4", WAIT = "Je demande à vos alts...", NO_MODULE = "Pas de réponse : ce serveur n'a pas les missions de CoA Bots",
 		AUTO = "Son métier de récolte", MINING = "Minage", HERBALISM = "Herboristerie", MIN = "%d min",
 		TRAVEL = "En route vers %s", WORK = "Récolte à %s", DELIVER = "Envoi du butin",
 		LEFT = "%d min restantes", ITEMS = "%d objets", DEATHS = "%d morts", DEATH = "1 mort",
@@ -105,6 +105,8 @@ end
 local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
 local ROWS, ROW_H, ROWS_TOP = 6, 80, 74
+-- An alt asked "mission status" that never answers after this long: its server has no missions (issue #3).
+local NO_ANSWER_SECONDS = 20
 -- One poll a minute while an alt is out (or the panel is open); one whisper a second, so as not to flood.
 local POLL_EVERY, POLL_GAP, OFFLINE_WAIT = 60, 1, 3
 local DURATIONS = { 30, 60, 120 }
@@ -146,7 +148,7 @@ local KNOWN_SKILL = { mining = true, herbalism = true, skinning = true, fishing 
 -- done: the alts back from a mission this session, with how many items they mailed.
 -- risk: the alts seen in High Risk (its aura in the group, the 8th field of MISSION;..., or a refusal); tried: the
 -- last mission asked of each, offered again in High Risk after a refusal.
-local M = { alts = {}, status = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {}, risk = {}, tried = {},
+local M = { alts = {}, status = {}, askedAt = {}, queue = {}, nextSend = 0, nextPoll = 0, polled = {}, mail = {}, done = {}, risk = {}, tried = {},
 	can = {} }
 -- Read by Dashboard.lua: the missions of each alt, Go and Recall; M.watcher() true keeps the polls going.
 SquidBotsLite_Missions = M
@@ -174,6 +176,8 @@ function M.Poll()
 	M.queue = {}
 	local queued = {}
 	for _, name in ipairs(M.alts) do
+		-- When it was first asked: an alt that never answers is on a server without the missions.
+		M.askedAt[name] = M.askedAt[name] or GetTime()
 		table.insert(M.queue, { name, "mission status" })
 		queued[name] = true
 		-- What it can be sent to: once, then again every 5 minutes (a new skill, a pick bought).
@@ -1064,7 +1068,8 @@ function M.ShowIdle(row, name, s)
 	else
 		Badge(row, "BADGE_WAIT", BADGE_COLOR.WAIT)
 		row.phase:SetTexture(SEND_ICON)
-		row.line:SetText("|cff9d9d9d" .. T("WAIT") .. "|r")
+		local silent = M.askedAt[name] and GetTime() - M.askedAt[name] > NO_ANSWER_SECONDS
+		row.line:SetText("|cff9d9d9d" .. T(silent and "NO_MODULE" or "WAIT") .. "|r")
 	end
 	row.action:Hide()
 	row.watch:Hide()
