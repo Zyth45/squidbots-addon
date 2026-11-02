@@ -1024,6 +1024,9 @@ local function ParseWcr(name, message)
 	if not (info and info.wcr) or not specHideUntil[name] or GetTime() > specHideUntil[name] then return end
 	-- The answer to "co ?" names strategies such as "frost" or "holy": not a tree.
 	if message:find("^Strategies: ") then return end
+	-- "wcr spec <n>" is followed by the list of the trees ("spec 0: Holy (heal)"), the active one marked ">spec":
+	-- a list line only lists, it is hidden without changing the spec read from the "WCR spec <n>:" header.
+	if message:find("^%s*>?%s*spec%s*%d") then return nil, true end
 	local function TreeIn(text)
 		local found, count = nil, 0
 		local lower = string.lower(text)
@@ -1052,7 +1055,8 @@ end
 
 -- An answer of a bot about its specializations: true when it was one.
 local function OnSpecReply(message, sender)
-	local tree = ParseWcr(sender, message)
+	local tree, listLine = ParseWcr(sender, message)
+	if listLine then return true end
 	if tree then
 		knownBot[sender] = true
 		local info = specsByName[sender]
