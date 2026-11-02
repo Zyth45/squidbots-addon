@@ -67,7 +67,7 @@ local STRINGS = {
 		T_DASHBOARD = "Alts Dashboard", TIP_T_DASHBOARD = "The whole team in one window: levels, gold, missions, professions and what needs doing.",
 		TIP_T_SUMMON = "Each logged-in alt teleports next to you.", TIP_T_FOLLOW = "Calls back every alt out on a mission (after a question).",
 		TIP_T_LEARN = "At a trainer: each alt learns all it can here.", TIP_T_MISSIONS = "Send your alts gathering on their own (opens Missions).", TIP_T_REPAIR = "At a vendor: each alt repairs and sells its junk (grey items, gear it cannot use).",
-		ST_follow = "Follows", ST_stay = "Stays", ST_far = "Far", ST_bags = "Bags full", ST_mission = "Mission %d min", ST_quest = "Quest missing", ST_dead = "Dead", ST_away = "Away", BADGE_MISSION = "On a mission",
+		ST_follow = "Follows", ST_stay = "Stays", ST_far = "Far", ST_bags = "Bags full", ST_mission = "Mission %d min", ST_quest = "Quest missing", ST_dead = "Dead", ST_away = "Away", TIP_REMOVE = "Right-click: remove from the bar",BADGE_MISSION = "On a mission",
 		TEAM_EMPTY = "No alt logged in", TIP_TEAM_DRAG = "Drag to move. Click a portrait: its bot sheet.",
 		SETTINGS = "Team settings", TIP_SETTINGS = "The disenchanter of the team, and how your alts' unused greens reach it.",
 		ENCH_TITLE = "Disenchanter of the team", ENCH_NONE = "Nobody (the greens are sold)",
@@ -127,7 +127,7 @@ local STRINGS = {
 		T_DASHBOARD = "Dashboard Alts", TIP_T_DASHBOARD = "Toute l'équipe dans une fenêtre : niveaux, or, missions, métiers et ce qu'il reste à faire.",
 		TIP_T_SUMMON = "Chaque alt connecté se téléporte près de vous.", TIP_T_FOLLOW = "Rappelle tous les alts partis en mission (après une question).",
 		TIP_T_LEARN = "Chez un entraîneur : chaque alt apprend tout ce qu'il peut ici.", TIP_T_MISSIONS = "Envoyer tes alts récolter seuls (ouvre Missions).", TIP_T_REPAIR = "Chez un marchand : chaque alt répare et vend sa camelote (objets gris, équipement qu'il ne peut pas porter).",
-		ST_follow = "Suit", ST_stay = "Reste", ST_far = "Loin", ST_bags = "Sacs pleins", ST_mission = "Mission %d min", ST_quest = "Quête manquante", ST_dead = "Mort", ST_away = "Absent", BADGE_MISSION = "En mission",
+		ST_follow = "Suit", ST_stay = "Reste", ST_far = "Loin", ST_bags = "Sacs pleins", ST_mission = "Mission %d min", ST_quest = "Quête manquante", ST_dead = "Mort", ST_away = "Absent", TIP_REMOVE = "Clic droit : retirer de la barre",BADGE_MISSION = "En mission",
 		TEAM_EMPTY = "Aucun alt connecté", TIP_TEAM_DRAG = "Glisser pour déplacer. Clic sur un portrait : sa fiche de bot.",
 		SETTINGS = "Réglages de l'équipe", TIP_SETTINGS = "Le désenchanteur de l'équipe, et comment les verts inutiles de vos alts lui parviennent.",
 		ENCH_TITLE = "Désenchanteur de l'équipe", ENCH_NONE = "Personne (les verts sont vendus)",
@@ -180,7 +180,7 @@ local STATE = {
 -- members[alt] = the last TEAM; obj[questId][alt] = { state, done, needed } from OBJ.
 -- ench: the team's disenchanter and mode (ENCH); enchSkill[alt] = its Enchanting.
 local A = { seen = {}, gone = {}, sent = {}, quests = {}, asked = {}, titles = {}, recent = {}, train = {}, journal = {},
-	nextHello = 0, members = {}, obj = {}, enchSkill = {} }
+	nextHello = 0, members = {}, obj = {}, enchSkill = {}, left = {}, grouped = {} }
 -- An alt that sent TEAM and has been silent this long is gone (TEAM comes at least once a minute).
 local TEAM_SILENT = 150
 local UI = SquidBotsLite_UI
@@ -222,6 +222,8 @@ function A.Online()
 	local function Add(name, sure)
 		if not name or have[name] or name == UnitName("player") then return end
 		if not sure and A.gone[name] and A.gone[name] >= (A.seen[name] or 0) then return end
+		-- Left the group (or removed with a right-click): off the bar until it is back, unless on a mission.
+		if not sure and A.left[name] and not (SquidBotsLite_MissionOf and SquidBotsLite_MissionOf(name)) then return end
 		have[name] = true
 		table.insert(list, name)
 	end
@@ -1070,8 +1072,16 @@ function A.BuildTeam()
 		p:RegisterForDrag("LeftButton")
 		p:SetScript("OnDragStart", function() f:StartMoving() end)
 		p:SetScript("OnDragStop", function() f:GetScript("OnDragStop")(f) end)
-		p:SetScript("OnClick", function(self)
-			if self.alt and SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(self.alt) end
+		p:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		p:SetScript("OnClick", function(self, button)
+			if not self.alt then return end
+			if button == "RightButton" then
+				A.left[self.alt], A.members[self.alt] = GetTime(), nil
+				GameTooltip:Hide()
+				A.RefreshTeam()
+			elseif SquidBotsLite_OpenSheet then
+				SquidBotsLite_OpenSheet(self.alt)
+			end
 		end)
 		p:SetScript("OnEnter", function(self)
 			if not self.alt then return end
@@ -1080,6 +1090,7 @@ function A.BuildTeam()
 			local text, color = A.AltStatus(self.alt)
 			GameTooltip:AddLine(text, color[1], color[2], color[3])
 			if A.ench and A.ench.name == self.alt then GameTooltip:AddLine(T("ENCH_TITLE"), 0.4, 0.8, 1) end
+			if not UnitOf(self.alt) then GameTooltip:AddLine(T("TIP_REMOVE"), 0.6, 0.6, 0.6) end
 			GameTooltip:Show()
 		end)
 		p:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1512,7 +1523,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	elseif event == "CHAT_MSG_SYSTEM" then
 		local added = arg1:match("^add%a*: (.-) %- ok$")
 		if added then
-			A.seen[added], A.gone[added] = GetTime(), nil
+			A.seen[added], A.gone[added], A.left[added] = GetTime(), nil, nil
 			A.RefreshTeam()
 		end
 		local gone = arg1:match("^No player named '(.-)' is currently playing%.$")
@@ -1568,10 +1579,19 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	else
 		-- An alt that joins the group opens the team bar again, even after the player closed it.
 		if event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
-			local count = 0
+			local count, now = 0, {}
 			for _, unit in ipairs(GroupUnits()) do
-				if IsAlt(UnitName(unit)) then count = count + 1 end
+				local name = UnitName(unit)
+				if IsAlt(name) then
+					count = count + 1
+					now[name], A.left[name] = true, nil
+				end
 			end
+			-- An alt removed from the group, or a group disbanded: its portrait goes instead of staying "Away".
+			for name in pairs(A.grouped) do
+				if not now[name] then A.left[name], A.members[name] = GetTime(), nil end
+			end
+			A.grouped = now
 			if count > (A.altsInGroup or 0) then SquidBotsLiteDB.teamHidden = nil end
 			A.altsInGroup = count
 		end
