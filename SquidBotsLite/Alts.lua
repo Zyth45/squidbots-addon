@@ -1110,7 +1110,10 @@ function A.BuildTeam()
 			if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end
 		end },
 		{ "Interface\\Icons\\Trade_BlackSmithing", "T_REPAIR", "TIP_T_REPAIR", function()
-			WhisperAll("repair")
+			-- At a vendor that does not repair, "repair" only brings a red "Cannot find any npc to repair at" from
+			-- every alt: it is not sent there, and that answer is hidden for a while after the click anyway.
+			if not (MerchantFrame and MerchantFrame:IsShown() and not CanMerchantRepair()) then WhisperAll("repair") end
+			A.repairUntil = GetTime() + 10
 			WhisperAll("s junk")
 		end },
 	}) do
@@ -1500,6 +1503,14 @@ end
 -- ---------------------------------------------------------------------------
 -- Events
 -- ---------------------------------------------------------------------------
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", function(_, _, message, name)
+	if A.repairUntil and GetTime() <= A.repairUntil and message:find("^Cannot find any npc to repair") then
+		for _, alt in ipairs(A.Online()) do
+			if alt == name or alt == (name or ""):match("^[^-]+") then return true end
+		end
+	end
+end)
+
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, message)
 	local name = message:match("^No player named '(.-)' is currently playing%.$")
 	if name and A.sent[name] and GetTime() - A.sent[name] < OFFLINE_WAIT then return true end

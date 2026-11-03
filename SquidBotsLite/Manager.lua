@@ -19,7 +19,8 @@ local STRINGS = {
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
 		MOUNT_HINT = "Click a mount: your bot rides it from now on. One ground and one flying favourite; a ground-and-flying mount is both. Automatic choice: the bot picks again.",
 		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
-		NO_MOUNTS = "This bot knows no mount.",
+		NO_MOUNTS = "This bot knows no mount: buy one and teach it riding, it rides it on its own.",
+		NO_MOUNTS_LOW = "No mount before level 20: riding is learnt at 20 (this bot is level %d).",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
 		NOT_A_MEMBER = "%s is not in your group.",
 		STRATS = "Strategies", COMBAT = "In combat", NONCOMBAT = "Out of combat", ADD = "Add...",
@@ -57,7 +58,8 @@ local STRINGS = {
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
 		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Une préférée au sol, une en vol ; une monture sol et vol compte pour les deux. Choix automatique : le bot choisit à nouveau.",
 		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
-		NO_MOUNTS = "Ce bot ne connaît aucune monture.",
+		NO_MOUNTS = "Ce bot ne connaît aucune monture : achetez-lui-en une et faites-lui apprendre la monte, il la prendra seul.",
+		NO_MOUNTS_LOW = "Pas de monture avant le niveau 20 : la monte s'apprend au niveau 20 (ce bot est niveau %d).",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
 		STRATS = "Stratégies", COMBAT = "En combat", NONCOMBAT = "Hors combat", ADD = "Ajouter...",
@@ -1175,7 +1177,13 @@ local function BuildMounts(page)
 end
 
 RenderMounts = function(page)
-	page.note:SetText(#mounts == 0 and capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
+	local note = ""
+	if #mounts == 0 and capture == nil and sheet.status:GetText() == "" then
+		local unit = UnitOf(current)
+		local level = unit and UnitLevel(unit) or (SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[current] or {}).level
+		note = level and level > 0 and level < 20 and string.format(T("NO_MOUNTS_LOW"), level) or T("NO_MOUNTS")
+	end
+	page.note:SetText(note)
 	page.auto:SetText(T("AUTO_MOUNT"))
 	page.hint:SetText(T("MOUNT_HINT"))
 	local kinds = { ground = T("GROUND"), flying = T("FLYING"), both = T("BOTH") }

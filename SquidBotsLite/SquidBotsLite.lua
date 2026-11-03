@@ -75,7 +75,8 @@ local STRINGS = {
 		TIP_ALT_SUMMON = "Brings it to you: an alt logs in where it logged out.",
 		ALTS_LOOK = "Keeps its look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Click: open its bot sheet.", ALTS_GOLD = "Gold: %s", ALTS_XP = "XP: %d%% (rested %d%%)",
-		INVITE = "Invite", ASKED = "Asked in %s: %s", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
+		INVITE = "Invite", ASKED = "Asked in %s: %s",
+		ASK_NONE = "No %s answered: only bots within 2 levels of you can. Ask again in a minute, or bring one of your alts (My alts).", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
 		NOT_IN_GROUP = "You are not in a group with bots.",
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
 		M_FOLLOW = "Follow me", M_STAY = "Stay here", M_ATTACK = "Attack my target", M_SUMMON = "Come to me",
@@ -178,7 +179,8 @@ local STRINGS = {
 		TIP_ALT_SUMMON = "L'amène à vous : un alt se connecte là où il s'était déconnecté.",
 		ALTS_LOOK = "Garde son apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Clic : ouvrir sa fiche.", ALTS_GOLD = "Or : %s", ALTS_XP = "XP : %d%% (reposé %d%%)",
-		INVITE = "Inviter", ASKED = "Demandé dans %s : %s", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
+		INVITE = "Inviter", ASKED = "Demandé dans %s : %s",
+		ASK_NONE = "Aucun %s n'a répondu : seuls les bots à 2 niveaux de vous peuvent le faire. Redemandez dans une minute, ou prenez un de vos alts (Mes alts).", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
 		NOT_IN_GROUP = "Vous n'êtes pas en groupe avec des bots.",
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
 		M_FOLLOW = "Me suivre", M_STAY = "Rester ici", M_ATTACK = "Attaquer ma cible", M_SUMMON = "Venir à moi",
@@ -229,6 +231,8 @@ local ROLE_COORDS = {
 }
 local CHANNELS = { "Zone", "Newcomers", "World" }
 local OFFER_SECONDS = 120
+-- An ask with no offer for a role after this many seconds gets a hint in the chat.
+local ASK_WAIT = 12
 -- "Ask for all three" brings 7 offers by default (2 tanks, 2 healers, 3 damage: CoaLfg*Offers on the server).
 local MAX_TOASTS = 8
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
@@ -492,6 +496,23 @@ local function Ask(roles)
 	local message = "lfg bot " .. roles
 	SendChatMessage(message, "CHANNEL", nil, id)
 	Print(string.format(L.ASKED, name, message))
+	-- No offer at all for a role a while later: say why (the server only sends bots close to the player's level)
+	-- and what to do, instead of leaving the player waiting.
+	local asked = GetTime()
+	state.askTimer = state.askTimer or CreateFrame("Frame")
+	state.askTimer:SetScript("OnUpdate", function(frame)
+		if GetTime() - asked < ASK_WAIT then return end
+		frame:SetScript("OnUpdate", nil)
+		local missing = {}
+		for role in roles:gmatch("%a+") do
+			local found = false
+			for _, offer in ipairs(toasts) do
+				if offer.role == role and offer.expires - OFFER_SECONDS >= asked then found = true end
+			end
+			if not found then table.insert(missing, L["ROLE_" .. string.upper(role)] or role) end
+		end
+		if #missing > 0 then Print(string.format(L.ASK_NONE, string.lower(table.concat(missing, ", ")))) end
+	end)
 end
 
 -- A menu closes on its own once the mouse has left it this many seconds (the game keeps it open otherwise).
