@@ -6,7 +6,9 @@
 local STRINGS = {
 	en = {
 		TITLE = "Bot sheet", GEAR = "Gear", BAGS = "Bags", QUESTS = "Quests", INFO = "Info", REFRESH = "Refresh",
-		BEST_GEAR = "Best gear", TRADE = "Open trade", FOLLOW = "Follow", STAY = "Stay", SUMMON = "Summon",
+		BEST_GEAR = "Best gear", BEST_GEAR_ASK = "%s gets free gear for its level, replacing what it wears. Players who earn their gear may not want this. Sure?",
+		BEST_GEAR_TIP = "Free gear for its level from the server, replacing what it wears (cannot be undone). A server can turn it off for alts (AiPlayerbot.AutoGearCommandAltBots = 0).",
+		TRADE = "Open trade", FOLLOW = "Follow", STAY = "Stay", SUMMON = "Summon",
 		LOGOUT = "Log out", WAIT = "Asking the bot...", WAIT_AGAIN = "Still waiting: asking the bot again...", NO_REPLY = "No answer: is it one of your bots?",
 		NOT_IN_GROUP = "Invite it to your group to see its gear.", OUT_OF_RANGE = "Come closer to see its gear.",
 		EMPTY_BAGS = "Nothing in the bags.", NO_QUESTS = "No quest.",
@@ -44,7 +46,9 @@ local STRINGS = {
 	},
 	fr = {
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
-		BEST_GEAR = "Meilleur équipement", TRADE = "Ouvrir l'échange", FOLLOW = "Suivre", STAY = "Rester", SUMMON = "Appeler",
+		BEST_GEAR = "Meilleur équipement", BEST_GEAR_ASK = "%s reçoit un équipement gratuit de son niveau, à la place de ce qu'il porte. Les joueurs qui gagnent leur équipement n'en voudront peut-être pas. Sûr ?",
+		BEST_GEAR_TIP = "Équipement gratuit de son niveau donné par le serveur, à la place de ce qu'il porte (impossible à annuler). Un serveur peut le désactiver pour les alts (AiPlayerbot.AutoGearCommandAltBots = 0).",
+		TRADE = "Ouvrir l'échange", FOLLOW = "Suivre", STAY = "Rester", SUMMON = "Appeler",
 		LOGOUT = "Déconnecter", WAIT = "Demande au bot...", WAIT_AGAIN = "Toujours en attente : je redemande au bot...", NO_REPLY = "Pas de réponse : est-ce bien un de vos bots ?",
 		NOT_IN_GROUP = "Invitez-le dans votre groupe pour voir son équipement.", OUT_OF_RANGE = "Approchez-vous pour voir son équipement.",
 		EMPTY_BAGS = "Rien dans les sacs.", NO_QUESTS = "Aucune quête.",
@@ -483,6 +487,14 @@ StaticPopupDialogs.SQUIDBOTSLITE_DESTROY = {
 		AfterChange()
 	end,
 }
+-- "autogear" makes new gear on the server: a click by mistake cannot be taken back, so it is asked first.
+StaticPopupDialogs.SQUIDBOTSLITE_AUTOGEAR = {
+	text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = 1, hideOnEscape = 1,
+	OnAccept = function()
+		Whisper("autogear")
+		AfterChange()
+	end,
+}
 local function Destroy(item, link)
 	StaticPopupDialogs.SQUIDBOTSLITE_DESTROY.text = string.format(T("DESTROY_ASK"), current, item.link)
 	local dialog = StaticPopup_Show("SQUIDBOTSLITE_DESTROY")
@@ -604,7 +616,17 @@ local function BuildGear(page)
 	page.best:SetWidth(140)
 	page.best:SetHeight(22)
 	page.best:SetPoint("TOP", 0, -296)
-	page.best:SetScript("OnClick", function() Whisper("autogear"); AfterChange() end)
+	page.best:SetScript("OnClick", function()
+		StaticPopupDialogs.SQUIDBOTSLITE_AUTOGEAR.text = string.format(T("BEST_GEAR_ASK"), current or "?")
+		StaticPopup_Show("SQUIDBOTSLITE_AUTOGEAR")
+	end)
+	page.best:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(T("BEST_GEAR"))
+		GameTooltip:AddLine(T("BEST_GEAR_TIP"), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	page.best:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
 local function BuildBags(page)
