@@ -28,7 +28,10 @@ local STRINGS = {
 		ASK_TANK = "Ask for a tank", ASK_HEAL = "Ask for a healer", ASK_DPS = "Ask for damage", ASK_ALL = "Ask for all three",
 		GM_ON = "GM mode on: bots are called with .playerbots coa.",
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
-		GEAR = "Best gear for the group", REPAIR = "Repair the group",
+		GEAR = "Best gear for the group",
+		GEAR_ASK_ALL = "Every bot of the group gets free gear for its level, replacing what it wears. Sure?",
+		GEAR_ASK_ONE = "%s gets free gear for its level, replacing what it wears. Players who earn their gear may not want this. Sure?",
+		REPAIR = "Repair the group",
 		RAID_10 = "Raid of 10 bots", RAID_25 = "Raid of 25 bots", REGEAR = "Regear level 60+ bots (GM)",
 		TRAIN = "Learn from my target (trainer)", M_TRAIN = "Learn from my target (trainer)",
 		QUESTS = "Take my quests (next to the quest giver)",
@@ -132,7 +135,10 @@ local STRINGS = {
 		ASK_TANK = "Demander un tank", ASK_HEAL = "Demander un soigneur", ASK_DPS = "Demander des DPS", ASK_ALL = "Demander les trois",
 		GM_ON = "Mode GM activé : les bots sont appelés avec .playerbots coa.",
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
-		GEAR = "Meilleur équipement du groupe", REPAIR = "Réparer le groupe",
+		GEAR = "Meilleur équipement du groupe",
+		GEAR_ASK_ALL = "Chaque bot du groupe reçoit un équipement gratuit de son niveau, à la place de ce qu'il porte. Sûr ?",
+		GEAR_ASK_ONE = "%s reçoit un équipement gratuit de son niveau, à la place de ce qu'il porte. Les joueurs qui gagnent leur équipement n'en voudront peut-être pas. Sûr ?",
+		REPAIR = "Réparer le groupe",
 		RAID_10 = "Raid de 10 bots", RAID_25 = "Raid de 25 bots", REGEAR = "Rééquiper les bots 60+ (MJ)",
 		TRAIN = "Apprendre de ma cible (entraîneur)", M_TRAIN = "Apprendre de ma cible (entraîneur)",
 		QUESTS = "Prendre mes quêtes (près du donneur)",
@@ -413,6 +419,17 @@ local function SetLanguage(lang)
 	BINDING_NAME_SQUIDBOTSLITE_RECALLALL = L.BIND_RECALL
 end
 
+-- "autogear" makes new gear on the server and cannot be undone: one Yes/No first, for a bot or the whole group.
+StaticPopupDialogs.SQUIDBOTSLITE_AUTOGEAR_GROUP = {
+	text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = 1, hideOnEscape = 1,
+	OnAccept = function(self) if self.data then self.data() end end,
+}
+local function AskAutogear(text, send)
+	StaticPopupDialogs.SQUIDBOTSLITE_AUTOGEAR_GROUP.text = text
+	local dialog = StaticPopup_Show("SQUIDBOTSLITE_AUTOGEAR_GROUP")
+	if dialog then dialog.data = send end
+end
+
 local function SendGroup(...)
 	if GetNumPartyMembers() == 0 and GetNumRaidMembers() == 0 then
 		Print(L.NOT_IN_GROUP)
@@ -659,7 +676,9 @@ local function RecruitMenu()
 		{ text = L.RAID_25, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 25", "SAY") end },
 		{ text = L.ALTS, notCheckable = true, func = function() ShowAlts() end },
 		{ text = L.SPECS, notCheckable = true, func = function() ShowSpecs() end },
-		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
+		{ text = L.GEAR, notCheckable = true, func = function()
+			AskAutogear(L.GEAR_ASK_ALL, function() SendGroup("autogear") end)
+		end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 		{ text = L.TRAIN, notCheckable = true, func = function() if TargetIsNpc() then SendGroup("trainer learn") end end },
 		-- "accept *": each bot takes every quest offered by the quest givers within reach of it (alts too).
@@ -742,7 +761,9 @@ local function ProfileMenu()
 		end },
 		{ text = L.ROLE_ORDERS, hasArrow = true, notCheckable = true, menuList = roleOrders },
 		{ text = L.FORMATION, hasArrow = true, notCheckable = true, menuList = formations },
-		{ text = L.GEAR, notCheckable = true, func = function() SendGroup("autogear") end },
+		{ text = L.GEAR, notCheckable = true, func = function()
+			AskAutogear(L.GEAR_ASK_ALL, function() SendGroup("autogear") end)
+		end },
 		{ text = L.REPAIR, notCheckable = true, func = function() SendGroup("repair") end },
 	}
 end
@@ -1464,7 +1485,9 @@ local function BotMenu(name)
 		table.insert(items, { text = L.M_SHEET, notCheckable = true, func = function() SquidBotsLite_OpenSheet(name) end })
 	end
 	table.insert(items, { text = L.M_STATS, notCheckable = true, func = function() Whisper(name, "stats") end })
-	table.insert(items, { text = L.M_GEAR, notCheckable = true, func = function() Whisper(name, "autogear") end })
+	table.insert(items, { text = L.M_GEAR, notCheckable = true, func = function()
+		AskAutogear(string.format(L.GEAR_ASK_ONE, name), function() Whisper(name, "autogear") end)
+	end })
 	table.insert(items, { text = L.M_KICK, notCheckable = true, func = function() UninviteUnit(name) end })
 	return items
 end
