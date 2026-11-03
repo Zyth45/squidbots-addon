@@ -443,6 +443,15 @@ local function Whisper(name, message)
 	SquidBotsLite_QuietWhisper(message, name)
 end
 
+-- The role a member queued as in the Dungeon Finder (3.3.5: three booleans; later clients: one word), else nil.
+-- A bot the finder brings has no "Bot" surname and is no alt: this is the role it shows until it answers "co ?".
+local function LfgRole(unit)
+	if not unit or not UnitGroupRolesAssigned then return end
+	local tank, heal, dps = UnitGroupRolesAssigned(unit)
+	if type(tank) == "string" then return ({ TANK = "tank", HEALER = "heal", DAMAGER = "dps" })[tank] end
+	return tank and "tank" or heal and "heal" or dps and "dps" or nil
+end
+
 local function SetRoleIcon(texture, role)
 	local c = role and ROLE_COORDS[role]
 	if c then
@@ -1744,8 +1753,9 @@ local function RefreshOverlays()
 		local name = UnitName(overlay.unit)
 		if name then
 			overlay:Show()
-			SetRoleIcon(overlay.icon, roleByName[name] or "none")
-			if not roleByName[name] then
+			local role = roleByName[name] or LfgRole(overlay.unit)
+			SetRoleIcon(overlay.icon, role or "none")
+			if not role then
 				overlay.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
 				overlay.icon:SetTexCoord(0, 1, 0, 1)
 				overlay.icon:Show()
@@ -1845,8 +1855,9 @@ function compact.Refresh()
 			if strata and strata ~= "UNKNOWN" then overlay:SetFrameStrata(strata) end
 			overlay:SetFrameLevel(frame:GetFrameLevel() + 10)
 			if frame.roleIcon then frame.roleIcon:SetAlpha(0) end
-			SetRoleIcon(overlay.icon, roleByName[name] or "none")
-			if not roleByName[name] then
+			local role = roleByName[name] or LfgRole(overlay.unit)
+			SetRoleIcon(overlay.icon, role or "none")
+			if not role then
 				overlay.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
 				overlay.icon:SetTexCoord(0, 1, 0, 1)
 				overlay.icon:Show()
