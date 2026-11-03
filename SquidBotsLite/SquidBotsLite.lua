@@ -529,16 +529,32 @@ local MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteMenu", UIParent, "UIDropDownMenuTemplate")
 -- The game closes a menu only on a click in the world, not over an addon window, and its own hide delay does
 -- not apply to these menus: a menu of the addon closes a second after the mouse left it, or on a click on our panels.
+-- A menu opens at the cursor, the mouse on its very edge (or beside it, when the game flips it near the screen
+-- bottom): it was closed a second later while the player had not moved yet (Maky, 2.9.1). The mouse now has to
+-- enter it once (with a few pixels to spare) before leaving counts, and an untouched menu stays FIRST seconds.
 local menuWatch = CreateFrame("Frame")
+menuWatch.FIRST, menuWatch.MARGIN = 6, 6
 menuWatch:Hide()
+local function MouseOverMenu(list)
+	local m = menuWatch.MARGIN
+	return list and list:IsShown() and MouseIsOver(list, m, -m, -m, m)
+end
 menuWatch:SetScript("OnUpdate", function(self)
-	local list1, list2 = _G.DropDownList1, _G.DropDownList2
+	local list1 = _G.DropDownList1
 	if not list1 or not list1:IsShown() then self:Hide() return end
-	if MouseIsOver(list1) or (list2 and list2:IsShown() and MouseIsOver(list2)) then
-		self.left = nil
+	local now = GetTime()
+	if MouseOverMenu(list1) or MouseOverMenu(_G.DropDownList2) then
+		self.entered, self.left = true, nil
+	elseif not self.entered then
+		-- The game's own countdown (the hide delay given to EasyMenu) waits too, if it already runs.
+		if UIDropDownMenu_StopCounting then UIDropDownMenu_StopCounting(list1) end
+		if now - self.opened > self.FIRST then
+			CloseDropDownMenus()
+			self:Hide()
+		end
 	else
-		self.left = self.left or GetTime()
-		if GetTime() - self.left > MENU_HIDE_DELAY then
+		self.left = self.left or now
+		if now - self.left > MENU_HIDE_DELAY then
 			CloseDropDownMenus()
 			self:Hide()
 		end
@@ -546,7 +562,7 @@ menuWatch:SetScript("OnUpdate", function(self)
 end)
 
 function SquidBotsLite_WatchMenu()
-	menuWatch.left = nil
+	menuWatch.left, menuWatch.entered, menuWatch.opened = nil, nil, GetTime()
 	menuWatch:Show()
 end
 
