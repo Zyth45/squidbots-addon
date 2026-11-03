@@ -24,7 +24,7 @@ local STRINGS = {
 		NOT_A_MEMBER = "%s is not in your group.",
 		STRATS = "Strategies", COMBAT = "In combat", NONCOMBAT = "Out of combat", ADD = "Add...",
 		STRAT_HINT = "Click a strategy to remove it; Add... to give one. The server resets them on a specialization switch.",
-		BANK = "Bank", BAGS_BTN = "Bags", DEPOSIT = "Put in the bank", WITHDRAW = "Take from the bank",
+		BANK = "Bank", BAGS_BTN = "Bags", DEPOSIT = "Put in the bank", DESTROY = "Destroy", DESTROY_ASK = "%s destroys %s (every stack of it in its bags). Sure?", WITHDRAW = "Take from the bank",
 		NO_BANKER = "No banker next to the bot: the bank opens only when the bot stands by a banker.",
 		ABANDON = "Abandon this quest", ABANDON_ASK = "%s abandons %s?", QUEST_HINT = "Right-click a quest to abandon it.",
 		DROP_HINT = "Drop an item from your bags here to give it to the bot (a trade opens).",
@@ -62,7 +62,7 @@ local STRINGS = {
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
 		STRATS = "Stratégies", COMBAT = "En combat", NONCOMBAT = "Hors combat", ADD = "Ajouter...",
 		STRAT_HINT = "Cliquez une stratégie pour la retirer ; Ajouter... pour en donner une. Le serveur les remet à zéro à un changement de spé.",
-		BANK = "Banque", BAGS_BTN = "Sacs", DEPOSIT = "Mettre à la banque", WITHDRAW = "Reprendre de la banque",
+		BANK = "Banque", BAGS_BTN = "Sacs", DEPOSIT = "Mettre à la banque", DESTROY = "Détruire", DESTROY_ASK = "%s détruit %s (toutes les piles dans ses sacs). Sûr ?", WITHDRAW = "Reprendre de la banque",
 		NO_BANKER = "Pas de banquier à côté du bot : la banque ne s'ouvre que si le bot est devant un banquier.",
 		ABANDON = "Abandonner cette quête", ABANDON_ASK = "%s abandonne %s ?", QUEST_HINT = "Clic droit sur une quête pour l'abandonner.",
 		DROP_HINT = "Déposez ici un objet de vos sacs pour le donner au bot (un échange s'ouvre).",
@@ -367,12 +367,24 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", Hide)
 local MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteSheetMenu", UIParent, "UIDropDownMenuTemplate")
 
--- "t [item]" opens a trade with the master first, and puts the item in only once the trade is open.
+-- "t [item]" opens a trade with the master first, and puts the item in only once the trade is open. On an item
+-- already in the trade, "t" takes it back out: it is sent again only while the item is not on the bot's side.
+local function InTrade(link)
+	local id = link:match("item:(%d+)")
+	for i = 1, 6 do
+		local l = GetTradeTargetItemLink(i)
+		if l and l:match("item:(%d+)") == id then return true end
+	end
+end
 local giveAt
 local function Give(link)
 	local unit = UnitOf(current)
 	if not unit or not CheckInteractDistance(unit, 2) then
 		Print(T("TRADE_RANGE"))
+		return
+	end
+	if TradeFrame:IsShown() then
+		if not InTrade(link) then Whisper("t " .. link) end
 		return
 	end
 	Whisper("t " .. link)
@@ -383,7 +395,7 @@ giveWatch:SetScript("OnUpdate", function()
 	if giveAt and GetTime() >= giveAt.at then
 		local link = giveAt.link
 		giveAt = nil
-		Whisper("t " .. link)
+		if not InTrade(link) then Whisper("t " .. link) end
 	end
 end)
 
@@ -464,6 +476,19 @@ tradeWatch:SetScript("OnEvent", function()
 	end
 end)
 
+StaticPopupDialogs.SQUIDBOTSLITE_DESTROY = {
+	text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = 1, hideOnEscape = 1,
+	OnAccept = function(self)
+		Whisper("destroy " .. self.data)
+		AfterChange()
+	end,
+}
+local function Destroy(item, link)
+	StaticPopupDialogs.SQUIDBOTSLITE_DESTROY.text = string.format(T("DESTROY_ASK"), current, item.link)
+	local dialog = StaticPopup_Show("SQUIDBOTSLITE_DESTROY")
+	if dialog then dialog.data = link end
+end
+
 local function ItemMenu(item)
 	local link = SendableLink(item)
 	if bagMode == "bank" then
@@ -483,6 +508,7 @@ local function ItemMenu(item)
 		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. link); AfterChange() end },
 		{ text = T("SELL"), notCheckable = true, func = function() Sell(link); AfterChange() end },
 		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); AfterChange() end },
+		{ text = T("DESTROY"), notCheckable = true, func = function() Destroy(item, link) end },
 		{ text = T("LINK"), notCheckable = true, func = function() ChatEdit_InsertLink(link) end },
 	}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
