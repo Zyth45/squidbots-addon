@@ -11,4 +11,14 @@
 	<Binding name="SQUIDBOTSLITE_RELEASE">SquidBotsLite_Order("release")</Binding>
 	<Binding name="SQUIDBOTSLITE_ALTS">SquidBotsLite_Order("alts")</Binding>
 	<Binding name="SQUIDBOTSLITE_SPECS">SquidBotsLite_Specs()</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_BAR" header="SQUIDBOTSLITE_MT">SquidBotsLite_ToggleMainTank()</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_MAIN">SquidBotsLite_MainTank("main")</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_TARGET1">SquidBotsLite_MainTank("target", 1)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_TAUNT1">SquidBotsLite_MainTank("taunt", 1)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_SWAP1">SquidBotsLite_MainTank("swap", 1)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_HOLD1">SquidBotsLite_MainTank("hold", 1)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_TARGET2">SquidBotsLite_MainTank("target", 2)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_TAUNT2">SquidBotsLite_MainTank("taunt", 2)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_SWAP2">SquidBotsLite_MainTank("swap", 2)</Binding>
+	<Binding name="SQUIDBOTSLITE_MT_HOLD2">SquidBotsLite_MainTank("hold", 2)</Binding>
 </Bindings>

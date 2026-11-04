@@ -13,3 +13,4 @@ Manager.lua
 Missions.lua
 Alts.lua
 Dashboard.lua
+MainTank.lua

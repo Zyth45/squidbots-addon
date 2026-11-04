@@ -1631,8 +1631,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	if not SquidBotsLiteDB then return end
 	if event == "CHAT_MSG_ADDON" then
 		if arg1 ~= PREFIX or arg3 ~= "WHISPER" or not arg4 then return end
-		A.seen[arg4], A.gone[arg4] = GetTime(), nil
 		local f = Split(arg2 or "")
+		-- The Main Tank bar's replies come from any bot of the raid, not only from an alt (MainTank.lua).
+		if f[1] == "TK" or f[1] == "TS" then return end
+		A.seen[arg4], A.gone[arg4] = GetTime(), nil
 		local handler = Handle[f[1]]
 		if handler then handler(arg4, f) end
 	elseif event == "CHAT_MSG_SYSTEM" then

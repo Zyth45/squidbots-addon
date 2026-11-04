@@ -866,6 +866,7 @@ local function IsCoaBot(name)
 	-- An alt of this account (seen offline in My alts, or logged in by the player) is a bot of theirs too.
 	return knownBot[name] or name:find(" Bot$") ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]) == true
 end
+function SquidBotsLite_IsBot(name) return name and IsCoaBot(name) end
 
 -- The three trees of a WotLK class bot, named in the addon's language: no list to wait for.
 local function WcrList(token)

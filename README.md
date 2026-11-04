@@ -101,6 +101,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 ## Changes
 
 **2.9.4** (in progress, for CoA Bots 2.9.4)
+- **Main Tank bar** (Dungeon clear panel > Main Tank, or a key binding): in a raid you tank the boss and lead up to two off-tank bots. Per bot: off-tank on my target (the server marks it with an icon), taunt (with its cooldown shown), swap, placement (it comes where you stand), clear, and a tank / damage switch out of combat. A line shows what each one holds. Key bindings for Main tank on / off and off-tank 1 (on my target, taunt, swap, placement), off-tank 2 optional. Needs CoA Bots 2.9.4: on an older realm the bar greys out and says so.
 - **Dungeon clear panel opens by itself** once when you enter a dungeon or a raid (after the fight if you are in one), to remind you it is there. Not in battlegrounds or arenas, not again after a reload or a run back from the graveyard. A box in the panel turns it off.
 
 **2.9.3** (2026-11-04, for CoA Bots 2.9.3)

@@ -1,0 +1,540 @@
+-- SquidBots Lite, the Main Tank bar (CoA Bots 2.9.4). In a raid the player tanks the boss and leads one or two
+-- off-tank bots: take my target (the server marks it), taunt, swap, hold a place, clear, and a tank / damage
+-- switch per bot. Opened from the Dungeon clear panel (Main Tank) or a key binding.
+-- Contract with the module (ETUDE-MAIN-TANK-2.9.4, frozen with the Builder): addon messages "SQBA" whispered to
+-- the bot, any bot of the group whose master is the player; tab-separated replies, the target name last:
+--   addon -> bot: tank main on|off (the player's flag: any bot, one answers), tank target (the player's target),
+--                 tank taunt, tank swap, tank hold (where the player stands), tank clear, tank spec tank|dps
+--                 (out of combat), tank status all (one bot answers for every bot of the group that can tank)
+--   bot -> addon: TK <action> <ok|no_target|out_of_range|cooldown|dead|not_tank|not_in_group|busy> <icon> <target|->
+--                 TS <bot> <tank|dps|heal> <can tank 0|1> <icon> <target|->
+-- Icons are the client's: 1 star ... 8 skull, 0 none. A marked target that dies: "TK target dead", the bot
+-- assists the player again. A realm without the module never answers: the bar greys out and says so.
+
+local PREFIX, ROWS, ICON, ROW_H, WIDTH = "SQBA", 2, 18, 24, 312
+local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH = 4, 8, 20, 1.2
+
+local STRINGS = {
+	en = {
+		TITLE = "Main Tank", YOU = "You (MT)", FREE = "free", AS_DPS = "damage", AS_HEAL = "healer",
+		MAIN = "Main tank", TIP_MAIN = "You tank the boss; your off-tanks take what you mark for them. Lit: on.",
+		REFRESH = "Refresh", TIP_REFRESH = "Asks the bots which of them can tank, and what each one holds.",
+		CLEAR_ALL = "Clear all", TIP_CLEAR_ALL = "Every off-tank forgets its target and its icon, and assists you again.",
+		TARGET = "Off-tank on my target", TIP_TARGET = "%s takes your target; the server marks it with an icon.",
+		TAUNT = "Taunt", TIP_TAUNT = "%s taunts its marked target now.",
+		SWAP = "Swap", TIP_SWAP = "Tank swap: %s taunts your target off you, or gives its own back.",
+		HOLD = "Placement", TIP_HOLD = "%s comes where you stand and tanks there, away from the raid's cleaves.",
+		CLEAR = "Clear", TIP_CLEAR = "%s forgets its target and its icon, and assists you again.",
+		SPEC = "Tank / damage", TIP_SPEC = "Switches %s between its tank and damage specs, out of combat. Now: %s.",
+		ROLE_tank = "tank", ROLE_dps = "damage", ROLE_heal = "healer",
+		ASKING = "Asking the bots...", NO_BOT = "No bot of your group can tank.",
+		NO_SERVER = "The realm does not answer the Main Tank bar (it needs CoA Bots 2.9.4).",
+		NO_GROUP = "Join a group with bots first.",
+		NEED_TARGET = "Target the monster first.", IN_COMBAT = "Out of combat only.", NO_OFFTANK = "No off-tank %d in the bar.",
+		LAST = "Last order: %s", FAIL = "%s, %s: %s.",
+		R_no_target = "no target", R_out_of_range = "out of range", R_cooldown = "on cooldown", R_dead = "target dead",
+		R_not_tank = "cannot tank", R_not_in_group = "not in your group", R_busy = "busy (in a fight, dead, controlled or in a vehicle)",
+		B_HEADER = "SquidBots Lite: Main Tank", B_MAIN = "Main tank on / off", B_BAR = "Main Tank bar",
+		B_TARGET = "Off-tank %d: on my target", B_TAUNT = "Off-tank %d: taunt", B_SWAP = "Off-tank %d: swap",
+		B_HOLD = "Off-tank %d: placement",
+	},
+	fr = {
+		TITLE = "Main Tank", YOU = "Vous (MT)", FREE = "libre", AS_DPS = "DPS", AS_HEAL = "soigneur",
+		MAIN = "Main tank", TIP_MAIN = "Vous tankez le boss ; vos off-tanks prennent ce que vous leur marquez. Allumé : actif.",
+		REFRESH = "Actualiser", TIP_REFRESH = "Demande aux bots lesquels peuvent tanker, et ce que chacun tient.",
+		CLEAR_ALL = "Tout effacer", TIP_CLEAR_ALL = "Chaque off-tank oublie sa cible et son icône, et vous assiste de nouveau.",
+		TARGET = "Off-tank sur ma cible", TIP_TARGET = "%s prend votre cible ; le serveur la marque d'une icône.",
+		TAUNT = "Taunt", TIP_TAUNT = "%s provoque tout de suite sa cible marquée.",
+		SWAP = "Swap", TIP_SWAP = "Échange de tank : %s vous prend votre cible, ou vous rend la sienne.",
+		HOLD = "Placement", TIP_HOLD = "%s vient là où vous êtes et y tanke, à l'écart des cleaves du raid.",
+		CLEAR = "Effacer", TIP_CLEAR = "%s oublie sa cible et son icône, et vous assiste de nouveau.",
+		SPEC = "Tank / DPS", TIP_SPEC = "Fait passer %s de sa spé tank à sa spé DPS, ou l'inverse, hors combat. Maintenant : %s.",
+		ROLE_tank = "tank", ROLE_dps = "DPS", ROLE_heal = "soigneur",
+		ASKING = "Je demande aux bots...", NO_BOT = "Aucun bot du groupe ne peut tanker.",
+		NO_SERVER = "Le royaume ne répond pas à la barre Main Tank (il faut CoA Bots 2.9.4).",
+		NO_GROUP = "Rejoignez d'abord un groupe avec des bots.",
+		NEED_TARGET = "Ciblez d'abord le monstre.", IN_COMBAT = "Hors combat seulement.", NO_OFFTANK = "Pas d'off-tank %d dans la barre.",
+		LAST = "Dernier ordre : %s", FAIL = "%s, %s : %s.",
+		R_no_target = "pas de cible", R_out_of_range = "hors de portée", R_cooldown = "en recharge", R_dead = "cible morte",
+		R_not_tank = "ne peut pas tanker", R_not_in_group = "pas dans votre groupe", R_busy = "occupé (en combat, mort, contrôlé ou en véhicule)",
+		B_HEADER = "SquidBots Lite : Main Tank", B_MAIN = "Main tank actif / inactif", B_BAR = "Barre Main Tank",
+		B_TARGET = "Off-tank %d : sur ma cible", B_TAUNT = "Off-tank %d : taunt", B_SWAP = "Off-tank %d : swap",
+		B_HOLD = "Off-tank %d : placement",
+	},
+}
+
+local function T(key)
+	local lang = SquidBotsLiteDB and SquidBotsLiteDB.lang
+	return (STRINGS[lang] or STRINGS.en)[key] or STRINGS.en[key] or key
+end
+
+local function Print(text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
+end
+
+local ICONS = {
+	main = "Interface\\Icons\\Ability_Warrior_DefensiveStance", refresh = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+	clear = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", target = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6",
+	taunt = "Interface\\Icons\\Spell_Nature_Reincarnation", swap = "Interface\\Icons\\Ability_Hunter_Misdirection",
+	hold = "Interface\\Icons\\Ability_Hunter_Pathfinding", tank = "Interface\\Icons\\Ability_Defend",
+	dps = "Interface\\Icons\\Ability_MeleeDamage",
+}
+
+-- One table for the state: info[bot] = { role, can, icon, target, hold, at, error }; rows[i].bot = its off-tank.
+local mt = { info = {}, rows = {}, main = false, supported = nil, askedAt = 0, waitUntil = nil, askAt = nil, nextRefresh = 0 }
+local UI
+
+local function RaidIcon(index, size)
+	index = tonumber(index) or 0
+	if index < 1 or index > 8 then return "" end
+	return "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_" .. index .. ":" .. (size or 14) .. "|t "
+end
+
+local function GroupUnits()
+	local units = {}
+	if GetNumRaidMembers() > 0 then
+		for i = 1, GetNumRaidMembers() do table.insert(units, "raid" .. i) end
+	else
+		for i = 1, GetNumPartyMembers() do table.insert(units, "party" .. i) end
+	end
+	return units
+end
+
+local function UnitOf(name)
+	for _, unit in ipairs(GroupUnits()) do
+		if UnitName(unit) == name then return unit end
+	end
+end
+
+-- The bot's name in its class colour, from the group.
+local function ClassName(name)
+	local unit = UnitOf(name)
+	local token = unit and select(2, UnitClass(unit))
+	local color = token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
+	if not color then return name end
+	return string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, name)
+end
+
+function mt.Send(name, text)
+	SendAddonMessage(PREFIX, text, "WHISPER", name)
+end
+
+-- "tank status all" goes to one bot: a known one (an alt, a bot that answered, a "Bot" surname), else the first
+-- members of the group, since bots of a raid of random bots are not known by name.
+function mt.AskStatus()
+	mt.askAt = nil
+	local me, known, others = UnitName("player"), nil, {}
+	for _, unit in ipairs(GroupUnits()) do
+		local name = UnitName(unit)
+		if name and name ~= me and name ~= UNKNOWNOBJECT and UnitIsConnected(unit) then
+			if not known and SquidBotsLite_IsBot and SquidBotsLite_IsBot(name) then known = name end
+			table.insert(others, name)
+		end
+	end
+	mt.askedAt = GetTime()
+	mt.nextRefresh = mt.askedAt + REFRESH_EVERY
+	if #others == 0 then
+		mt.info, mt.waitUntil = {}, nil
+		mt.Refresh()
+		return
+	end
+	local to = known and { known } or { others[1], others[2], others[3] }
+	for _, name in ipairs(to) do mt.Send(name, "tank status all") end
+	mt.waitUntil = mt.askedAt + STATUS_WAIT
+	mt.Refresh()
+end
+
+-- The rows: the bots that are tanks, or damage dealers able to tank (a healer is never offered: one click would
+-- leave the raid without its heals), tanks first, then by name; two at most.
+function mt.Candidates()
+	local list = {}
+	for name, info in pairs(mt.info) do
+		if UnitOf(name) and (info.role == "tank" or (info.role == "dps" and info.can)) then table.insert(list, name) end
+	end
+	table.sort(list, function(a, b)
+		local ta, tb = mt.info[a].role == "tank", mt.info[b].role == "tank"
+		if ta ~= tb then return ta end
+		return a < b
+	end)
+	while #list > ROWS do table.remove(list) end
+	return list
+end
+
+function mt.Fail(name, action, result)
+	local info = mt.info[name]
+	if info then info.error = T("R_" .. result) end
+	local text = string.format(T("FAIL"), ClassName(name), T(string.upper(action)), T("R_" .. result))
+	if UIErrorsFrame then UIErrorsFrame:AddMessage(text, 1, 0.4, 0.3) end
+	for _, row in ipairs(mt.rows) do
+		if row.bot == name then row.flashUntil = GetTime() + FLASH end
+	end
+end
+
+function mt.StartTauntCooldown(name)
+	for _, row in ipairs(mt.rows) do
+		if row.bot == name and CooldownFrame_SetTimer then CooldownFrame_SetTimer(row.taunt.cd, GetTime(), TAUNT_CD, 1) end
+	end
+end
+
+-- The replies: TS fills the rows, TK updates the bot's line (or blinks it red with the reason).
+function mt.OnAddon(sender, message)
+	local f = {}
+	for field in (message .. "\t"):gmatch("([^\t]*)\t") do table.insert(f, field) end
+	if f[1] == "TS" and f[2] and f[2] ~= "" then
+		mt.supported = true
+		local info = mt.info[f[2]] or {}
+		info.role, info.can, info.at = f[3], f[4] == "1", GetTime()
+		info.icon, info.target = tonumber(f[5]) or 0, (f[6] and f[6] ~= "-" and f[6] ~= "") and f[6] or nil
+		mt.info[f[2]] = info
+		mt.Refresh()
+	elseif f[1] == "TK" then
+		mt.supported = true
+		local action, result = f[2] or "", f[3] or ""
+		local icon, target = tonumber(f[4]) or 0, (f[5] and f[5] ~= "-" and f[5] ~= "") and f[5] or nil
+		if action == "main" then
+			if result == "ok" then mt.main = mt.wantMain and true or false else mt.Fail(sender, action, result) end
+		else
+			local info = mt.info[sender] or { role = "tank", can = true, at = GetTime() }
+			mt.info[sender] = info
+			if result == "ok" then
+				info.error = nil
+				if action == "spec" then
+					info.role = target or info.role
+					if info.role ~= "tank" then info.icon, info.target, info.hold = 0, nil, false end
+				elseif action == "clear" then
+					info.icon, info.target, info.hold = 0, nil, false
+				elseif action == "hold" then
+					info.hold = true
+				else
+					if icon > 0 or target then info.icon, info.target = icon, target end
+					if action == "taunt" then mt.StartTauntCooldown(sender) end
+				end
+			elseif result == "dead" then
+				-- Its marked target died: it assists the player again.
+				info.icon, info.target = 0, nil
+			else
+				if action == "taunt" and result == "cooldown" then mt.StartTauntCooldown(sender) end
+				mt.Fail(sender, action, result)
+			end
+		end
+		mt.Refresh()
+	end
+end
+
+-- An order from a row (or a key binding: the row's index).
+function mt.Order(index, action)
+	local row = mt.rows[index]
+	local name = row and row.bot
+	if not name then
+		Print(string.format(T("NO_OFFTANK"), index))
+		return
+	end
+	if mt.supported == false then
+		Print(T("NO_SERVER"))
+		return
+	end
+	local info = mt.info[name] or {}
+	if action == "spec" then
+		if UnitAffectingCombat("player") then
+			if UIErrorsFrame then UIErrorsFrame:AddMessage(T("IN_COMBAT"), 1, 0.4, 0.3) end
+			return
+		end
+		mt.Send(name, "tank spec " .. (info.role == "tank" and "dps" or "tank"))
+		return
+	end
+	if info.role and info.role ~= "tank" then
+		if UIErrorsFrame then UIErrorsFrame:AddMessage(string.format(T("FAIL"), ClassName(name), T(string.upper(action)), T("R_not_tank")), 1, 0.4, 0.3) end
+		return
+	end
+	if (action == "target" or action == "swap") and not UnitExists("target") then
+		if UIErrorsFrame then UIErrorsFrame:AddMessage(T("NEED_TARGET"), 1, 0.4, 0.3) end
+		return
+	end
+	info.last = T(string.upper(action))
+	mt.Send(name, "tank " .. action)
+end
+
+function mt.ToggleMain()
+	if mt.supported == false then
+		Print(T("NO_SERVER"))
+		return
+	end
+	local to = mt.rows[1] and mt.rows[1].bot
+	if not to then
+		for _, unit in ipairs(GroupUnits()) do
+			local name = UnitName(unit)
+			if name and name ~= UnitName("player") and SquidBotsLite_IsBot and SquidBotsLite_IsBot(name) then to = name break end
+		end
+	end
+	if not to then
+		Print(T("NO_BOT"))
+		return
+	end
+	mt.wantMain = not mt.main
+	mt.Send(to, "tank main " .. (mt.wantMain and "on" or "off"))
+end
+
+function mt.ClearAll()
+	for _, row in ipairs(mt.rows) do
+		if row.bot then mt.Send(row.bot, "tank clear") end
+	end
+end
+
+-- ---------------------------------------------------------------------------
+-- The bar
+-- ---------------------------------------------------------------------------
+local function Lit(button, on)
+	if on then
+		button.border:SetVertexColor(1, 0.82, 0, 1)
+		button:LockHighlight()
+	else
+		button.border:SetVertexColor(0, 0, 0, 0.9)
+		button:UnlockHighlight()
+	end
+end
+
+function mt.BotButton(row, key, x)
+	local button = UI.IconButton(row, ICON, ICONS[key], function()
+		local name = row.bot and ClassName(row.bot) or "?"
+		local key2 = key == "spec" and "SPEC" or string.upper(key)
+		local info = row.bot and mt.info[row.bot]
+		if key == "spec" then return T(key2), string.format(T("TIP_SPEC"), name, T("ROLE_" .. (info and info.role or "tank"))) end
+		local line = string.format(T("TIP_" .. key2), name)
+		if info and info.error then line = line .. "\n|cffff6655" .. string.format(T("LAST"), info.error) .. "|r" end
+		return T(key2), line
+	end, function() mt.Order(row.index, key) end)
+	button:SetPoint("LEFT", x, 0)
+	return button
+end
+
+function mt.Build()
+	UI = UI or SquidBotsLite_UI
+	local f = CreateFrame("Frame", "SquidBotsLiteMainTank", UIParent)
+	f:SetWidth(WIDTH)
+	f:SetBackdrop(UI.CARD)
+	f:SetBackdropColor(0.04, 0.04, 0.05, 0.92)
+	f:SetBackdropBorderColor(1, 0.82, 0, 0.35)
+	f:SetFrameStrata("MEDIUM")
+	f:SetMovable(true)
+	f:EnableMouse(true)
+	f:SetClampedToScreen(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		local point, _, relative, x, y = self:GetPoint()
+		SquidBotsLiteDB.mainTankBar = { point, relative, x, y }
+	end)
+	local saved = SquidBotsLiteDB.mainTankBar
+	if saved then f:SetPoint(saved[1], UIParent, saved[2], saved[3], saved[4]) else f:SetPoint("TOP", 0, -230) end
+	-- Head: the title on the left; Main tank, Clear all, Refresh and close on the right.
+	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	f.title:SetPoint("TOPLEFT", 10, -9)
+	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+	close:SetWidth(22)
+	close:SetHeight(22)
+	close:SetPoint("TOPRIGHT", 0, 0)
+	f.refresh = UI.IconButton(f, ICON, ICONS.refresh, function() return T("REFRESH"), T("TIP_REFRESH") end, function() mt.AskStatus() end)
+	f.refresh:SetPoint("TOPRIGHT", -26, -5)
+	f.clearAll = UI.IconButton(f, ICON, ICONS.clear, function() return T("CLEAR_ALL"), T("TIP_CLEAR_ALL") end, function() mt.ClearAll() end)
+	f.clearAll:SetPoint("RIGHT", f.refresh, "LEFT", -4, 0)
+	f.main = UI.IconButton(f, ICON, ICONS.main, function() return T("MAIN"), T("TIP_MAIN") end, function() mt.ToggleMain() end)
+	f.main:SetPoint("RIGHT", f.clearAll, "LEFT", -4, 0)
+	UI.Rule(f, -28)
+	-- The player's line: "You (MT)" and what they target.
+	f.me = CreateFrame("Frame", nil, f)
+	f.me:SetWidth(WIDTH - 16)
+	f.me:SetHeight(ROW_H)
+	f.me:SetPoint("TOPLEFT", 8, -32)
+	f.me.name = f.me:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	f.me.name:SetPoint("LEFT", 4, 0)
+	f.me.status = f.me:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.me.status:SetPoint("LEFT", 82, 0)
+	f.me.status:SetWidth(WIDTH - 106)
+	f.me.status:SetJustifyH("LEFT")
+	-- A line per off-tank: its name, six buttons, what it holds.
+	for i = 1, ROWS do
+		local row = CreateFrame("Frame", nil, f)
+		row.index = i
+		row:SetWidth(WIDTH - 16)
+		row:SetHeight(ROW_H)
+		row:SetPoint("TOPLEFT", 8, -32 - i * ROW_H)
+		row.bg = row:CreateTexture(nil, "BACKGROUND")
+		row.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+		row.bg:SetAllPoints()
+		row.bg:SetVertexColor(1, 1, 1, 0.03)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.name:SetPoint("LEFT", 4, 0)
+		row.name:SetWidth(74)
+		row.name:SetJustifyH("LEFT")
+		local x = 80
+		for _, key in ipairs({ "target", "taunt", "swap", "hold", "clear", "spec" }) do
+			row[key] = mt.BotButton(row, key, x)
+			x = x + ICON + 3 + (key == "clear" and 4 or 0)
+		end
+		row.taunt.cd = CreateFrame("Cooldown", nil, row.taunt)
+		row.taunt.cd:SetAllPoints()
+		row.status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.status:SetPoint("LEFT", x + 2, 0)
+		row.status:SetWidth(WIDTH - 16 - x - 6)
+		row.status:SetJustifyH("LEFT")
+		mt.rows[i] = row
+	end
+	f.note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.note:SetWidth(WIDTH - 24)
+	f.note:SetJustifyH("LEFT")
+	table.insert(UISpecialFrames, "SquidBotsLiteMainTank")
+	f:Hide()
+	mt.frame = f
+end
+
+function mt.Refresh()
+	local f = mt.frame
+	if not f or not f:IsShown() then return end
+	f.title:SetText(T("TITLE"))
+	Lit(f.main, mt.main)
+	local unsupported = mt.supported == false
+	-- The player's line.
+	f.me.name:SetText(T("YOU"))
+	local target = UnitExists("target") and UnitName("target")
+	f.me.status:SetText(target and (RaidIcon(GetRaidTargetIndex("target")) .. target) or "")
+	-- The off-tanks.
+	local bots = mt.Candidates()
+	local inCombat = UnitAffectingCombat("player")
+	for i, row in ipairs(mt.rows) do
+		local name = bots[i]
+		row.bot = name
+		if name then
+			local info = mt.info[name]
+			local tank = info.role == "tank"
+			row.name:SetText(ClassName(name))
+			for _, key in ipairs({ "target", "taunt", "swap", "hold", "clear" }) do
+				UI.SetIcon(row[key], ICONS[key], tank and not unsupported)
+			end
+			UI.SetIcon(row.spec, tank and ICONS.tank or ICONS.dps, not inCombat and not unsupported)
+			Lit(row.hold, tank and info.hold)
+			Lit(row.target, tank and info.target ~= nil)
+			if not tank then
+				row.status:SetText("|cff999999" .. T("AS_DPS") .. "|r")
+			elseif info.target then
+				row.status:SetText(RaidIcon(info.icon) .. info.target)
+			else
+				row.status:SetText("|cff999999" .. T("FREE") .. "|r")
+			end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	-- Under the rows: why the bar is empty or grey.
+	local note
+	if unsupported then
+		note = T("NO_SERVER")
+	elseif #GroupUnits() == 0 then
+		note = T("NO_GROUP")
+	elseif mt.waitUntil and #bots == 0 then
+		note = T("ASKING")
+	elseif #bots == 0 then
+		note = T("NO_BOT")
+	end
+	for _, button in ipairs({ f.main, f.clearAll }) do UI.SetIcon(button, button == f.main and ICONS.main or ICONS.clear, not unsupported) end
+	local height = 32 + (1 + #bots) * ROW_H + 8
+	if note then
+		f.note:ClearAllPoints()
+		f.note:SetPoint("TOPLEFT", 12, -32 - (1 + #bots) * ROW_H - 2)
+		f.note:SetText(note)
+		height = height + f.note:GetStringHeight() + 4
+	else
+		f.note:SetText("")
+	end
+	f:SetHeight(height)
+end
+
+function SquidBotsLite_ToggleMainTank()
+	if not SquidBotsLiteDB then return end
+	if not mt.frame then mt.Build() end
+	if mt.frame:IsShown() then
+		mt.frame:Hide()
+		return
+	end
+	mt.frame:Show()
+	-- Asked again each time it opens: an earlier "no answer" may have been a realm restarted since.
+	if mt.supported == false then mt.supported = nil end
+	mt.AskStatus()
+end
+
+-- Key bindings (Bindings.xml): SquidBotsLite_MainTank("target", 1) and so on, "main" for Main tank on / off.
+function SquidBotsLite_MainTank(action, index)
+	if not SquidBotsLiteDB then return end
+	if not mt.frame then mt.Build() end
+	if action == "main" then mt.ToggleMain() else mt.Order(index or 1, action) end
+end
+
+local function BindingNames()
+	BINDING_HEADER_SQUIDBOTSLITE_MT = T("B_HEADER")
+	BINDING_NAME_SQUIDBOTSLITE_MT_BAR = T("B_BAR")
+	BINDING_NAME_SQUIDBOTSLITE_MT_MAIN = T("B_MAIN")
+	for i = 1, ROWS do
+		for _, key in ipairs({ "TARGET", "TAUNT", "SWAP", "HOLD" }) do
+			_G["BINDING_NAME_SQUIDBOTSLITE_MT_" .. key .. i] = string.format(T("B_" .. key), i)
+		end
+	end
+end
+BindingNames()
+
+local frame = CreateFrame("Frame")
+for _, event in ipairs({ "PLAYER_LOGIN", "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE",
+	"PLAYER_TARGET_CHANGED", "RAID_TARGET_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
+	frame:RegisterEvent(event)
+end
+frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
+	if event == "PLAYER_LOGIN" then
+		BindingNames()
+	elseif event == "CHAT_MSG_ADDON" then
+		if arg1 == PREFIX and arg3 == "WHISPER" and arg4 and arg2 and (arg2:find("^TK\t") or arg2:find("^TS\t")) then
+			mt.OnAddon(arg4, arg2)
+		end
+	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+		-- Who can tank may have changed: asked again a moment later, once the roster settles.
+		if mt.frame and mt.frame:IsShown() then mt.askAt = GetTime() + 2 end
+	else
+		mt.Refresh()
+	end
+end)
+
+local elapsed = 0
+frame:SetScript("OnUpdate", function(_, delta)
+	elapsed = elapsed + delta
+	if elapsed < 0.1 then return end
+	elapsed = 0
+	if not mt.frame or not mt.frame:IsShown() then return end
+	local now = GetTime()
+	if mt.askAt and now >= mt.askAt then mt.AskStatus() end
+	-- No TS since the question: a realm without the module (or without a bot that can answer).
+	if mt.waitUntil and now >= mt.waitUntil then
+		mt.waitUntil = nil
+		local answered = false
+		for name, info in pairs(mt.info) do
+			if info.at and info.at >= mt.askedAt then answered = true else mt.info[name] = nil end
+		end
+		if not answered and mt.supported ~= true then
+			mt.supported = false
+			Print(T("NO_SERVER"))
+		end
+		mt.Refresh()
+	end
+	if not mt.waitUntil and not mt.askAt and now >= mt.nextRefresh and mt.supported then mt.AskStatus() end
+	-- A failed order blinks its line red for a moment.
+	for _, row in ipairs(mt.rows) do
+		if row.flashUntil then
+			local left = row.flashUntil - now
+			if left <= 0 then
+				row.flashUntil = nil
+				row.bg:SetVertexColor(1, 1, 1, 0.03)
+			else
+				local pulse = 0.25 + 0.2 * math.sin(now * 12)
+				row.bg:SetVertexColor(1, 0.2, 0.15, pulse * left / FLASH)
+			end
+		end
+	end
+end)
