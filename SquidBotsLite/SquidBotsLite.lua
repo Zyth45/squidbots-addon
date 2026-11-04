@@ -73,6 +73,7 @@ local STRINGS = {
 		A_KEYFOR = "Security key of %s (set on that account with Set this account's key):", A_MYKEY = "Key for this account (letters and digits):",
 		A_BAD = "Letters, digits and _ only.", A_NONE = "No linked account known yet: Show my linked accounts.",
 		A_HOWTO = "To play the characters of another account: log on that account once and set its key, then link it from here with that key.",
+		ALTS_IN = "logging in...", ALTS_OUT = "logging out...",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
 		ALTS_HELP = "Click a logged-in alt for its sheet. Hover an icon to see what it does.",
@@ -183,6 +184,7 @@ local STRINGS = {
 		A_KEYFOR = "Clé de sécurité de %s (définie sur ce compte avec Définir la clé de ce compte) :", A_MYKEY = "Clé de ce compte (lettres et chiffres) :",
 		A_BAD = "Lettres, chiffres et _ seulement.", A_NONE = "Aucun compte lié connu : Voir mes comptes liés.",
 		A_HOWTO = "Pour jouer les personnages d'un autre compte : connectez-vous une fois sur ce compte et définissez sa clé, puis liez-le d'ici avec cette clé.",
+		ALTS_IN = "connexion...", ALTS_OUT = "déconnexion...",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
 		ALTS_HELP = "Cliquez sur un alt connecté pour sa fiche. Survolez une icône pour son rôle.",
@@ -2024,7 +2026,9 @@ local function AskRoster()
 	BotCommand("list")
 end
 -- For Missions.lua: ask the roster again, and the alts logged in as bots now.
-SquidBotsLite_AskRoster = function() if altsFrame then AskRoster() end end
+SquidBotsLite_AskRoster = function()
+	if altsFrame and not (rosterAskedAt and GetTime() - rosterAskedAt < ROSTER_WAIT) then AskRoster() end
+end
 function SquidBotsLite_OnlineAlts()
 	local list = {}
 	for _, alt in ipairs(roster) do
@@ -2185,7 +2189,10 @@ local function RefreshAlts()
 		local alt = roster[i + offset]
 		row.alt = alt
 		if alt then
-			local name = alt.online and ui.ClassName(alt.name) or ("|cff9d9d9d" .. alt.name .. "|r")
+			-- Logging in or out (2.9.4): shown at once as it will be, the toggle off until the server says so.
+			local online = alt.online
+			if alt.pending then online = alt.pending == "in" end
+			local name = online and ui.ClassName(alt.name) or ("|cff9d9d9d" .. alt.name .. "|r")
 			row.name:SetText(alt.linked and (name .. " |cff8888aa(" .. L.ALTS_LINKED .. ")|r") or name)
 			-- Level, class, spec; its gathering skill as an icon, and a gold word while it is out on a mission.
 			local line = AltLine(alt.name)
@@ -2195,16 +2202,19 @@ local function RefreshAlts()
 			if mission then
 				line = line .. "  |cffffd100" .. string.format(L.ALTS_MISSION, mission.minutes, mission.items) .. "|r"
 			end
+			if alt.pending then line = line .. "  |cffffd100" .. (alt.pending == "in" and L.ALTS_IN or L.ALTS_OUT) .. "|r" end
 			row.info:SetText(line)
 			ShowXP(row.xp, alt.name)
 			ui.ClassIcon(row.icon, alt.name)
-			row.icon:SetDesaturated(not alt.online)
-			row.icon:SetAlpha(alt.online and 1 or 0.55)
-			row.dot:SetTexture(alt.online and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
-			row:SetBackdropColor(alt.online and 0.10 or 0.07, alt.online and 0.10 or 0.07, alt.online and 0.12 or 0.08, 0.95)
-			ui.SetIcon(row.toggle, alt.online and "Interface\\Icons\\Spell_ChargeNegative" or "Interface\\Icons\\Spell_ChargePositive", true)
-			if alt.online then row.summon:Show() else row.summon:Hide() end
-			if alt.online and SquidBotsLite_OpenSheet then row.sheet:Show() else row.sheet:Hide() end
+			row.icon:SetDesaturated(not online)
+			row.icon:SetAlpha(online and 1 or 0.55)
+			row.dot:SetTexture(alt.pending and "Interface\\FriendsFrame\\StatusIcon-Away"
+				or online and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
+			row:SetBackdropColor(online and 0.10 or 0.07, online and 0.10 or 0.07, online and 0.12 or 0.08, 0.95)
+			ui.SetIcon(row.toggle, online and "Interface\\Icons\\Spell_ChargeNegative" or "Interface\\Icons\\Spell_ChargePositive",
+				not alt.pending)
+			if alt.online and not alt.pending then row.summon:Show() else row.summon:Hide() end
+			if alt.online and not alt.pending and SquidBotsLite_OpenSheet then row.sheet:Show() else row.sheet:Hide() end
 			row:Show()
 		else
 			row:Hide()
@@ -2490,8 +2500,10 @@ local function BuildAlts()
 			local alt = self:GetParent().alt
 			if not alt then return end
 			BotCommand((alt.online and "remove " or "add ") .. alt.name)
-			ui.SetIcon(self, self.icon:GetTexture(), false)
-			refreshAt = GetTime() + AFTER_TOGGLE
+			alt.pending, alt.pendingAt = alt.online and "out" or "in", GetTime()
+			-- Only a safety net: the "- ok" line or the group's change asks the list again at once.
+			refreshAt = GetTime() + AFTER_TOGGLE + 5
+			RefreshAlts()
 		end)
 		row.toggle:SetPoint("RIGHT", -10, 0)
 		-- An alt logs in where it logged out: Summon brings it over.
@@ -2587,10 +2599,24 @@ end
 -- Called with the other refreshes: a new list after a log in / out, a word if the server stays silent.
 local readingLinks
 
+-- The roster's row of an alt; a log in / out confirmed or refused by the server (also ONLINE / OFFLINE, Alts.lua).
+local function SetAltOnline(name, online)
+	for _, alt in ipairs(roster) do
+		if alt.name == name then
+			if online ~= nil then alt.online = online end
+			alt.pending = nil
+		end
+	end
+	-- Several alts logging in one after the other: one list at the end of the queue (TickLogins), not one each.
+	refreshAt = GetTime() + (#loginQueue > 0 and AFTER_TOGGLE or 0.5)
+	RefreshAlts()
+end
+SquidBotsLite_AltOnline = function(name, online) if altsFrame then SetAltOnline(name, online) end end
+
 local function TickAlts()
 	TickLogins()
-	if not altsFrame:IsShown() then return end
 	local now = GetTime()
+	-- Runs with the panel closed too: Missions and the dashboard ask the list without it.
 	if refreshAt and now >= refreshAt then
 		AskRoster()
 	elseif rosterAskedAt and now - rosterAskedAt > ROSTER_WAIT then
@@ -2604,6 +2630,15 @@ local function OnSystem(message)
 	-- "add: Name - ok" / "addaccount: Name - ok": a character logged in by the player is one of their alts, also
 	-- those of a linked account, which "bot list" alone never shows offline.
 	local added = message:match("^add%a*: (.-) %- ok$")
+	local removed = message:match("^remove: (.-) %- ok$")
+	if added or removed then SetAltOnline(added or removed, added and true or false) end
+	-- "add: Name - <reason>" or a "Failure: ..." line: the row goes back to what it was.
+	local refused = message:match("^add%a*: (.-) %- ") or message:match("^remove: (.-) %- ")
+	if refused and not added and not removed then SetAltOnline(refused, nil) end
+	if message:find("^Failure") then
+		for _, alt in ipairs(roster) do alt.pending = nil end
+		RefreshAlts()
+	end
 	if added then
 		SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
 		SquidBotsLiteDB.alts[added] = true
@@ -3248,7 +3283,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		BuildSpecs()
 		RefreshTexts()
 		for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
-			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM", "CHAT_MSG_ADDON" }) do
+			"CHAT_MSG_RAID_LEADER", "CHAT_MSG_SYSTEM", "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE" }) do
 			self:RegisterEvent(e)
 		end
 		dc.probeAt = GetTime() + dc.PROBE_DELAY
@@ -3272,6 +3307,11 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 	elseif event == "CHAT_MSG_WHISPER" then
 		dc.OnWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)
+	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+		-- An alt logging in joins the group: its row is confirmed sooner than by the list.
+		for _, alt in ipairs(roster) do
+			if alt.pending then refreshAt = math.min(refreshAt or math.huge, GetTime() + 0.5) end
+		end
 	elseif event == "CHAT_MSG_SYSTEM" then
 		dc.OnSystem(arg1)
 		if OnSystem(arg1) then return end

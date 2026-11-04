@@ -30,6 +30,7 @@ local STRINGS = {
 		ASKING = "Asking the bots...", NO_BOT = "No bot of your group can tank.",
 		NO_SERVER = "The realm does not answer the Main Tank bar (it needs CoA Bots 2.9.4).",
 		NO_GROUP = "Join a group with bots first.",
+		NO_KNOWN_BOT = "No bot of the group known yet: give the group an order (follow), or wait for one to answer.",
 		NEED_TARGET = "Target the monster first.", IN_COMBAT = "Out of combat only.", NO_OFFTANK = "No off-tank %d in the bar.",
 		LAST = "Last order: %s", FAIL = "%s, %s: %s.",
 		R_no_target = "no target", R_out_of_range = "out of range", R_cooldown = "on cooldown", R_dead = "target dead",
@@ -53,6 +54,7 @@ local STRINGS = {
 		ASKING = "Je demande aux bots...", NO_BOT = "Aucun bot du groupe ne peut tanker.",
 		NO_SERVER = "Le royaume ne répond pas à la barre Main Tank (il faut CoA Bots 2.9.4).",
 		NO_GROUP = "Rejoignez d'abord un groupe avec des bots.",
+		NO_KNOWN_BOT = "Aucun bot du groupe connu pour l'instant : donnez un ordre au groupe (suivre), ou attendez qu'un bot réponde.",
 		NEED_TARGET = "Ciblez d'abord le monstre.", IN_COMBAT = "Hors combat seulement.", NO_OFFTANK = "Pas d'off-tank %d dans la barre.",
 		LAST = "Dernier ordre : %s", FAIL = "%s, %s : %s.",
 		R_no_target = "pas de cible", R_out_of_range = "hors de portée", R_cooldown = "en recharge", R_dead = "cible morte",
@@ -119,27 +121,28 @@ function mt.Send(name, text)
 	SendAddonMessage(PREFIX, text, "WHISPER", name)
 end
 
--- "tank status all" goes to one bot: a known one (an alt, a bot that answered, a "Bot" surname), else the first
--- members of the group, since bots of a raid of random bots are not known by name.
+-- "tank status all" goes to one bot, and only to a bot: one that answered the bar before, an alt, a bot known
+-- to the addon (it answered, joined as a role, a "Bot" surname). Never to a member who may be a player.
 function mt.AskStatus()
 	mt.askAt = nil
-	local me, known, others = UnitName("player"), nil, {}
+	local me, to, members = UnitName("player"), nil, 0
 	for _, unit in ipairs(GroupUnits()) do
 		local name = UnitName(unit)
 		if name and name ~= me and name ~= UNKNOWNOBJECT and UnitIsConnected(unit) then
-			if not known and SquidBotsLite_IsBot and SquidBotsLite_IsBot(name) then known = name end
-			table.insert(others, name)
+			members = members + 1
+			if mt.info[name] then to = name end
+			if not to and SquidBotsLite_IsBot and SquidBotsLite_IsBot(name) then to = name end
 		end
 	end
 	mt.askedAt = GetTime()
 	mt.nextRefresh = mt.askedAt + REFRESH_EVERY
-	if #others == 0 then
+	mt.noBot = members > 0 and not to
+	if not to then
 		mt.info, mt.waitUntil = {}, nil
 		mt.Refresh()
 		return
 	end
-	local to = known and { known } or { others[1], others[2], others[3] }
-	for _, name in ipairs(to) do mt.Send(name, "tank status all") end
+	mt.Send(to, "tank status all")
 	mt.waitUntil = mt.askedAt + STATUS_WAIT
 	mt.Refresh()
 end
@@ -186,13 +189,20 @@ function mt.OnAddon(sender, message)
 		info.role, info.can, info.at = f[3], f[4] == "1", GetTime()
 		info.icon, info.target = tonumber(f[5]) or 0, (f[6] and f[6] ~= "-" and f[6] ~= "") and f[6] or nil
 		mt.info[f[2]] = info
+		-- A key pressed before the bar knew its off-tanks: done once the answers are in.
+		if mt.pending then mt.pendingAt = GetTime() + 0.3 end
 		mt.Refresh()
 	elseif f[1] == "TK" then
 		mt.supported = true
 		local action, result = f[2] or "", f[3] or ""
 		local icon, target = tonumber(f[4]) or 0, (f[5] and f[5] ~= "-" and f[5] ~= "") and f[5] or nil
 		if action == "main" then
-			if result == "ok" then mt.main = mt.wantMain and true or false else mt.Fail(sender, action, result) end
+			-- "TK main ok 0 on|off": the state of the flag in the last field.
+			if result == "ok" then
+				if target == "on" or target == "off" then mt.main = target == "on" else mt.main = mt.wantMain and true or false end
+			else
+				mt.Fail(sender, action, result)
+			end
 		else
 			local info = mt.info[sender] or { role = "tank", can = true, at = GetTime() }
 			mt.info[sender] = info
@@ -223,14 +233,13 @@ end
 
 -- An order from a row (or a key binding: the row's index).
 function mt.Order(index, action)
-	local row = mt.rows[index]
-	local name = row and row.bot
-	if not name then
-		Print(string.format(T("NO_OFFTANK"), index))
-		return
-	end
 	if mt.supported == false then
 		Print(T("NO_SERVER"))
+		return
+	end
+	local name = mt.Candidates()[index]
+	if not name then
+		Print(string.format(T("NO_OFFTANK"), index))
 		return
 	end
 	local info = mt.info[name] or {}
@@ -259,7 +268,7 @@ function mt.ToggleMain()
 		Print(T("NO_SERVER"))
 		return
 	end
-	local to = mt.rows[1] and mt.rows[1].bot
+	local to = mt.Candidates()[1]
 	if not to then
 		for _, unit in ipairs(GroupUnits()) do
 			local name = UnitName(unit)
@@ -275,9 +284,7 @@ function mt.ToggleMain()
 end
 
 function mt.ClearAll()
-	for _, row in ipairs(mt.rows) do
-		if row.bot then mt.Send(row.bot, "tank clear") end
-	end
+	for _, name in ipairs(mt.Candidates()) do mt.Send(name, "tank clear") end
 end
 
 -- ---------------------------------------------------------------------------
@@ -434,6 +441,8 @@ function mt.Refresh()
 		note = T("NO_GROUP")
 	elseif mt.waitUntil and #bots == 0 then
 		note = T("ASKING")
+	elseif mt.noBot then
+		note = T("NO_KNOWN_BOT")
 	elseif #bots == 0 then
 		note = T("NO_BOT")
 	end
@@ -464,10 +473,23 @@ function SquidBotsLite_ToggleMainTank()
 end
 
 -- Key bindings (Bindings.xml): SquidBotsLite_MainTank("target", 1) and so on, "main" for Main tank on / off.
+-- They work with the bar closed or never opened: off-tanks not known yet (or not for a while) are asked first,
+-- and the key's order follows the answers.
 function SquidBotsLite_MainTank(action, index)
 	if not SquidBotsLiteDB then return end
 	if not mt.frame then mt.Build() end
-	if action == "main" then mt.ToggleMain() else mt.Order(index or 1, action) end
+	if mt.supported == false then mt.supported = nil end
+	if not next(mt.info) or GetTime() - mt.askedAt > REFRESH_EVERY then
+		mt.pending = { action = action, index = index or 1 }
+		mt.AskStatus()
+		if mt.waitUntil then return end
+		mt.pending = nil
+	end
+	mt.RunKey(action, index or 1)
+end
+
+function mt.RunKey(action, index)
+	if action == "main" then mt.ToggleMain() else mt.Order(index, action) end
 end
 
 local function BindingNames()
@@ -507,8 +529,9 @@ frame:SetScript("OnUpdate", function(_, delta)
 	elapsed = elapsed + delta
 	if elapsed < 0.1 then return end
 	elapsed = 0
-	if not mt.frame or not mt.frame:IsShown() then return end
+	if not mt.frame then return end
 	local now = GetTime()
+	local shown = mt.frame:IsShown()
 	if mt.askAt and now >= mt.askAt then mt.AskStatus() end
 	-- No TS since the question: a realm without the module (or without a bot that can answer).
 	if mt.waitUntil and now >= mt.waitUntil then
@@ -521,8 +544,15 @@ frame:SetScript("OnUpdate", function(_, delta)
 			mt.supported = false
 			Print(T("NO_SERVER"))
 		end
+		if mt.pending then mt.pendingAt = now end
 		mt.Refresh()
 	end
+	if mt.pending and mt.pendingAt and now >= mt.pendingAt then
+		local key = mt.pending
+		mt.pending, mt.pendingAt = nil, nil
+		mt.RunKey(key.action, key.index)
+	end
+	if not shown then return end
 	if not mt.waitUntil and not mt.askAt and now >= mt.nextRefresh and mt.supported then mt.AskStatus() end
 	-- A failed order blinks its line red for a moment.
 	for _, row in ipairs(mt.rows) do

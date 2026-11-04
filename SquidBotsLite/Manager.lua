@@ -144,6 +144,8 @@ end
 -- ---------------------------------------------------------------------------
 local Render
 
+-- A request too soon after the same one (the server would drop its lines) waits its turn instead of being lost.
+local later = {}
 local function Ask(kind, command)
 	if not current then return end
 	if capture then
@@ -152,7 +154,11 @@ local function Ask(kind, command)
 		return
 	end
 	local key = current .. ":" .. kind
-	if lastAsked[key] and GetTime() - lastAsked[key] < REPEAT_DELAY then return end
+	if lastAsked[key] and GetTime() - lastAsked[key] < REPEAT_DELAY then
+		later[kind] = { name = current, command = command, at = lastAsked[key] + REPEAT_DELAY }
+		sheet.status:SetText(T("WAIT"))
+		return
+	end
 	lastAsked[key] = GetTime()
 	capture = { name = current, kind = kind, command = command, lines = {}, started = GetTime(), last = GetTime() }
 	sheet.status:SetText(T("WAIT"))
@@ -334,7 +340,9 @@ watch:SetScript("OnEvent", function(_, event, message, sender)
 			capture.last = GetTime()
 			if (capture.kind == "mounts" and message:find("^Mounts: %d+")) or (capture.kind == "talents" and message:find("^Talents: %d+"))
 				or (capture.kind == "options" and message:find("^Talent options: %d+")) then Finish()
-			elseif (capture.kind == "co" or capture.kind == "nc") and message:find("^Strategies:") then Finish() end
+			elseif (capture.kind == "co" or capture.kind == "nc") and message:find("^Strategies:") then Finish()
+			-- CoA Bots 2.9.4 ends the bags and the bank with "Items: N": no need to wait for the quiet.
+			elseif (capture.kind == "bags" or capture.kind == "bank") and message:find("^Items: %d+") then Finish() end
 		end
 	elseif sheet and sheet:IsShown() and tab == "gear" then
 		Render()
@@ -346,10 +354,18 @@ watch:SetScript("OnUpdate", function(_, delta)
 	elapsed = elapsed + delta
 	if elapsed < 0.25 then return end
 	elapsed = 0
+	local now = GetTime()
 	if capture then
-		local now = GetTime()
 		if (#capture.lines > 0 and now - capture.last > QUIET) or now - capture.started > GIVE_UP then
 			Finish()
+		end
+	end
+	for kind, q in pairs(later) do
+		if q.name ~= current then
+			later[kind] = nil
+		elseif not capture and now >= q.at then
+			later[kind] = nil
+			Ask(kind, q.command)
 		end
 	end
 end)
@@ -403,32 +419,59 @@ giveWatch:SetScript("OnUpdate", function()
 	end
 end)
 
-local sellCheck
+-- An item sold, destroyed or moved leaves the list at once (2.9.4); a sale the bot does not make puts it back.
+local function TakeOut(list, item)
+	for i, other in ipairs(list) do
+		if other == item then
+			table.remove(list, i)
+			if Render then Render() end
+			return i
+		end
+	end
+end
+
+local sellCheck, AfterChange
 -- One item: silence means no vendor. "gray" with nothing grey is silent too, so it is not checked.
-local function Sell(text, unchecked)
+local function Sell(text, unchecked, item)
 	Whisper("s " .. text)
-	if not unchecked then sellCheck = { name = current, at = GetTime() + 3 } end
+	if not unchecked then
+		sellCheck = { name = current, at = GetTime() + 3, item = item, list = bags, index = item and TakeOut(bags, item) }
+	end
 end
 local sellWatch = CreateFrame("Frame")
 sellWatch:RegisterEvent("CHAT_MSG_WHISPER")
 sellWatch:SetScript("OnEvent", function(_, _, message, sender)
-	if sellCheck and sender == sellCheck.name and message:find("^Selling ") then sellCheck = nil end
+	if not sellCheck or sender ~= sellCheck.name then return end
+	-- Sold: the bags are asked again now. On its way to the vendor it targets: more time.
+	if message:find("^Selling ") or message:find("^Sold ") then
+		sellCheck = nil
+		AfterChange()
+	elseif message:find("^Going to ") then
+		sellCheck.at = GetTime() + 20
+	end
 end)
 sellWatch:SetScript("OnUpdate", function()
 	if sellCheck and GetTime() >= sellCheck.at then
+		local check = sellCheck
 		sellCheck = nil
+		-- Not sold: the item comes back, unless the list was asked again since (it is right then).
+		if check.index and check.name == current and bags == check.list then
+			table.insert(bags, math.min(check.index, #bags + 1), check.item)
+			if Render then Render() end
+		end
 		Print(T("NO_VENDOR"))
 	end
 end)
 
-local function AfterChange()
-	-- The bags changed: ask again once the server lets the same lines through.
+function AfterChange()
+	-- The bags changed: ask again once the server lets the same lines through, counted from the last listing
+	-- (Ask queues it otherwise); a short moment first, for the bot to act on the order.
 	local name = current
 	local again = CreateFrame("Frame")
 	local wait = 0
 	again:SetScript("OnUpdate", function(self, delta)
 		wait = wait + delta
-		if wait < REPEAT_DELAY then return end
+		if wait < 0.4 then return end
 		self:SetScript("OnUpdate", nil)
 		if current == name and sheet:IsShown() then
 			if tab == "bags" then Ask(bagMode, bagMode == "bank" and "bank" or "c")
@@ -490,6 +533,7 @@ StaticPopupDialogs.SQUIDBOTSLITE_DESTROY = {
 	text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = 1, hideOnEscape = 1,
 	OnAccept = function(self)
 		Whisper("destroy " .. self.data)
+		if self.item then TakeOut(bags, self.item) end
 		AfterChange()
 	end,
 }
@@ -504,7 +548,7 @@ StaticPopupDialogs.SQUIDBOTSLITE_AUTOGEAR = {
 local function Destroy(item, link)
 	StaticPopupDialogs.SQUIDBOTSLITE_DESTROY.text = string.format(T("DESTROY_ASK"), current, item.link)
 	local dialog = StaticPopup_Show("SQUIDBOTSLITE_DESTROY")
-	if dialog then dialog.data = link end
+	if dialog then dialog.data, dialog.item = link, item end
 end
 
 local function ItemMenu(item)
@@ -512,7 +556,7 @@ local function ItemMenu(item)
 	if bagMode == "bank" then
 		EasyMenu({
 			{ text = item.link, isTitle = true, notCheckable = true },
-			{ text = T("WITHDRAW"), notCheckable = true, func = function() Whisper("bank -" .. link); AfterChange() end },
+			{ text = T("WITHDRAW"), notCheckable = true, func = function() Whisper("bank -" .. link); TakeOut(bank, item); AfterChange() end },
 			{ text = T("LINK"), notCheckable = true, func = function() InsertLink(link) end },
 		}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
@@ -524,8 +568,8 @@ local function ItemMenu(item)
 			or { text = T("GIVE"), notCheckable = true, func = function() Give(link); AfterChange() end },
 		{ text = T("EQUIP"), notCheckable = true, func = function() Whisper("e " .. link); AfterChange() end },
 		{ text = T("USE"), notCheckable = true, func = function() Whisper("u " .. link); AfterChange() end },
-		{ text = T("SELL"), notCheckable = true, func = function() Sell(link); AfterChange() end },
-		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); AfterChange() end },
+		{ text = T("SELL"), notCheckable = true, func = function() Sell(link, false, item) end },
+		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); TakeOut(bags, item); AfterChange() end },
 		{ text = T("DESTROY"), notCheckable = true, func = function() Destroy(item, link) end },
 		{ text = T("LINK"), notCheckable = true, func = function() InsertLink(link) end },
 	}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
@@ -673,7 +717,15 @@ local function BuildBags(page)
 	page.grey:SetWidth(130)
 	page.grey:SetHeight(22)
 	page.grey:SetPoint("LEFT", page.trade, "RIGHT", 8, 0)
-	page.grey:SetScript("OnClick", function() Sell("junk", true); AfterChange() end)
+	page.grey:SetScript("OnClick", function()
+		Sell("junk", true)
+		-- The grey items leave the list at once.
+		for i = #bags, 1, -1 do
+			if bags[i].link:find("^|cff9d9d9d") then table.remove(bags, i) end
+		end
+		if Render then Render() end
+		AfterChange()
+	end)
 	page.bank = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.bank:SetWidth(110)
 	page.bank:SetHeight(22)

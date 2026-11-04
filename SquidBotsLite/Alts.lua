@@ -1447,6 +1447,19 @@ end
 local Handle = {}
 A.Handle = Handle
 
+-- CoA Bots 2.9.4: an alt says when it logs in or out, so the bar and My alts change at once.
+function Handle.ONLINE(name)
+	A.left[name] = nil
+	if SquidBotsLite_AltOnline then SquidBotsLite_AltOnline(name, true) end
+	A.RefreshTeam()
+end
+
+function Handle.OFFLINE(name)
+	A.gone[name], A.members[name] = GetTime(), nil
+	if SquidBotsLite_AltOnline then SquidBotsLite_AltOnline(name, false) end
+	A.RefreshTeam()
+end
+
 function Handle.HELLO(name, f)
 	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", at = GetTime() }
 	A.RefreshLog()
@@ -1632,8 +1645,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	if event == "CHAT_MSG_ADDON" then
 		if arg1 ~= PREFIX or arg3 ~= "WHISPER" or not arg4 then return end
 		local f = Split(arg2 or "")
-		-- The Main Tank bar's replies come from any bot of the raid, not only from an alt (MainTank.lua).
+		-- The Main Tank bar's replies come from any bot of the raid, not only from an alt (MainTank.lua); and a
+		-- line this file does not know, from someone not an alt, is not one of the team's.
 		if f[1] == "TK" or f[1] == "TS" then return end
+		if not Handle[f[1]] and not IsAlt(arg4) then return end
 		A.seen[arg4], A.gone[arg4] = GetTime(), nil
 		local handler = Handle[f[1]]
 		if handler then handler(arg4, f) end
