@@ -3261,6 +3261,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		SquidBotsLite_OpenSheet(rest)
 	elseif command == "spec" or command == "specs" then
 		ShowSpecs()
+	elseif command == "questask" and SquidBotsLite_QuestAsk then
+		SquidBotsLite_QuestAsk(rest)
 	elseif command == "roles" then
 		SquidBotsLiteDB.autoRoles = string.lower(rest) ~= "off"
 		Print(SquidBotsLiteDB.autoRoles and L.ROLES_ON or L.ROLES_OFF)

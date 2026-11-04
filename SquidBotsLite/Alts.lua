@@ -30,6 +30,12 @@ local STRINGS = {
 		NO_ALTS = "No alt logged in: log one in from My alts.", ASKING = "Asking...", NO_ANSWER = "No answer yet",
 		JUST_ME = "Just me", TAKE_TEAM = "Take for the team", TAKE_ALL = "Take for all", CATCH_UP = "Catch up",
 		TIP_JUST_ME = "Accept it for you only: your alts do not take it.",
+		QA_ASK = "Your alts take this quest too?\n%s", QA_ALWAYS = "Always",
+		QA_ALWAYS_SET = "Your alts in the group now take each quest you accept (/sbl questask on to be asked again).",
+		QA_ON = "Each quest you accept: you are asked whether your alts take it too.",
+		QA_OFF = "Your alts no longer take the quests you accept (Take for the team still works).",
+		QA_TAKEN = "taken by %s", QA_NONE = "no answer from %s", QA_log_full = "log full", QA_bags_full = "bags full",
+		QA_no_giver = "no quest giver in range",
 		TIP_TAKE_TEAM = "Each alt that can takes it too; a chain left behind is caught up first if the server allows it.",
 		TIP_CATCH_UP = "Marks the earlier quests of the chain as done (no reward, no xp), then takes this one.",
 		TIP_REFRESH_Q = "Ask each alt again.", TIP_QUESTS = "Take for the team: each alt's state for a quest, the last one seen.",
@@ -90,6 +96,12 @@ local STRINGS = {
 		NO_ALTS = "Aucun alt connecté : connectez-en un depuis Mes alts.", ASKING = "Je demande...", NO_ANSWER = "Pas encore de réponse",
 		JUST_ME = "Juste moi", TAKE_TEAM = "Prendre pour l'équipe", TAKE_ALL = "Prendre pour tous", CATCH_UP = "Rattraper",
 		TIP_JUST_ME = "L'accepter pour vous seul : vos alts ne la prennent pas.",
+		QA_ASK = "Vos alts prennent aussi cette quête ?\n%s", QA_ALWAYS = "Toujours",
+		QA_ALWAYS_SET = "Vos alts du groupe prennent désormais chaque quête que vous acceptez (/sbl questask on pour être de nouveau consulté).",
+		QA_ON = "À chaque quête acceptée, on vous demande si vos alts la prennent aussi.",
+		QA_OFF = "Vos alts ne prennent plus les quêtes que vous acceptez (Prendre pour l'équipe marche toujours).",
+		QA_TAKEN = "prise par %s", QA_NONE = "pas de réponse de %s", QA_log_full = "journal plein", QA_bags_full = "sacs pleins",
+		QA_no_giver = "aucun PNJ à portée",
 		TIP_TAKE_TEAM = "Chaque alt qui le peut la prend aussi ; une chaîne en retard est d'abord rattrapée si le serveur le permet.",
 		TIP_CATCH_UP = "Marque faites les quêtes d'avant de la chaîne (sans récompense ni XP), puis prend celle-ci.",
 		TIP_REFRESH_Q = "Redemander à chaque alt.", TIP_QUESTS = "Prendre pour l'équipe : l'état de chaque alt pour une quête, la dernière vue.",
@@ -600,7 +612,9 @@ function A.BuildQuests()
 	f.me:SetWidth(96)
 	f.me:SetHeight(22)
 	f.me:SetPoint("BOTTOMLEFT", 16, 14)
-	f.me:SetScript("OnClick", function() if A.detail then AcceptQuest() end end)
+	f.me:SetScript("OnClick", function()
+		if A.detail then A.chosen = { id = A.detail, at = GetTime() } AcceptQuest() end
+	end)
 	f.team = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
 	f.team:SetWidth(160)
 	f.team:SetHeight(22)
@@ -771,11 +785,79 @@ end
 function A.TakeAll()
 	local id = A.current
 	if not id then return end
+	A.chosen = { id = id, at = GetTime() }
 	for _, name in ipairs(A.Online()) do
 		local s = A.quests[id] and A.quests[id][name]
 		if not s or s.state == "can_take" or (s.state == "missing_prev" and s.catchable) then A.Ask(name, "take", id) end
 	end
 	if A.detail == id then AcceptQuest() end
+end
+
+-- Accepted with the game's own button, in quiet mode: are the alts of the group taking it too? (2.9.3)
+StaticPopupDialogs.SQUIDBOTSLITE_QUEST_TAKE = {
+	text = "%s", button1 = YES, button2 = NO, button3 = "Always",
+	OnAccept = function() A.TakePending() end,
+	OnAlt = function()
+		SquidBotsLiteDB.questAsk = "always"
+		Print(T("QA_ALWAYS_SET"))
+		A.TakePending()
+	end,
+	OnCancel = function() A.pendingTake = nil end,
+	timeout = 30, whileDead = true, hideOnEscape = true,
+}
+
+function A.AfterAccept(id, index)
+	local title = id and A.titles[id]
+	if not id and index then
+		local link = GetQuestLink(index)
+		id = link and tonumber(link:match("|Hquest:(%d+)"))
+		title = GetQuestLogTitle(index)
+	end
+	if not id or SquidBotsLiteDB.questAsk == "off" then return end
+	-- "Just me" or "Take for the team" already answered; out of quiet mode the alts take it on their own.
+	if A.chosen and A.chosen.id == id and GetTime() - A.chosen.at < ACCEPT_WINDOW then return end
+	if not (A.hello and A.hello.silent) then return end
+	local alts = {}
+	for _, unit in ipairs(GroupUnits()) do
+		local name = UnitName(unit)
+		if IsAlt(name) and UnitIsConnected(unit) then table.insert(alts, name) end
+	end
+	if #alts == 0 then return end
+	A.pendingTake = { id = id, alts = alts }
+	if SquidBotsLiteDB.questAsk == "always" then A.TakePending() return end
+	local popup = StaticPopupDialogs.SQUIDBOTSLITE_QUEST_TAKE
+	popup.text, popup.button3 = T("QA_ASK"), T("QA_ALWAYS")
+	StaticPopup_Show("SQUIDBOTSLITE_QUEST_TAKE", title or QuestLink(id))
+end
+
+-- Their answers come back as one line once all have answered (or after 10 s).
+function A.TakePending()
+	local p = A.pendingTake
+	A.pendingTake = nil
+	if not p then return end
+	A.batch = { id = p.id, waiting = {}, taken = {}, other = {}, ends = GetTime() + 10 }
+	for _, name in ipairs(p.alts) do
+		A.batch.waiting[name] = true
+		A.Ask(name, "take", p.id)
+	end
+end
+
+function A.FlushBatch()
+	local b = A.batch
+	A.batch = nil
+	if not b then return end
+	local parts, silent = {}, {}
+	if #b.taken > 0 then table.insert(parts, string.format(T("QA_TAKEN"), table.concat(b.taken, ", "))) end
+	for _, text in ipairs(b.other) do table.insert(parts, text) end
+	for name in pairs(b.waiting) do table.insert(silent, UI.ClassName(name)) end
+	if #silent > 0 then table.insert(parts, string.format(T("QA_NONE"), table.concat(silent, ", "))) end
+	if #parts > 0 then Print(QuestLink(b.id) .. " : " .. table.concat(parts, " ; ")) end
+end
+
+function SquidBotsLite_QuestAsk(value)
+	value = string.lower(value or "")
+	SquidBotsLiteDB.questAsk = (value == "off" or value == "always") and value or nil
+	Print(T(value == "off" and "QA_OFF" or value == "always" and "QA_ALWAYS_SET" or "QA_ON"))
 end
 
 function SquidBotsLite_ShowAltQuests()
@@ -1426,20 +1508,31 @@ function Handle.QR(name, f)
 	if not id then return end
 	local who, quest = UI.ClassName(name), QuestLink(id)
 	A.quests[id] = A.quests[id] or {}
+	-- Asked by the popup: the log keeps every line, the chat gets one line for all (A.FlushBatch).
+	local batch = A.batch and A.batch.id == id and A.batch.waiting[name] and A.batch
+	local chat = not batch
+	if batch then batch.waiting[name] = nil end
 	if result == "taken" then
 		A.quests[id][name] = { state = "in_log", detail = "incomplete", at = GetTime() }
-		A.Log(string.format(T("QR_taken"), who, quest), true, 0.5, 1, 0.5)
+		A.Log(string.format(T("QR_taken"), who, quest), chat, 0.5, 1, 0.5)
+		if batch then table.insert(batch.taken, who) end
 	elseif result == "caught_up" then
-		A.Log(string.format(T("QR_caught_up"), who, quest, tonumber(detail) or 0), true, 1, 0.82, 0)
+		A.Log(string.format(T("QR_caught_up"), who, quest, tonumber(detail) or 0), chat, 1, 0.82, 0)
+		if batch then table.insert(batch.taken, who) end
 	elseif result == "refused" then
 		local s = A.quests[id][name]
 		local reason = (s and s.state == detail) and A.Reason(s) or A.Reason({ state = detail, detail = "" })
-		A.Log(string.format(T("QR_refused"), who, quest, reason), true, 1, 0.4, 0.3)
+		A.Log(string.format(T("QR_refused"), who, quest, reason), chat, 1, 0.4, 0.3)
+		if batch then table.insert(batch.other, who .. " (" .. reason .. ")") end
 	elseif T("QR_" .. result) ~= "QR_" .. result then
 		local text = string.format(T("QR_" .. result), who, quest)
-		A.Log(text, true, 1, 0.4, 0.3)
-		if UIErrorsFrame then UIErrorsFrame:AddMessage(text, 1, 0.4, 0.3) end
+		A.Log(text, chat, 1, 0.4, 0.3)
+		if batch then table.insert(batch.other, who .. " (" .. T("QA_" .. result) .. ")")
+		elseif UIErrorsFrame then UIErrorsFrame:AddMessage(text, 1, 0.4, 0.3) end
+	elseif batch then
+		table.insert(batch.other, who .. " (" .. result .. ")")
 	end
+	if batch and not next(batch.waiting) then A.FlushBatch() end
 	A.RefreshQuests()
 	A.WatchDots()
 end
@@ -1566,6 +1659,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		A.HideQuests()
 	elseif event == "QUEST_ACCEPTED" then
 		A.acceptedAt = GetTime()
+		A.AfterAccept(A.detail, arg1)
 		A.detail = nil
 	elseif event == "QUEST_GREETING" or event == "GOSSIP_SHOW" then
 		A.detail = nil
@@ -1641,6 +1735,7 @@ frame:SetScript("OnUpdate", function(_, delta)
 		end
 		A.RefreshQuests()
 	end
+	if A.batch and now >= A.batch.ends then A.FlushBatch() end
 	-- The trainer opened and an alt said nothing: ask it.
 	if A.trainAsk and now >= A.trainAsk then
 		A.trainAsk = nil
