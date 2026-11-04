@@ -818,11 +818,11 @@ StaticPopupDialogs.SQUIDBOTSLITE_QUEST_TAKE = {
 
 function A.AfterAccept(id, index)
 	local title = id and A.titles[id]
-	if not id and index then
-		local link = GetQuestLink(index)
-		id = link and tonumber(link:match("|Hquest:(%d+)"))
-		title = GetQuestLogTitle(index)
-	end
+	-- The quest link: a 2.9.2 server only understands "take <link>", the id alone works from 2.9.3.
+	local link = index and GetQuestLink(index)
+	local linked = link and tonumber(link:match("|Hquest:(%d+)"))
+	if not id then id, title = linked, index and GetQuestLogTitle(index) end
+	if linked ~= id then link = nil end
 	if not id or SquidBotsLiteDB.questAsk == "off" then return end
 	-- "Just me" or "Take for the team" already answered; out of quiet mode the alts take it on their own.
 	if A.chosen and A.chosen.id == id and GetTime() - A.chosen.at < ACCEPT_WINDOW then return end
@@ -833,7 +833,7 @@ function A.AfterAccept(id, index)
 		if IsAlt(name) and UnitIsConnected(unit) then table.insert(alts, name) end
 	end
 	if #alts == 0 then return end
-	A.pendingTake = { id = id, alts = alts }
+	A.pendingTake = { id = id, link = link, alts = alts }
 	if SquidBotsLiteDB.questAsk == "always" then A.TakePending() return end
 	local popup = StaticPopupDialogs.SQUIDBOTSLITE_QUEST_TAKE
 	popup.text, popup.button3 = T("QA_ASK"), T("QA_ALWAYS")
@@ -846,9 +846,10 @@ function A.TakePending()
 	A.pendingTake = nil
 	if not p then return end
 	A.batch = { id = p.id, waiting = {}, taken = {}, other = {}, ends = GetTime() + 10 }
+	A.asked[p.id] = A.asked[p.id] or {}
 	for _, name in ipairs(p.alts) do
-		A.batch.waiting[name] = true
-		A.Ask(name, "take", p.id)
+		A.batch.waiting[name], A.asked[p.id][name] = true, GetTime()
+		Send(name, "take " .. (p.link or p.id))
 	end
 end
 
