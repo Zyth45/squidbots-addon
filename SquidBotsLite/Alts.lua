@@ -35,7 +35,9 @@ local STRINGS = {
 		QA_ON = "Each quest you accept: you are asked whether your alts take it too.",
 		QA_OFF = "Your alts no longer take the quests you accept (Take for the team still works).",
 		QA_TAKEN = "taken by %s", QA_NONE = "no answer from %s", QA_log_full = "log full", QA_bags_full = "bags full",
-		QA_no_giver = "no quest giver in range",
+		QA_no_giver = "no quest giver in range", QA_too_far = "quest giver out of reach",
+		S_level_bare = "Wrong level", S_missing_bare = "Chain not done", S_exclusive_bare = "Took the other branch",
+		S_reputation_bare = "Reputation too low", S_skill_bare = "Skill too low",
 		TIP_TAKE_TEAM = "Each alt that can takes it too; a chain left behind is caught up first if the server allows it.",
 		TIP_CATCH_UP = "Marks the earlier quests of the chain as done (no reward, no xp), then takes this one.",
 		TIP_REFRESH_Q = "Ask each alt again.", TIP_QUESTS = "Take for the team: each alt's state for a quest, the last one seen.",
@@ -54,6 +56,7 @@ local STRINGS = {
 		QR_taken = "%s took %s.", QR_caught_up = "%s caught up the chain of %s (%d quests).",
 		QR_refused = "%s cannot take %s: %s.", QR_log_full = "%s: quest log full, %s not taken.",
 		QR_bags_full = "%s: bags full, %s not taken.", QR_no_giver = "%s: no quest giver in range for %s, and you do not have it to share.",
+		QR_too_far = "%s: the quest giver of %s is near you but out of its reach.",
 		Q_BLOCKED = "%s cannot take %s: %s.",
 		TRAINER_OF = "%s", TRAIN_NOTHING = "Nothing to learn here", ERR_no_trainer = "Talk to the trainer first", TRAIN_SUM = "%d to learn: %s", TRAIN_HAS = "has %s",
 		TRAIN_MORE = "+ %d more", LEARN_ALL = "Learn all", TIP_LEARN_ALL = "It learns everything listed, in order, while its money lasts.",
@@ -101,7 +104,9 @@ local STRINGS = {
 		QA_ON = "À chaque quête acceptée, on vous demande si vos alts la prennent aussi.",
 		QA_OFF = "Vos alts ne prennent plus les quêtes que vous acceptez (Prendre pour l'équipe marche toujours).",
 		QA_TAKEN = "prise par %s", QA_NONE = "pas de réponse de %s", QA_log_full = "journal plein", QA_bags_full = "sacs pleins",
-		QA_no_giver = "aucun PNJ à portée",
+		QA_no_giver = "aucun PNJ à portée", QA_too_far = "donneur hors de portée",
+		S_level_bare = "Mauvais niveau", S_missing_bare = "Chaîne incomplète", S_exclusive_bare = "A pris l'autre branche",
+		S_reputation_bare = "Réputation trop basse", S_skill_bare = "Métier trop bas",
 		TIP_TAKE_TEAM = "Chaque alt qui le peut la prend aussi ; une chaîne en retard est d'abord rattrapée si le serveur le permet.",
 		TIP_CATCH_UP = "Marque faites les quêtes d'avant de la chaîne (sans récompense ni XP), puis prend celle-ci.",
 		TIP_REFRESH_Q = "Redemander à chaque alt.", TIP_QUESTS = "Prendre pour l'équipe : l'état de chaque alt pour une quête, la dernière vue.",
@@ -120,6 +125,7 @@ local STRINGS = {
 		QR_taken = "%s a pris %s.", QR_caught_up = "%s a rattrapé la chaîne de %s (%d quêtes).",
 		QR_refused = "%s ne peut pas prendre %s : %s.", QR_log_full = "%s : journal de quêtes plein, %s non prise.",
 		QR_bags_full = "%s : sacs pleins, %s non prise.", QR_no_giver = "%s : pas de donneur à portée pour %s, et vous ne l'avez pas à partager.",
+		QR_too_far = "%s : le donneur de %s est près de vous mais hors de sa portée.",
 		Q_BLOCKED = "%s ne peut pas prendre %s : %s.",
 		TRAINER_OF = "%s", TRAIN_NOTHING = "Rien à apprendre ici", ERR_no_trainer = "Parle d'abord à l'entraîneur", TRAIN_SUM = "%d à apprendre : %s", TRAIN_HAS = "a %s",
 		TRAIN_MORE = "+ %d autres", LEARN_ALL = "Tout apprendre", TIP_LEARN_ALL = "Il apprend toute la liste, dans l'ordre, tant que son argent suffit.",
@@ -311,6 +317,10 @@ function A.Reason(s)
 	local state, detail = s.state, s.detail or ""
 	if state == "can_take" or state == "done" then return T("S_" .. state) end
 	if state == "in_log" then return string.format(T("S_in_log"), T("IN_" .. (detail ~= "" and detail or "incomplete"))) end
+	-- A refusal (QR) carries the state alone: no "Level 0 needed" or "Quest #0".
+	local bare = { level = "S_level_bare", missing_prev = "S_missing_bare", exclusive = "S_exclusive_bare",
+		reputation = "S_reputation_bare", skill = "S_skill_bare" }
+	if detail == "" and bare[state] then return T(bare[state]) end
 	if state == "missing_prev" then
 		local ids = {}
 		for id in detail:gmatch("(%d+)") do table.insert(ids, tonumber(id)) end
