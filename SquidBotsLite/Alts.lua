@@ -1649,6 +1649,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		-- line this file does not know, from someone not an alt, is not one of the team's.
 		if f[1] == "TK" or f[1] == "TS" then return end
 		if not Handle[f[1]] and not IsAlt(arg4) then return end
+		-- A HELLO back from a bot that is not an alt (the Main Tank bar said HELLO to it): not one of the team.
+		if f[1] == "HELLO" and not IsAlt(arg4) then
+			Handle.HELLO(arg4, f)
+			return
+		end
 		A.seen[arg4], A.gone[arg4] = GetTime(), nil
 		local handler = Handle[f[1]]
 		if handler then handler(arg4, f) end

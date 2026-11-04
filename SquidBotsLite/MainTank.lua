@@ -121,6 +121,22 @@ function mt.Send(name, text)
 	SendAddonMessage(PREFIX, text, "WHISPER", name)
 end
 
+-- A player without an alt logged in never says HELLO (Alts.lua says it to an alt): said here to a known bot
+-- of the group, so the module answers TK / TS as addon messages and not as whispers. At most every 30 s.
+function mt.Hello()
+	local alts = SquidBotsLite_OnlineAlts and SquidBotsLite_OnlineAlts() or {}
+	if #alts > 0 or (mt.helloAt and GetTime() - mt.helloAt < 30) then return end
+	local me = UnitName("player")
+	for _, unit in ipairs(GroupUnits()) do
+		local name = UnitName(unit)
+		if name and name ~= me and UnitIsConnected(unit) and (mt.info[name] or (SquidBotsLite_IsBot and SquidBotsLite_IsBot(name))) then
+			mt.helloAt = GetTime()
+			mt.Send(name, "HELLO	1")
+			return
+		end
+	end
+end
+
 -- "tank status all" goes to one bot, and only to a bot: one that answered the bar before, an alt, a bot known
 -- to the addon (it answered, joined as a role, a "Bot" surname). Never to a member who may be a player.
 function mt.AskStatus()
@@ -142,6 +158,7 @@ function mt.AskStatus()
 		mt.Refresh()
 		return
 	end
+	mt.Hello()
 	mt.Send(to, "tank status all")
 	mt.waitUntil = mt.askedAt + STATUS_WAIT
 	mt.Refresh()
@@ -519,6 +536,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
 		-- Who can tank may have changed: asked again a moment later, once the roster settles.
 		if mt.frame and mt.frame:IsShown() then mt.askAt = GetTime() + 2 end
+		mt.Hello()
 	else
 		mt.Refresh()
 	end
