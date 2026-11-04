@@ -85,6 +85,7 @@ At login the server names its CoA Bots version. SquidBots Lite carries the same 
 /sbl bot <name>      the bot sheet of a bot of your group (or of your target)
 /sbl missions        send your logged-in alts gathering on their own
 /sbl roles on | off  ask bots of unknown role for it
+/sbl questask on | off | always  ask whether your alts take the quest you accept
 /sbl gm              GM mode
 /sbl reset           put the bar back in the middle
 ```
@@ -98,6 +99,11 @@ It ships with CoA Bots, whose installer copies it into your client. To install i
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
+
+**2.9.3** (2026-11-04, for CoA Bots 2.9.3)
+- **Raid 15 (Manastorm)**: new button in the Bots menu, next to Raid 10 and Raid 25. It sends `.playerbots coa raid 15`; the server picks the group (1 tank, 2 healers, counting your own role).
+- **Your alts take this quest too?**: when you accept a quest with the game's button and alts are in your group, a popup asks whether they take it too (Yes, No, Always). Their answers come back as one line in the chat. `/sbl questask on|off|always` changes it.
+- **Link in chat** (bot sheet item menu, and shift-click on items, gear, quests and spells): the chat now opens with the link when no chat box is open.
 
 **2.8.2**
 - **Missions** (My alts > Missions, or `/sbl missions`; CoA Bots 2.8.2): send a logged-in alt gathering on its own for 30, 60 or 120 minutes, up to 4 alts at a time (3 before CoA Bots 2.8.4). Each card shows small icons for what that alt can do (mining, herbalism, and from CoA Bots 2.8.4 skinning, fishing, and cloth for everyone), the suggested one framed; one greyed out tells why (no pick, no knife, no pole). Pick, pick a length, **Send**. **Order** opens a small window: suggestions for the activity and the alt's level, a search field over the classic materials, a quantity, or an item dropped from your bags. It leaves the group, gathers, and mails you what it found. The panel shows each alt's state live (on the way, gathering, mailing), its zone, the minutes left, the items gathered and its deaths, with a **Recall** button; a message tells you when the mail has arrived. Through what you can whisper to your own alt: `mission gather [minutes] [mining|herbalism]`, `mission status`, `mission stop`.
