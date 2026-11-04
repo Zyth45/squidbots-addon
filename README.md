@@ -100,6 +100,9 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**2.9.4** (in progress, for CoA Bots 2.9.4)
+- **Dungeon clear panel opens by itself** once when you enter a dungeon or a raid (after the fight if you are in one), to remind you it is there. Not in battlegrounds or arenas, not again after a reload or a run back from the graveyard. A box in the panel turns it off.
+
 **2.9.3** (2026-11-04, for CoA Bots 2.9.3)
 - **Raid 15 (Manastorm)**: new button in the Bots menu, next to Raid 10 and Raid 25. It sends `.playerbots coa raid 15`; the server picks the group (1 tank, 2 healers, counting your own role).
 - **Your alts take this quest too?**: when you accept a quest with the game's button and alts are in your group, a popup asks whether they take it too (Yes, No, Always). Their answers come back as one line in the chat. `/sbl questask on|off|always` changes it.

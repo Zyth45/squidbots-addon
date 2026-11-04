@@ -56,6 +56,9 @@ local STRINGS = {
 		DC_ALIVE = "alive", DC_DEAD = "dead", DC_SKIPPED = "skipped", DC_MISSING = "missing", DC_RUNNING = "running",
 		TIP_DUNGEON_DC = "Dungeon clear: the tank leads the group through the dungeon. Opens its panel (bosses, Go, pull mode). The old dungeon mode is in the panel and in the bar's right-click menu.",
 		DC_MANUAL = "Dungeon mode (you lead)",
+		DC_AUTO = "Open in dungeons and raids",
+		TIP_DC_AUTO = "Opens this panel once when you enter a dungeon or a raid (after the fight, if there is one).",
+		DC_MT = "Main Tank", TIP_DC_MT = "The raid tank bar: your off-tanks, their marked target, taunt, swap and placement.",
 		TIP_DC_MANUAL = "The old Dungeon button: bots stick to you, avoid ground effects, engage with you.",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
@@ -163,6 +166,9 @@ local STRINGS = {
 		DC_ALIVE = "vivant", DC_DEAD = "mort", DC_SKIPPED = "passé", DC_MISSING = "introuvable", DC_RUNNING = "en cours",
 		TIP_DUNGEON_DC = "Dungeon clear : le tank mène le groupe à travers le donjon. Ouvre son panneau (boss, Go, mode de pull). L'ancien mode donjon est dans le panneau et dans le menu du clic droit sur la barre.",
 		DC_MANUAL = "Mode donjon (vous menez)",
+		DC_AUTO = "Ouvrir en donjon et en raid",
+		TIP_DC_AUTO = "Ouvre ce panneau une fois quand vous entrez dans un donjon ou un raid (après le combat s'il y en a un).",
+		DC_MT = "Main Tank", TIP_DC_MT = "La barre des tanks de raid : vos off-tanks, leur cible marquée, taunt, swap et placement.",
 		TIP_DC_MANUAL = "L'ancien bouton Donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
@@ -272,6 +278,7 @@ local ui = {
 	UNKNOWN = "Interface\\Icons\\INV_Misc_QuestionMark", NOBODY = "Interface\\CharacterFrame\\TempPortrait",
 }
 SquidBotsLite_UI = ui
+ui.PANEL_BACKDROP = PANEL_BACKDROP
 
 -- A card: dark, a thin border that turns gold under the mouse.
 function ui.Card(frame)
@@ -3018,7 +3025,27 @@ function dc.BuildPanel()
 	end
 	f.manual = dc.Button(f, 200, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
 	f.manual:SetHeight(18)
-	f.manual:SetPoint("BOTTOM", 0, 14)
+	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
+	-- 2.9.4: the raid tank bar (MainTank.lua).
+	f.mt = dc.Button(f, 100, "DC_MT", function() if SquidBotsLite_ToggleMainTank then SquidBotsLite_ToggleMainTank() end end,
+		"TIP_DC_MT")
+	f.mt:SetHeight(18)
+	f.mt:SetPoint("BOTTOMRIGHT", -16, 14)
+	-- 2.9.4: the panel opens by itself once per dungeon or raid (dc.AutoCheck); this box turns that off.
+	f.auto = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+	f.auto:SetWidth(20)
+	f.auto:SetHeight(20)
+	f.auto:SetPoint("BOTTOMLEFT", 14, 36)
+	f.auto.text = f.auto:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.auto.text:SetPoint("LEFT", f.auto, "RIGHT", 2, 0)
+	f.auto:SetScript("OnClick", function(self) SquidBotsLiteDB.dcAutoOpen = self:GetChecked() and true or false end)
+	f.auto:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(L.DC_AUTO, 1, 0.82, 0)
+		GameTooltip:AddLine(L.TIP_DC_AUTO, 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	f.auto:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	ui.FlattenAll(f)
 	f:Hide()
 	dc.panel = f
@@ -3047,11 +3074,57 @@ function dc.ShowPanel()
 	dc.RefreshPanel()
 end
 
+-- 2.9.4: the panel opens by itself once per dungeon or raid, to remind that it is there. Not in a fight (it
+-- waits for the end), a battleground or an arena; not again after a reload, nor after a run back from the
+-- graveyard (the same instance within 10 minutes). Without the module on the realm, never.
+dc.auto = CreateFrame("Frame")
+function dc.AutoCheck()
+	dc.autoAt = nil
+	if not SquidBotsLiteDB or not SquidBotsLiteCharDB then return end
+	local inside, kind = IsInInstance()
+	local seen = SquidBotsLiteCharDB.dcAuto
+	if not inside or (kind ~= "party" and kind ~= "raid") then
+		if seen and not seen.left then seen.left = time() end
+		dc.autoWait = nil
+		return
+	end
+	local name, _, difficulty = GetInstanceInfo()
+	local key = (name or "?") .. ":" .. (difficulty or 0)
+	if seen and seen.key == key and (not seen.left or time() - seen.left < 600) then
+		seen.left = nil
+		return
+	end
+	if SquidBotsLiteDB.dcAutoOpen == false or dc.module == "absent" then return end
+	if UnitAffectingCombat("player") then
+		dc.autoWait = true
+		return
+	end
+	dc.autoWait = nil
+	SquidBotsLiteCharDB.dcAuto = { key = key }
+	if not (dc.panel and dc.panel:IsShown()) then dc.ShowPanel() end
+end
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED" }) do
+	dc.auto:RegisterEvent(event)
+end
+dc.auto:SetScript("OnEvent", function(_, event)
+	if event ~= "PLAYER_REGEN_ENABLED" then
+		dc.autoAt = GetTime() + 3
+	elseif dc.autoWait then
+		dc.autoAt = GetTime() + 1
+	end
+end)
+dc.auto:SetScript("OnUpdate", function()
+	if dc.autoAt and GetTime() >= dc.autoAt then dc.AutoCheck() end
+end)
+
 function dc.RefreshPanel()
 	local f = dc.panel
 	if not f or not f:IsShown() then return end
 	f.title:SetText(L.DC_LINE)
 	f.manual:SetText(L.DC_MANUAL)
+	f.mt:SetText(L.DC_MT)
+	f.auto.text:SetText(L.DC_AUTO)
+	f.auto:SetChecked(SquidBotsLiteDB.dcAutoOpen ~= false)
 	f.pullTitle:SetText(L.DC_PULL_T)
 	f.bossTitle:SetText(L.DC_BOSSES_T)
 	local off = dc.module == "off"
@@ -3062,7 +3135,7 @@ function dc.RefreshPanel()
 	local bosses = off and {} or (dc.bosses or {})
 	local shown = math.min(#bosses, dc.ROWS)
 	-- The panel fits the list: no empty space under a short dungeon.
-	f:SetHeight(dc.ROWS_TOP + math.max(shown, 1) * dc.ROW_H + 44)
+	f:SetHeight(dc.ROWS_TOP + math.max(shown, 1) * dc.ROW_H + 66)
 	if off then
 		f.dot:SetVertexColor(1, 0.3, 0.3)
 		f.state:SetText("|cffff5555" .. L.DC_DISABLED .. "|r")
