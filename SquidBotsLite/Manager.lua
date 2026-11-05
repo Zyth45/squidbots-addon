@@ -18,6 +18,7 @@ local STRINGS = {
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
 		FOR_GROUND = "favourite on the ground", FOR_FLYING = "favourite in the air",
+		MOUNT_SEARCH = "Search a mount...", MOUNT_NONE = "No mount matches \"%s\".",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
 		MOUNT_HINT = "Click a mount: your bot rides it from now on. One ground and one flying favourite; a ground-and-flying mount is both. Automatic choice: the bot picks again.",
 		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
@@ -58,6 +59,7 @@ local STRINGS = {
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
 		FOR_GROUND = "préférée au sol", FOR_FLYING = "préférée en vol",
+		MOUNT_SEARCH = "Chercher une monture...", MOUNT_NONE = "Aucune monture ne correspond à « %s ».",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
 		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Une préférée au sol, une en vol ; une monture sol et vol compte pour les deux. Choix automatique : le bot choisit à nouveau.",
 		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
@@ -95,7 +97,7 @@ local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interfac
 -- The bot answers line by line; a listing is over once it stays quiet this long. The server drops a line it
 -- already sent in the last 2 s (AiPlayerbot.RepeatDelay), so a new request waits that long.
 local QUIET, GIVE_UP, REPEAT_DELAY = 0.7, 6, 2.1
-local BAG_COLS, BAG_ROWS, QUEST_ROWS, MOUNT_ROWS = 8, 6, 14, 11
+local BAG_COLS, BAG_ROWS, QUEST_ROWS, MOUNT_ROWS = 8, 6, 14, 10
 -- Inventory slot ids of the 3.3.5 client, left column, right column, then weapons.
 local GEAR_LEFT = { 1, 2, 3, 15, 5, 4, 19, 9 }
 local GEAR_RIGHT = { 10, 6, 7, 8, 11, 12, 13, 14 }
@@ -1190,13 +1192,36 @@ end
 
 local RenderMounts
 
+-- The mounts the search box keeps: a part of the name, any case. Empty box: all of them.
+local function ShownMounts(page)
+	local search = page.search and strlower(strtrim(page.search:GetText() or "")) or ""
+	if search == "" then return mounts, search end
+	local list = {}
+	for _, m in ipairs(mounts) do
+		if strlower(m.name or ""):find(search, 1, true) then table.insert(list, m) end
+	end
+	return list, search
+end
+
 local function BuildMounts(page)
+	page.search = CreateFrame("EditBox", "SquidBotsLiteMountSearch", page, "InputBoxTemplate")
+	page.search:SetWidth(220)
+	page.search:SetHeight(20)
+	page.search:SetPoint("TOPLEFT", 18, -2)
+	page.search:SetAutoFocus(false)
+	page.search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+	page.search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	page.search:SetScript("OnTextChanged", function() mountOffset = 0; RenderMounts(page) end)
+	page.search:SetScript("OnEditFocusGained", function() page.typing = true; RenderMounts(page) end)
+	page.search:SetScript("OnEditFocusLost", function() page.typing = nil; RenderMounts(page) end)
+	page.searchHint = page.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.searchHint:SetPoint("LEFT", 4, 0)
 	page.rows = {}
 	for i = 1, MOUNT_ROWS do
 		local row = CreateFrame("Button", nil, page)
 		row:SetWidth(370)
 		row:SetHeight(22)
-		row:SetPoint("TOPLEFT", 10, -(i - 1) * 24)
+		row:SetPoint("TOPLEFT", 10, -26 - (i - 1) * 24)
 		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
 		row.icon = row:CreateTexture(nil, "ARTWORK")
 		row.icon:SetWidth(20)
@@ -1226,24 +1251,24 @@ local function BuildMounts(page)
 		end)
 		row:EnableMouseWheel(true)
 		row:SetScript("OnMouseWheel", function(_, delta)
-			mountOffset = math.max(0, math.min(math.max(0, #mounts - MOUNT_ROWS), mountOffset - delta * 3))
+			mountOffset = math.max(0, math.min(math.max(0, (page.count or 0) - MOUNT_ROWS), mountOffset - delta * 3))
 			RenderMounts(page)
 		end)
 		page.rows[i] = row
 	end
 	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
-	page.up:SetPoint("TOPRIGHT", -6, 0)
+	page.up:SetPoint("TOPRIGHT", -6, -26)
 	page.up:SetScript("OnClick", function() mountOffset = math.max(0, mountOffset - MOUNT_ROWS); RenderMounts(page) end)
 	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
-	page.down:SetPoint("TOPRIGHT", -6, -(MOUNT_ROWS * 24) + 16)
+	page.down:SetPoint("TOPRIGHT", -6, -26 - (MOUNT_ROWS * 24) + 16)
 	page.down:SetScript("OnClick", function()
-		if mountOffset + MOUNT_ROWS < #mounts then mountOffset = mountOffset + MOUNT_ROWS end
+		if mountOffset + MOUNT_ROWS < (page.count or 0) then mountOffset = mountOffset + MOUNT_ROWS end
 		RenderMounts(page)
 	end)
 	page.auto = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.auto:SetWidth(150)
 	page.auto:SetHeight(22)
-	page.auto:SetPoint("TOPLEFT", 10, -(MOUNT_ROWS * 24) - 6)
+	page.auto:SetPoint("TOPLEFT", 10, -26 - (MOUNT_ROWS * 24) - 6)
 	page.auto:SetScript("OnClick", function() Whisper("mount clear"); AfterChange() end)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	page.hint:SetPoint("TOPLEFT", page.auto, "TOPRIGHT", 8, 2)
@@ -1255,7 +1280,15 @@ local function BuildMounts(page)
 end
 
 RenderMounts = function(page)
-	page.note:SetText(#mounts == 0 and capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
+	local shown, search = ShownMounts(page)
+	page.count = #shown
+	mountOffset = math.max(0, math.min(mountOffset, #shown - MOUNT_ROWS))
+	page.searchHint:SetText(search == "" and not page.typing and T("MOUNT_SEARCH") or "")
+	if #mounts == 0 then
+		page.note:SetText(capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
+	else
+		page.note:SetText(#shown == 0 and string.format(T("MOUNT_NONE"), page.search:GetText()) or "")
+	end
 	page.auto:SetText(T("AUTO_MOUNT"))
 	page.hint:SetText(T("MOUNT_HINT"))
 	local kinds = { ground = T("GROUND"), flying = T("FLYING"), both = T("BOTH") }
@@ -1274,7 +1307,7 @@ RenderMounts = function(page)
 		return T("PREFERRED")
 	end
 	for i, row in ipairs(page.rows) do
-		local m = mounts[mountOffset + i]
+		local m = shown[mountOffset + i]
 		row.mount = m
 		if m then
 			row.icon:SetTexture(select(3, GetSpellInfo(m.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -1286,7 +1319,7 @@ RenderMounts = function(page)
 			row:Hide()
 		end
 	end
-	if #mounts > MOUNT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
+	if #shown > MOUNT_ROWS then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
 end
 
 local TABS = { { "gear", "GEAR", BuildGear, "Interface\\Icons\\INV_Chest_Chain_05" },
@@ -1534,6 +1567,7 @@ function SquidBotsLite_OpenSheet(name)
 	if not sheet then Build() end
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
+		if pages.mounts and pages.mounts.search then pages.mounts.search:SetText(""); pages.mounts.search:ClearFocus() end
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
 		bagMode = "bags"

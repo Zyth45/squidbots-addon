@@ -105,6 +105,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 - **Dungeon clear panel opens by itself** once when you enter a dungeon or a raid (after the fight if you are in one), to remind you it is there. Not in battlegrounds or arenas, not again after a reload or a run back from the graveyard. A box in the panel turns it off.
 - **Faster**: logging an alt in or out (My alts) shows at once, confirmed by the server's answer instead of a fixed 3 s wait; an item sold, destroyed, deposited or withdrawn on the bot sheet leaves the list at once (a sale the bot cannot make puts it back); the sheet asks its lists again as soon as the server allows, and a Refresh clicked too soon waits its turn instead of being lost. With CoA Bots 2.9.4, alts say when they log in or out, and the bag list ends with "Items: N" so it no longer waits for the bot to go quiet.
 - Main Tank bar: key bindings work with the bar closed or never opened; the bar only asks bots, never players; Main tank on / off follows the server's state.
+- **Mount search** (bot sheet, Mounts tab): a box above the list filters the mounts by name as you type, handy with a large collection. Escape clears it.
 
 **2.9.3** (2026-11-04, for CoA Bots 2.9.3)
 - **Raid 15 (Manastorm)**: new button in the Bots menu, next to Raid 10 and Raid 25. It sends `.playerbots coa raid 15`; the server picks the group (1 tank, 2 healers, counting your own role).
