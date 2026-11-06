@@ -226,8 +226,13 @@ function mt.OnAddon(sender, message)
 			-- "TK main ok 0 on|off": the state of the flag in the last field.
 			if result == "ok" then
 				if target == "on" or target == "off" then mt.main = target == "on" else mt.main = mt.wantMain and true or false end
-				-- Main tank and a running clear never go together: the server's "on" stops the clear.
-				if mt.main and SquidBotsLite_DcStopForTank then SquidBotsLite_DcStopForTank() end
+				if mt.main and not (mt.frame and mt.frame:IsShown()) then
+					-- On while the bar is closed (a reload, a late answer): the bar closed means off.
+					mt.SetMain(false, true)
+				elseif mt.main and SquidBotsLite_DcStopForTank then
+					-- Main tank and a running clear never go together: the server's "on" stops the clear.
+					SquidBotsLite_DcStopForTank()
+				end
 			else
 				mt.Fail(sender, action, result)
 			end
@@ -305,6 +310,7 @@ function mt.Order(index, action)
 end
 
 -- Main tank on or off. "quiet": no line in the chat when it cannot be sent (the bar opening by itself).
+-- on true / false: Main tank on / off; on nil: only asks the server's state ("tank main" changes nothing).
 function mt.SetMain(on, quiet)
 	if mt.supported == false then
 		if not quiet then Print(T("NO_SERVER")) end
@@ -320,6 +326,10 @@ function mt.SetMain(on, quiet)
 	if not to then
 		if not quiet then Print(T("NO_BOT")) end
 		return false
+	end
+	if on == nil then
+		mt.Send(to, "tank main")
+		return true
 	end
 	mt.wantMain = on and true or false
 	-- A running clear moves the group and overrides the tank orders: stopped first, you lead.
@@ -627,7 +637,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	if event == "PLAYER_LOGIN" then
 		BindingNames()
 	elseif event == "PLAYER_ENTERING_WORLD" then
-		-- After a login or a reload the bar is closed, so Main tank is off: the server's flag may still be on.
+		-- After a login or a reload the bar is closed, so Main tank is off: the server's flag may still be on. Its
+		-- state is asked ("tank main"), and an "on" is turned off (OnAddon).
 		mt.syncAt = GetTime() + 3
 	elseif event == "CHAT_MSG_ADDON" then
 		if arg1 == PREFIX and arg3 == "WHISPER" and arg4 and arg2 and (arg2:find("^TK\t") or arg2:find("^TS\t")) then
@@ -654,8 +665,7 @@ frame:SetScript("OnUpdate", function(_, delta)
 			mt.syncPending = nil
 		else
 			-- No bot known yet: tried again when the group changes.
-			mt.syncPending = not mt.SetMain(false, true) or nil
-			if not mt.syncPending then mt.main = false end
+			mt.syncPending = not mt.SetMain(nil, true) or nil
 		end
 	end
 	if not mt.frame then return end
