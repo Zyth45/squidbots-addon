@@ -58,7 +58,8 @@ local STRINGS = {
 		DC_MANUAL = "Dungeon mode (you lead)",
 		DC_AUTO = "Open in dungeons and raids",
 		TIP_DC_AUTO = "Opens this panel once when you enter a dungeon or a raid (after the fight, if there is one).",
-		DC_MT = "Main Tank", TIP_DC_MT = "The raid tank bar: your off-tanks, their marked target, taunt, swap and placement.",
+		DC_MT = "Main Tank", TIP_DC_MT = "The raid tank bar, with Main tank on: your off-tanks, their marked target, taunt, swap and placement. A running clear is stopped first (you lead).",
+		DC_OFF_FOR_MT = "Dungeon Clear off: you lead as main tank.",
 		TIP_DC_MANUAL = "The old Dungeon button: bots stick to you, avoid ground effects, engage with you.",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
@@ -169,7 +170,8 @@ local STRINGS = {
 		DC_MANUAL = "Mode donjon (vous menez)",
 		DC_AUTO = "Ouvrir en donjon et en raid",
 		TIP_DC_AUTO = "Ouvre ce panneau une fois quand vous entrez dans un donjon ou un raid (après le combat s'il y en a un).",
-		DC_MT = "Main Tank", TIP_DC_MT = "La barre des tanks de raid : vos off-tanks, leur cible marquée, taunt, swap et placement.",
+		DC_MT = "Main Tank", TIP_DC_MT = "La barre des tanks de raid, Main tank allumé : vos off-tanks, leur cible marquée, taunt, swap et placement. Un clear en cours est d'abord arrêté (vous menez).",
+		DC_OFF_FOR_MT = "Dungeon Clear arrêté : vous menez en main tank.",
 		TIP_DC_MANUAL = "L'ancien bouton Donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
@@ -625,7 +627,13 @@ end
 -- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
 function dc.Start()
 	local inside, kind = IsInInstance()
-	if inside and (kind == "party" or kind == "raid") then dc.Send("on") else Print(L.DC_NOT_IN_DUNGEON) end
+	if not inside or (kind ~= "party" and kind ~= "raid") then
+		Print(L.DC_NOT_IN_DUNGEON)
+		return
+	end
+	-- 2.9.4: the clear moves the group and overrides the tank orders: Main tank goes off first (MainTank.lua).
+	if SquidBotsLite_MainTankOffForDc then SquidBotsLite_MainTankOffForDc() end
+	dc.Send("on")
 end
 
 function dc.Tick()
@@ -2897,7 +2905,10 @@ function dc.OnAddon(message)
 	if parts[1] ~= "STATUS" then return end
 	if dc.module ~= "on" then dc.module, dc.waitUntil = "on", nil end
 	dc.pull = tonumber(parts[9] or "")
+	local wasRunning = dc.enabled
 	dc.enabled, dc.state, dc.detail, dc.stall = parts[2] == "1", parts[7] or "", parts[8] or "", parts[5] or ""
+	-- A clear that starts (whoever started it) turns Main tank off: the two never run together.
+	if dc.enabled and not wasRunning and SquidBotsLite_MainTankOffForDc then SquidBotsLite_MainTankOffForDc() end
 	dc.nextBoss = parts[4] ~= "None" and parts[4] or nil
 	Highlight()
 	if not dc.line then
@@ -3084,12 +3095,50 @@ function dc.BuildPanel()
 	f.auto:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	ui.FlattenAll(f)
 	f:Hide()
+	SquidBotsLite_KeepOnControlLoss(f)
 	dc.panel = f
 end
 
 function dc.DungeonMode()
 	if SendOrder("co -wait for attack,+avoid aoe", "follow") then SetOrder("dungeon") end
 end
+
+-- 2.9.4: Main tank on while a clear runs: the clear stops (the Off button's command), the bots go to the
+-- Dungeon mode (you lead). Called by MainTank.lua on the click and on the server's "main on".
+function SquidBotsLite_DcStopForTank()
+	if not dc.enabled or (dc.stopAt and GetTime() - dc.stopAt < 3) then return end
+	dc.stopAt = GetTime()
+	dc.Send("off")
+	dc.DungeonMode()
+	Print(L.DC_OFF_FOR_MT)
+end
+
+-- 2.9.4: fear, stun or charm (PLAYER_CONTROL_LOST) make UIParent close every window of UISpecialFrames. The
+-- windows of a fight (Dungeon clear panel, Main Tank bar) keep Escape but come back at once. UIParent closes
+-- them in the same frame as the event (GetTime() does not change within a frame), before or after us.
+dc.keep = CreateFrame("Frame")
+dc.keep.frames, dc.keep.back = {}, {}
+function SquidBotsLite_KeepOnControlLoss(frame)
+	table.insert(dc.keep.frames, frame)
+	frame:HookScript("OnHide", function(self)
+		self.hiddenAt = GetTime()
+		if dc.keep.lostAt == self.hiddenAt then dc.keep.back[self] = true end
+	end)
+end
+dc.keep:RegisterEvent("PLAYER_CONTROL_LOST")
+dc.keep:SetScript("OnEvent", function(self)
+	local now = GetTime()
+	self.lostAt = now
+	for _, frame in ipairs(self.frames) do
+		if frame.hiddenAt == now and not frame:IsShown() then self.back[frame] = true end
+	end
+end)
+dc.keep:SetScript("OnUpdate", function(self)
+	for frame in pairs(self.back) do
+		self.back[frame] = nil
+		frame:Show()
+	end
+end)
 
 function dc.TogglePanel()
 	if dc.panel and dc.panel:IsShown() then dc.panel:Hide() else dc.ShowPanel() end

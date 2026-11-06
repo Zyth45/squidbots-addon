@@ -31,11 +31,12 @@ local STRINGS = {
 		NO_SERVER = "The realm does not answer the Main Tank bar (it needs CoA Bots 2.9.4).",
 		NO_GROUP = "Join a group with bots first.",
 		NO_KNOWN_BOT = "No bot of the group known yet: give the group an order (follow), or wait for one to answer.",
+		MT_OFF_FOR_DC = "Main tank off: Dungeon Clear leads.",
 		NEED_TARGET = "Target the monster first.", IN_COMBAT = "Out of combat only.", NO_OFFTANK = "No off-tank %d in the bar.",
 		LAST = "Last order: %s", FAIL = "%s, %s: %s.",
 		R_no_target = "no target", R_out_of_range = "out of range", R_cooldown = "on cooldown", R_dead = "target dead",
 		R_not_tank = "cannot tank", R_not_in_group = "not in your group", R_busy = "busy (in a fight, dead, controlled or in a vehicle)",
-		B_HEADER = "SquidBots Lite: Main Tank", B_MAIN = "Main tank on / off", B_BAR = "Main Tank bar",
+		B_HEADER = "SquidBots Lite: Main Tank", B_MAIN = "Main tank on / off", B_BAR = "Main Tank bar (Main tank on / off)",
 		B_TARGET = "Off-tank %d: on my target", B_TAUNT = "Off-tank %d: taunt", B_SWAP = "Off-tank %d: swap",
 		B_HOLD = "Off-tank %d: placement",
 	},
@@ -55,11 +56,12 @@ local STRINGS = {
 		NO_SERVER = "Le royaume ne répond pas à la barre Main Tank (il faut CoA Bots 2.9.4).",
 		NO_GROUP = "Rejoignez d'abord un groupe avec des bots.",
 		NO_KNOWN_BOT = "Aucun bot du groupe connu pour l'instant : donnez un ordre au groupe (suivre), ou attendez qu'un bot réponde.",
+		MT_OFF_FOR_DC = "Main tank éteint : Dungeon Clear mène.",
 		NEED_TARGET = "Ciblez d'abord le monstre.", IN_COMBAT = "Hors combat seulement.", NO_OFFTANK = "Pas d'off-tank %d dans la barre.",
 		LAST = "Dernier ordre : %s", FAIL = "%s, %s : %s.",
 		R_no_target = "pas de cible", R_out_of_range = "hors de portée", R_cooldown = "en recharge", R_dead = "cible morte",
 		R_not_tank = "ne peut pas tanker", R_not_in_group = "pas dans votre groupe", R_busy = "occupé (en combat, mort, contrôlé ou en véhicule)",
-		B_HEADER = "SquidBots Lite : Main Tank", B_MAIN = "Main tank actif / inactif", B_BAR = "Barre Main Tank",
+		B_HEADER = "SquidBots Lite : Main Tank", B_MAIN = "Main tank actif / inactif", B_BAR = "Barre Main Tank (Main tank actif / inactif)",
 		B_TARGET = "Off-tank %d : sur ma cible", B_TAUNT = "Off-tank %d : taunt", B_SWAP = "Off-tank %d : swap",
 		B_HOLD = "Off-tank %d : placement",
 	},
@@ -217,6 +219,8 @@ function mt.OnAddon(sender, message)
 			-- "TK main ok 0 on|off": the state of the flag in the last field.
 			if result == "ok" then
 				if target == "on" or target == "off" then mt.main = target == "on" else mt.main = mt.wantMain and true or false end
+				-- Main tank and a running clear never go together: the server's "on" stops the clear.
+				if mt.main and SquidBotsLite_DcStopForTank then SquidBotsLite_DcStopForTank() end
 			else
 				mt.Fail(sender, action, result)
 			end
@@ -280,9 +284,10 @@ function mt.Order(index, action)
 	mt.Send(name, "tank " .. action)
 end
 
-function mt.ToggleMain()
+-- Main tank on or off. "quiet": no line in the chat when it cannot be sent (the bar opening by itself).
+function mt.SetMain(on, quiet)
 	if mt.supported == false then
-		Print(T("NO_SERVER"))
+		if not quiet then Print(T("NO_SERVER")) end
 		return
 	end
 	local to = mt.Candidates()[1]
@@ -293,11 +298,21 @@ function mt.ToggleMain()
 		end
 	end
 	if not to then
-		Print(T("NO_BOT"))
+		if not quiet then Print(T("NO_BOT")) end
 		return
 	end
-	mt.wantMain = not mt.main
-	mt.Send(to, "tank main " .. (mt.wantMain and "on" or "off"))
+	mt.wantMain = on and true or false
+	-- A running clear moves the group and overrides the tank orders: stopped first, you lead.
+	if on and SquidBotsLite_DcStopForTank then SquidBotsLite_DcStopForTank() end
+	mt.Send(to, "tank main " .. (on and "on" or "off"))
+end
+
+-- Dungeon clear starts (SquidBotsLite.lua): the bar closes (Main tank off), and says so.
+function SquidBotsLite_MainTankOffForDc()
+	if not (mt.frame and mt.frame:IsShown()) and not mt.main then return end
+	if mt.frame and mt.frame:IsShown() then mt.frame:Hide() else mt.SetMain(false, true) end
+	mt.main = false
+	Print(T("MT_OFF_FOR_DC"))
 end
 
 function mt.ClearAll()
@@ -351,7 +366,8 @@ function mt.Build()
 	end)
 	local saved = SquidBotsLiteDB.mainTankBar
 	if saved then f:SetPoint(saved[1], UIParent, saved[2], saved[3], saved[4]) else f:SetPoint("TOP", 0, -230) end
-	-- Head: the title on the left; Main tank, Clear all, Refresh and close on the right.
+	-- Head: the title on the left; Clear all, Refresh and close on the right. The bar is Main tank: open, it is on;
+	-- closed (its X, its key, a clear that starts), off.
 	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.title:SetPoint("TOPLEFT", 10, -9)
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -362,8 +378,6 @@ function mt.Build()
 	f.refresh:SetPoint("TOPRIGHT", -26, -5)
 	f.clearAll = UI.IconButton(f, ICON, ICONS.clear, function() return T("CLEAR_ALL"), T("TIP_CLEAR_ALL") end, function() mt.ClearAll() end)
 	f.clearAll:SetPoint("RIGHT", f.refresh, "LEFT", -4, 0)
-	f.main = UI.IconButton(f, ICON, ICONS.main, function() return T("MAIN"), T("TIP_MAIN") end, function() mt.ToggleMain() end)
-	f.main:SetPoint("RIGHT", f.clearAll, "LEFT", -4, 0)
 	UI.Rule(f, -28)
 	-- The player's line: "You (MT)" and what they target.
 	f.me = CreateFrame("Frame", nil, f)
@@ -407,8 +421,10 @@ function mt.Build()
 	f.note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.note:SetWidth(WIDTH - 24)
 	f.note:SetJustifyH("LEFT")
-	table.insert(UISpecialFrames, "SquidBotsLiteMainTank")
+	-- Not in UISpecialFrames: Escape, and fear, stun or charm (UIParent closes those windows) would close it, and
+	-- closing the bar turns Main tank off. Its X and its key close it.
 	f:Hide()
+	f:SetScript("OnHide", function() mt.pending, mt.pendingAt = nil, nil; mt.SetMain(false, true) end)
 	mt.frame = f
 end
 
@@ -416,7 +432,6 @@ function mt.Refresh()
 	local f = mt.frame
 	if not f or not f:IsShown() then return end
 	f.title:SetText(T("TITLE"))
-	Lit(f.main, mt.main)
 	local unsupported = mt.supported == false
 	-- The player's line.
 	f.me.name:SetText(T("YOU"))
@@ -463,7 +478,7 @@ function mt.Refresh()
 	elseif #bots == 0 then
 		note = T("NO_BOT")
 	end
-	for _, button in ipairs({ f.main, f.clearAll }) do UI.SetIcon(button, button == f.main and ICONS.main or ICONS.clear, not unsupported) end
+	UI.SetIcon(f.clearAll, ICONS.clear, not unsupported)
 	local height = 32 + (1 + #bots) * ROW_H + 8
 	if note then
 		f.note:ClearAllPoints()
@@ -487,9 +502,16 @@ function SquidBotsLite_ToggleMainTank()
 	-- Asked again each time it opens: an earlier "no answer" may have been a realm restarted since.
 	if mt.supported == false then mt.supported = nil end
 	mt.AskStatus()
+	-- Opening the bar turns Main tank on (and stops a running clear); closing it turns it off. Off-tanks not
+	-- known yet: sent once the answers are in.
+	if mt.waitUntil then
+		mt.pending = { action = "mainon", index = 1 }
+	else
+		mt.RunKey("mainon", 1)
+	end
 end
 
--- Key bindings (Bindings.xml): SquidBotsLite_MainTank("target", 1) and so on, "main" for Main tank on / off.
+-- Key bindings (Bindings.xml): SquidBotsLite_MainTank("target", 1) and so on.
 -- They work with the bar closed or never opened: off-tanks not known yet (or not for a while) are asked first,
 -- and the key's order follows the answers.
 function SquidBotsLite_MainTank(action, index)
@@ -506,13 +528,13 @@ function SquidBotsLite_MainTank(action, index)
 end
 
 function mt.RunKey(action, index)
-	if action == "main" then mt.ToggleMain() else mt.Order(index, action) end
+	if action == "mainon" then mt.SetMain(true, true)
+	else mt.Order(index, action) end
 end
 
 local function BindingNames()
 	BINDING_HEADER_SQUIDBOTSLITE_MT = T("B_HEADER")
 	BINDING_NAME_SQUIDBOTSLITE_MT_BAR = T("B_BAR")
-	BINDING_NAME_SQUIDBOTSLITE_MT_MAIN = T("B_MAIN")
 	for i = 1, ROWS do
 		for _, key in ipairs({ "TARGET", "TAUNT", "SWAP", "HOLD" }) do
 			_G["BINDING_NAME_SQUIDBOTSLITE_MT_" .. key .. i] = string.format(T("B_" .. key), i)

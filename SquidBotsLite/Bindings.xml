@@ -12,7 +12,6 @@
 	<Binding name="SQUIDBOTSLITE_ALTS">SquidBotsLite_Order("alts")</Binding>
 	<Binding name="SQUIDBOTSLITE_SPECS">SquidBotsLite_Specs()</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_BAR" header="SQUIDBOTSLITE_MT">SquidBotsLite_ToggleMainTank()</Binding>
-	<Binding name="SQUIDBOTSLITE_MT_MAIN">SquidBotsLite_MainTank("main")</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_TARGET1">SquidBotsLite_MainTank("target", 1)</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_TAUNT1">SquidBotsLite_MainTank("taunt", 1)</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_SWAP1">SquidBotsLite_MainTank("swap", 1)</Binding>
