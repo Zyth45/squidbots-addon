@@ -187,6 +187,9 @@ function mt.Candidates()
 end
 
 function mt.Fail(name, action, result)
+	local key = name .. "|" .. action .. "|" .. result
+	if mt.lastFail == key and GetTime() - (mt.lastFailAt or 0) < 1 then return end
+	mt.lastFail, mt.lastFailAt = key, GetTime()
 	local info = mt.info[name]
 	if info then info.error = T("R_" .. result) end
 	local text = string.format(T("FAIL"), ClassName(name), T(string.upper(action)), T("R_" .. result))
@@ -240,10 +243,16 @@ function mt.OnAddon(sender, message)
 					info.icon, info.target, info.hold = 0, nil, false
 				elseif action == "hold" then
 					info.hold = true
+				elseif action == "taunt" then
+					-- A taunt does not move the pin: the line keeps its icon and its target.
+					mt.StartTauntCooldown(sender)
+				elseif action == "swap" and info.swapBack then
+					-- "tank swap back": the target is the player's again.
+					info.icon, info.target = 0, nil
 				else
 					if icon > 0 or target then info.icon, info.target = icon, target end
-					if action == "taunt" then mt.StartTauntCooldown(sender) end
 				end
+				if action == "swap" then info.swapBack = nil end
 			elseif result == "dead" then
 				-- Its marked target died: it assists the player again.
 				info.icon, info.target = 0, nil
@@ -285,6 +294,13 @@ function mt.Order(index, action)
 		return
 	end
 	info.last = T(string.upper(action))
+	-- Swap on the target the bot already holds: it gives it back to the player.
+	if action == "swap" and info.target and UnitName("target") == info.target then
+		info.swapBack = true
+		mt.Send(name, "tank swap back")
+		return
+	end
+	info.swapBack = nil
 	mt.Send(name, "tank " .. action)
 end
 
@@ -303,20 +319,22 @@ function mt.SetMain(on, quiet)
 	end
 	if not to then
 		if not quiet then Print(T("NO_BOT")) end
-		return
+		return false
 	end
 	mt.wantMain = on and true or false
 	-- A running clear moves the group and overrides the tank orders: stopped first, you lead.
 	if on and SquidBotsLite_DcStopForTank then SquidBotsLite_DcStopForTank() end
 	mt.Send(to, "tank main " .. (on and "on" or "off"))
+	return true
 end
 
 -- Dungeon clear starts (SquidBotsLite.lua): the bar closes (Main tank off), and says so.
 function SquidBotsLite_MainTankOffForDc()
-	if not (mt.frame and mt.frame:IsShown()) and not mt.main then return end
+	local was = (mt.frame and mt.frame:IsShown()) or mt.main
+	-- Sent even when the addon believes it off: after a reload the server may still have it on.
 	if mt.frame and mt.frame:IsShown() then mt.frame:Hide() else mt.SetMain(false, true) end
 	mt.main = false
-	Print(T("MT_OFF_FOR_DC"))
+	if was then Print(T("MT_OFF_FOR_DC")) end
 end
 
 function mt.ClearAll()
@@ -449,7 +467,11 @@ function mt.Build()
 	-- Not in UISpecialFrames: Escape, and fear, stun or charm (UIParent closes those windows) would close it, and
 	-- closing the bar turns Main tank off. Its X and its key close it.
 	f:Hide()
-	f:SetScript("OnHide", function() mt.pending, mt.pendingAt = nil, nil; mt.SetMain(false, true) end)
+	f:SetScript("OnHide", function()
+		mt.pending, mt.pendingAt = nil, nil
+		if mt.supported ~= false then mt.ClearAll() end
+		mt.SetMain(false, true)
+	end)
 	mt.frame = f
 end
 
@@ -597,13 +619,16 @@ end
 BindingNames()
 
 local frame = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_LOGIN", "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE",
+for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE",
 	"PLAYER_TARGET_CHANGED", "RAID_TARGET_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
 	frame:RegisterEvent(event)
 end
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	if event == "PLAYER_LOGIN" then
 		BindingNames()
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		-- After a login or a reload the bar is closed, so Main tank is off: the server's flag may still be on.
+		mt.syncAt = GetTime() + 3
 	elseif event == "CHAT_MSG_ADDON" then
 		if arg1 == PREFIX and arg3 == "WHISPER" and arg4 and arg2 and (arg2:find("^TK\t") or arg2:find("^TS\t")) then
 			mt.OnAddon(arg4, arg2)
@@ -611,6 +636,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
 		-- Who can tank may have changed: asked again a moment later, once the roster settles.
 		if mt.frame and mt.frame:IsShown() then mt.askAt = GetTime() + 2 end
+		if mt.syncPending then mt.syncAt = GetTime() + 2 end
 		mt.Hello()
 	else
 		mt.Refresh()
@@ -622,6 +648,16 @@ frame:SetScript("OnUpdate", function(_, delta)
 	elapsed = elapsed + delta
 	if elapsed < 0.1 then return end
 	elapsed = 0
+	if mt.syncAt and GetTime() >= mt.syncAt then
+		mt.syncAt = nil
+		if mt.frame and mt.frame:IsShown() then
+			mt.syncPending = nil
+		else
+			-- No bot known yet: tried again when the group changes.
+			mt.syncPending = not mt.SetMain(false, true) or nil
+			if not mt.syncPending then mt.main = false end
+		end
+	end
 	if not mt.frame then return end
 	local now = GetTime()
 	local shown = mt.frame:IsShown()
