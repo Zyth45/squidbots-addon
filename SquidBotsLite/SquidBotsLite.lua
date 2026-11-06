@@ -58,7 +58,7 @@ local STRINGS = {
 		DC_MANUAL = "Dungeon mode (you lead)",
 		DC_AUTO = "Open in dungeons and raids",
 		TIP_DC_AUTO = "Opens this panel once when you enter a dungeon or a raid (after the fight, if there is one).",
-		DC_MT = "Main Tank", TIP_DC_MT = "The raid tank bar, with Main tank on: your off-tanks, their marked target, taunt, swap and placement. A running clear is stopped first (you lead).",
+		DC_MT = "Main Tank", TIP_DC_MT = "You tank: this panel closes and the raid tank bar opens, Main tank on (a running clear stops, you lead). Leave Tank on the bar brings this panel back.",
 		DC_OFF_FOR_MT = "Dungeon Clear off: you lead as main tank.",
 		TIP_DC_MANUAL = "The old Dungeon button: bots stick to you, avoid ground effects, engage with you.",
 		NO_TRAINER = "Target a trainer first (class or profession): the bots learn all it teaches them.",
@@ -170,7 +170,7 @@ local STRINGS = {
 		DC_MANUAL = "Mode donjon (vous menez)",
 		DC_AUTO = "Ouvrir en donjon et en raid",
 		TIP_DC_AUTO = "Ouvre ce panneau une fois quand vous entrez dans un donjon ou un raid (après le combat s'il y en a un).",
-		DC_MT = "Main Tank", TIP_DC_MT = "La barre des tanks de raid, Main tank allumé : vos off-tanks, leur cible marquée, taunt, swap et placement. Un clear en cours est d'abord arrêté (vous menez).",
+		DC_MT = "Main Tank", TIP_DC_MT = "Vous tankez : ce panneau se ferme et la barre des tanks de raid s'ouvre, Main tank actif (un clear en cours s'arrête, vous menez). Quitter tank, sur la barre, ramène ce panneau.",
 		DC_OFF_FOR_MT = "Dungeon Clear arrêté : vous menez en main tank.",
 		TIP_DC_MANUAL = "L'ancien bouton Donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
 		NO_TRAINER = "Ciblez d'abord un entraîneur (de classe ou de métier) : les bots apprennent tout ce qu'il leur enseigne.",
@@ -3074,8 +3074,12 @@ function dc.BuildPanel()
 	f.manual:SetHeight(18)
 	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
 	-- 2.9.4: the raid tank bar (MainTank.lua).
-	f.mt = dc.Button(f, 100, "DC_MT", function() if SquidBotsLite_ToggleMainTank then SquidBotsLite_ToggleMainTank() end end,
-		"TIP_DC_MT")
+	-- The panel gives way to the bar (MainTank.lua); its Leave Tank brings the panel back.
+	f.mt = dc.Button(f, 100, "DC_MT", function()
+		if not SquidBotsLite_OpenMainTank then return end
+		f:Hide()
+		SquidBotsLite_OpenMainTank()
+	end, "TIP_DC_MT")
 	f.mt:SetHeight(18)
 	f.mt:SetPoint("BOTTOMRIGHT", -16, 14)
 	-- 2.9.4: the panel opens by itself once per dungeon or raid (dc.AutoCheck); this box turns that off.
@@ -3139,6 +3143,11 @@ dc.keep:SetScript("OnUpdate", function(self)
 		frame:Show()
 	end
 end)
+
+-- Leave Tank on the Main Tank bar: back to the panel.
+function SquidBotsLite_ShowDcPanel()
+	dc.ShowPanel()
+end
 
 function dc.TogglePanel()
 	if dc.panel and dc.panel:IsShown() then dc.panel:Hide() else dc.ShowPanel() end

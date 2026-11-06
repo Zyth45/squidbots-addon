@@ -16,6 +16,7 @@ local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH = 4, 8, 20, 1.2
 
 local STRINGS = {
 	en = {
+		LEAVE = "Leave Tank", TIP_LEAVE = "Main tank off: the bar closes and the Dungeon clear panel comes back.",
 		TITLE = "Main Tank", YOU = "You (MT)", FREE = "free", AS_DPS = "damage", AS_HEAL = "healer",
 		MAIN = "Main tank", TIP_MAIN = "You tank the boss; your off-tanks take what you mark for them. Lit: on.",
 		REFRESH = "Refresh", TIP_REFRESH = "Asks the bots which of them can tank, and what each one holds.",
@@ -41,6 +42,7 @@ local STRINGS = {
 		B_HOLD = "Off-tank %d: placement",
 	},
 	fr = {
+		LEAVE = "Quitter tank", TIP_LEAVE = "Main tank inactif : la barre se ferme et le panneau Dungeon clear revient.",
 		TITLE = "Main Tank", YOU = "Vous (MT)", FREE = "libre", AS_DPS = "DPS", AS_HEAL = "soigneur",
 		MAIN = "Main tank", TIP_MAIN = "Vous tankez le boss ; vos off-tanks prennent ce que vous leur marquez. Allumé : actif.",
 		REFRESH = "Actualiser", TIP_REFRESH = "Demande aux bots lesquels peuvent tanker, et ce que chacun tient.",
@@ -366,10 +368,26 @@ function mt.Build()
 	end)
 	local saved = SquidBotsLiteDB.mainTankBar
 	if saved then f:SetPoint(saved[1], UIParent, saved[2], saved[3], saved[4]) else f:SetPoint("TOP", 0, -230) end
-	-- Head: the title on the left; Clear all, Refresh and close on the right. The bar is Main tank: open, it is on;
-	-- closed (its X, its key, a clear that starts), off.
+	-- Head: Leave Tank and the title on the left; Clear all, Refresh and close on the right. The bar is Main tank:
+	-- open, it is on; closed (Leave Tank, its X, its key, a clear that starts), off.
+	f.leave = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	f.leave:SetWidth(96)
+	f.leave:SetHeight(18)
+	f.leave:SetPoint("TOPLEFT", 8, -5)
+	f.leave:SetScript("OnClick", function()
+		f:Hide()
+		if SquidBotsLite_ShowDcPanel then SquidBotsLite_ShowDcPanel() end
+	end)
+	f.leave:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(T("LEAVE"), 1, 0.82, 0)
+		GameTooltip:AddLine(T("TIP_LEAVE"), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	f.leave:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	if UI.Flatten then UI.Flatten(f.leave) end
 	f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	f.title:SetPoint("TOPLEFT", 10, -9)
+	f.title:SetPoint("LEFT", f.leave, "RIGHT", 8, 0)
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetWidth(22)
 	close:SetHeight(22)
@@ -432,6 +450,7 @@ function mt.Refresh()
 	local f = mt.frame
 	if not f or not f:IsShown() then return end
 	f.title:SetText(T("TITLE"))
+	f.leave:SetText(T("LEAVE"))
 	local unsupported = mt.supported == false
 	-- The player's line.
 	f.me.name:SetText(T("YOU"))
@@ -509,6 +528,11 @@ function SquidBotsLite_ToggleMainTank()
 	else
 		mt.RunKey("mainon", 1)
 	end
+end
+
+-- The Dungeon clear panel's Main Tank button: the bar opens (Main tank on), never closes.
+function SquidBotsLite_OpenMainTank()
+	if not (mt.frame and mt.frame:IsShown()) then SquidBotsLite_ToggleMainTank() end
 end
 
 -- Key bindings (Bindings.xml): SquidBotsLite_MainTank("target", 1) and so on.
