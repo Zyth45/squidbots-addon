@@ -17,6 +17,7 @@ local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH = 4, 8, 20, 1.2
 local STRINGS = {
 	en = {
 		LEAVE = "Leave Tank", TIP_LEAVE = "Main tank off: the bar closes and the Dungeon clear panel comes back.",
+		INFO_NEXT = "Next boss:", INFO_BOSSES = "Bosses", INFO_NONE = "none",
 		TITLE = "Main Tank", YOU = "You (MT)", FREE = "free", AS_DPS = "damage", AS_HEAL = "healer",
 		MAIN = "Main tank", TIP_MAIN = "You tank the boss; your off-tanks take what you mark for them. Lit: on.",
 		REFRESH = "Refresh", TIP_REFRESH = "Asks the bots which of them can tank, and what each one holds.",
@@ -43,6 +44,7 @@ local STRINGS = {
 	},
 	fr = {
 		LEAVE = "Quitter tank", TIP_LEAVE = "Main tank inactif : la barre se ferme et le panneau Dungeon clear revient.",
+		INFO_NEXT = "Prochain boss :", INFO_BOSSES = "Boss", INFO_NONE = "aucun",
 		TITLE = "Main Tank", YOU = "Vous (MT)", FREE = "libre", AS_DPS = "DPS", AS_HEAL = "soigneur",
 		MAIN = "Main tank", TIP_MAIN = "Vous tankez le boss ; vos off-tanks prennent ce que vous leur marquez. Allumé : actif.",
 		REFRESH = "Actualiser", TIP_REFRESH = "Demande aux bots lesquels peuvent tanker, et ce que chacun tient.",
@@ -397,6 +399,11 @@ function mt.Build()
 	f.clearAll = UI.IconButton(f, ICON, ICONS.clear, function() return T("CLEAR_ALL"), T("TIP_CLEAR_ALL") end, function() mt.ClearAll() end)
 	f.clearAll:SetPoint("RIGHT", f.refresh, "LEFT", -4, 0)
 	UI.Rule(f, -28)
+	-- What a main tank needs of the clear: the next boss, the bosses killed (the Dungeon clear panel's data).
+	f.info = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.info:SetPoint("TOPLEFT", 12, -33)
+	f.info:SetWidth(WIDTH - 24)
+	f.info:SetJustifyH("LEFT")
 	-- The player's line: "You (MT)" and what they target.
 	f.me = CreateFrame("Frame", nil, f)
 	f.me:SetWidth(WIDTH - 16)
@@ -498,10 +505,26 @@ function mt.Refresh()
 		note = T("NO_BOT")
 	end
 	UI.SetIcon(f.clearAll, ICONS.clear, not unsupported)
-	local height = 32 + (1 + #bots) * ROW_H + 8
+	-- The clear's line, when there is one: the rows go down by its height.
+	local top = 32
+	local nextBoss, dead, total = nil, 0, 0
+	if SquidBotsLite_DcInfo then nextBoss, dead, total = SquidBotsLite_DcInfo() end
+	if nextBoss or (total and total > 0) then
+		local text = "|cffffd100" .. T("INFO_NEXT") .. "|r " .. (nextBoss or T("INFO_NONE"))
+		if total > 0 then text = text .. "  |cffaaaaaa·|r  |cffffd100" .. T("INFO_BOSSES") .. "|r " .. dead .. "/" .. total end
+		f.info:SetText(text)
+		f.info:Show()
+		top = 48
+	else
+		f.info:SetText("")
+		f.info:Hide()
+	end
+	f.me:SetPoint("TOPLEFT", 8, -top)
+	for i, row in ipairs(mt.rows) do row:SetPoint("TOPLEFT", 8, -top - i * ROW_H) end
+	local height = top + (1 + #bots) * ROW_H + 8
 	if note then
 		f.note:ClearAllPoints()
-		f.note:SetPoint("TOPLEFT", 12, -32 - (1 + #bots) * ROW_H - 2)
+		f.note:SetPoint("TOPLEFT", 12, -top - (1 + #bots) * ROW_H - 2)
 		f.note:SetText(note)
 		height = height + f.note:GetStringHeight() + 4
 	else
@@ -521,6 +544,7 @@ function SquidBotsLite_ToggleMainTank()
 	-- Asked again each time it opens: an earlier "no answer" may have been a realm restarted since.
 	if mt.supported == false then mt.supported = nil end
 	mt.AskStatus()
+	if SquidBotsLite_DcAsk then SquidBotsLite_DcAsk() end
 	-- Opening the bar turns Main tank on (and stops a running clear); closing it turns it off. Off-tanks not
 	-- known yet: sent once the answers are in.
 	if mt.waitUntil then
@@ -528,6 +552,11 @@ function SquidBotsLite_ToggleMainTank()
 	else
 		mt.RunKey("mainon", 1)
 	end
+end
+
+-- The clear's data changed (SquidBotsLite.lua): its line on the bar follows.
+function SquidBotsLite_MainTankRefresh()
+	mt.Refresh()
 end
 
 -- The Dungeon clear panel's Main Tank button: the bar opens (Main tank on), never closes.

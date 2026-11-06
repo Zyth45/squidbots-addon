@@ -2900,6 +2900,7 @@ function dc.OnAddon(message)
 		dc.pending = nil
 		table.sort(dc.bosses, function(a, b) return a.order < b.order end)
 		dc.RefreshPanel()
+		if SquidBotsLite_MainTankRefresh then SquidBotsLite_MainTankRefresh() end
 		return
 	end
 	if parts[1] ~= "STATUS" then return end
@@ -2930,6 +2931,7 @@ function dc.OnAddon(message)
 	dc.line:SetText("|cff66ccff" .. L.DC_LINE .. ":|r " .. text)
 	dc.line:Show()
 	dc.RefreshPanel()
+	if SquidBotsLite_MainTankRefresh then SquidBotsLite_MainTankRefresh() end
 end
 
 -- ---------------------------------------------------------------------------
@@ -3164,8 +3166,35 @@ function dc.ShowPanel()
 	if dc.module ~= "off" then
 		dc.Send("status silent")
 		dc.AskBosses()
+		dc.askedAt = GetTime()
 	end
 	dc.RefreshPanel()
+end
+
+-- 2.9.4: what the Main Tank bar shows of the clear: the next boss and the bosses killed, from the panel's own data
+-- (the tank's STATUS and boss list). nil outside a dungeon or a raid, or when the realm has no answer.
+function SquidBotsLite_DcInfo()
+	local inside, kind = IsInInstance()
+	if not inside or (kind ~= "party" and kind ~= "raid") or dc.module == "off" or dc.module == "absent" then return nil end
+	local dead, total = 0, 0
+	for _, boss in ipairs(dc.bosses or {}) do
+		if not boss.event then
+			total = total + 1
+			if boss.status == "dead" then dead = dead + 1 end
+		end
+	end
+	if not dc.nextBoss and total == 0 then return nil end
+	return dc.nextBoss, dead, total
+end
+
+-- The bar opening by itself (its key): the same questions as the panel, unless it just asked them.
+function SquidBotsLite_DcAsk()
+	local inside, kind = IsInInstance()
+	if not inside or (kind ~= "party" and kind ~= "raid") or dc.module == "off" or dc.module == "absent" then return end
+	if dc.askedAt and GetTime() - dc.askedAt < 10 then return end
+	dc.askedAt = GetTime()
+	dc.Send("status silent")
+	dc.AskBosses()
 end
 
 -- 2.9.4: the panel opens by itself once per dungeon or raid, to remind that it is there. Not in a fight (it
