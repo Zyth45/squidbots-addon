@@ -2919,6 +2919,11 @@ function dc.OnAddon(message)
 		if text and text ~= "" then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccff[" .. L.DC_LINE .. "]|r " .. text) end
 		return
 	end
+	-- 2.9.5: "MTEV <id> ready|running|done|left <name>": a boss event for the player who leads as main tank.
+	if parts[1] == "MTEV" then
+		if SquidBotsLite_MainTankEvent then SquidBotsLite_MainTankEvent(parts[2], parts[3], parts[4]) end
+		return
+	end
 	-- The boss list: BOSS_START, one "BOSS" per boss or scripted event, BOSS_END (sent on ".dc bosses", and again
 	-- by the tank whenever a boss changes). BOSS fields: 2 entry, 3 order, 4 name, 5 alive|dead|skipped|missing.
 	if parts[1] == "BOSS_START" then

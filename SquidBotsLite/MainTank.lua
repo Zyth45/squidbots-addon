@@ -17,6 +17,8 @@ local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH, STATUS_TRIES, FORGET_AFTER = 
 local STRINGS = {
 	en = {
 		LEAVE = "Leave Tank", TIP_LEAVE = "Main tank off: the bar closes and the Dungeon clear panel comes back.",
+		EVENT_START = "Start event: %s", EVENT_RUNNING = "Event running: %s",
+		TIP_EVENT = "Dungeon clear plays this boss event (doors, gongs, waves) while you stay main tank: it waits for your go.",
 		INFO_NEXT = "Next boss:", INFO_BOSSES = "Bosses", INFO_NONE = "none",
 		TITLE = "Main Tank", YOU = "You (MT)", FREE = "free", AS_DPS = "damage", AS_HEAL = "healer",
 		MAIN = "Main tank", TIP_MAIN = "You tank the boss; your off-tanks take what you mark for them. Lit: on.",
@@ -45,6 +47,8 @@ local STRINGS = {
 	},
 	fr = {
 		LEAVE = "Quitter tank", TIP_LEAVE = "Main tank inactif : la barre se ferme et le panneau Dungeon clear revient.",
+		EVENT_START = "Lancer l'event : %s", EVENT_RUNNING = "Event en cours : %s",
+		TIP_EVENT = "Dungeon clear joue cet event de boss (portes, gongs, vagues) pendant que vous restez main tank : il attend votre go.",
 		INFO_NEXT = "Prochain boss :", INFO_BOSSES = "Boss", INFO_NONE = "aucun",
 		TITLE = "Main Tank", YOU = "Vous (MT)", FREE = "libre", AS_DPS = "DPS", AS_HEAL = "soigneur",
 		MAIN = "Main tank", TIP_MAIN = "Vous tankez le boss ; vos off-tanks prennent ce que vous leur marquez. Allumé : actif.",
@@ -547,6 +551,20 @@ function mt.Build()
 		row.status:SetJustifyH("LEFT")
 		mt.rows[i] = row
 	end
+	-- 2.9.5: Start event (the clear's MTEV message): "dc go" in the group chat, the clear plays the event ready.
+	f.event = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	f.event:SetWidth(WIDTH - 16)
+	f.event:SetHeight(20)
+	f.event:SetScript("OnClick", function() mt.StartEvent() end)
+	f.event:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(self:GetText() or "", 1, 0.82, 0)
+		GameTooltip:AddLine(T("TIP_EVENT"), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	f.event:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	if UI.Flatten then UI.Flatten(f.event) end
+	f.event:Hide()
 	f.note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.note:SetWidth(WIDTH - 24)
 	f.note:SetJustifyH("LEFT")
@@ -554,7 +572,7 @@ function mt.Build()
 	-- closing the bar turns Main tank off. Its X and its key close it.
 	f:Hide()
 	f:SetScript("OnHide", function()
-		mt.pending, mt.pendingAt = nil, nil
+		mt.pending, mt.pendingAt, mt.event = nil, nil, nil
 		if mt.supported ~= false then mt.ClearAll() end
 		mt.SetMain(false, true)
 		if SquidBotsLite_RefreshBar then SquidBotsLite_RefreshBar() end
@@ -631,6 +649,18 @@ function mt.Refresh()
 		f.info:SetText("")
 		f.info:Hide()
 	end
+	-- The event the clear waits for (or plays): a button under the clear's line.
+	local event = mt.event
+	if event then
+		f.event:ClearAllPoints()
+		f.event:SetPoint("TOPLEFT", 8, -top - 2)
+		f.event:SetText(string.format(T(event.state == "running" and "EVENT_RUNNING" or "EVENT_START"), event.name or "?"))
+		if event.state == "ready" and not (event.sentAt and GetTime() - event.sentAt < 5) then f.event:Enable() else f.event:Disable() end
+		f.event:Show()
+		top = top + 24
+	else
+		f.event:Hide()
+	end
 	f.me:SetPoint("TOPLEFT", 8, -top)
 	for i, row in ipairs(mt.rows) do row:SetPoint("TOPLEFT", 8, -top - i * ROW_H) end
 	local height = top + (1 + #bots) * ROW_H + 8
@@ -699,6 +729,30 @@ function SquidBotsLite_MainTankDebug()
 			tostring(unit and UnitIsConnected(unit) and true or false), tostring(unit and SameZone(unit)), tostring(info.target)))
 	end
 	for _, line in ipairs(mt.log or {}) do Print("  " .. line) end
+end
+
+-- 2.9.5: the clear's "MTEV <id> ready|running|done|left <name>" (SquidBotsLite.lua): one event at a time, the last
+-- one heard. ready: the button waits for the player's go; running: shown, greyed; done or left: gone.
+function SquidBotsLite_MainTankEvent(id, state, name)
+	if state == "ready" or state == "running" then
+		local sentAt = mt.event and mt.event.id == id and state == "ready" and mt.event.sentAt or nil
+		mt.event = { id = id, state = state, name = (name and name ~= "") and name or nil, sentAt = sentAt }
+	elseif state == "done" or state == "left" then
+		if not mt.event or mt.event.id == id or state == "left" then mt.event = nil end
+	else
+		return
+	end
+	if mt.frame and mt.frame:IsShown() then mt.Refresh() end
+end
+
+-- Start event: "dc go" with no argument, in the group chat (the clear takes the event ready). Greyed 5 s, until
+-- "running" comes.
+function mt.StartEvent()
+	if not (mt.event and mt.event.state == "ready") then return end
+	if mt.event.sentAt and GetTime() - mt.event.sentAt < 5 then return end
+	mt.event.sentAt = GetTime()
+	SendChatMessage("dc go", GetNumRaidMembers() > 0 and "RAID" or "PARTY")
+	mt.Refresh()
 end
 
 -- The clear's data changed (SquidBotsLite.lua): its line on the bar follows.
