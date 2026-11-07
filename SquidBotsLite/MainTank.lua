@@ -221,6 +221,9 @@ function mt.OnAddon(sender, message)
 	elseif f[1] == "TK" then
 		mt.supported = true
 		local action, result = f[2] or "", f[3] or ""
+		-- "tank swap back" answers with the action "swap back": a swap that gives the target back.
+		local back = action == "swap back"
+		if back then action = "swap" end
 		local icon, target = tonumber(f[4]) or 0, (f[5] and f[5] ~= "-" and f[5] ~= "") and f[5] or nil
 		if action == "main" then
 			-- "TK main ok 0 on|off": the state of the flag in the last field.
@@ -251,7 +254,7 @@ function mt.OnAddon(sender, message)
 				elseif action == "taunt" then
 					-- A taunt does not move the pin: the line keeps its icon and its target.
 					mt.StartTauntCooldown(sender)
-				elseif action == "swap" and info.swapBack then
+				elseif action == "swap" and (back or info.swapBack) then
 					-- "tank swap back": the target is the player's again.
 					info.icon, info.target = 0, nil
 				else
