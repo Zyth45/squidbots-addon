@@ -3233,7 +3233,9 @@ end
 
 -- 2.9.4: the panel opens by itself once per dungeon or raid, to remind that it is there. Not in a fight (it
 -- waits for the end), a battleground or an arena; not again after a reload, nor after a run back from the
--- graveyard (the same instance within 10 minutes). Without the module on the realm, never.
+-- graveyard (left dead or as a ghost, back within 10 minutes). Left alive, the instance is forgotten: going in
+-- again opens it. Kept at most 2 hours. Not while the Main Tank bar is open (the bar shows the next boss).
+-- Without the module on the realm, never.
 dc.auto = CreateFrame("Frame")
 function dc.AutoCheck()
 	dc.autoAt = nil
@@ -3241,23 +3243,27 @@ function dc.AutoCheck()
 	local inside, kind = IsInInstance()
 	local seen = SquidBotsLiteCharDB.dcAuto
 	if not inside or (kind ~= "party" and kind ~= "raid") then
-		if seen and not seen.left then seen.left = time() end
+		if seen and not seen.left then
+			-- Left alive (the door, a hearthstone, a port): next time is a new visit.
+			if UnitIsDeadOrGhost("player") then seen.left = time() else SquidBotsLiteCharDB.dcAuto = nil end
+		end
 		dc.autoWait = nil
 		return
 	end
 	local name, _, difficulty = GetInstanceInfo()
 	local key = (name or "?") .. ":" .. (difficulty or 0)
-	if seen and seen.key == key and (not seen.left or time() - seen.left < 600) then
+	if seen and seen.key == key and time() - (seen.at or 0) < 7200 and (not seen.left or time() - seen.left < 600) then
 		seen.left = nil
 		return
 	end
 	if SquidBotsLiteDB.dcAutoOpen == false or dc.module == "absent" then return end
+	if SquidBotsLite_MainTankShown and SquidBotsLite_MainTankShown() then return end
 	if UnitAffectingCombat("player") then
 		dc.autoWait = true
 		return
 	end
 	dc.autoWait = nil
-	SquidBotsLiteCharDB.dcAuto = { key = key }
+	SquidBotsLiteCharDB.dcAuto = { key = key, at = time() }
 	if not (dc.panel and dc.panel:IsShown()) then dc.ShowPanel() end
 end
 for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "PLAYER_REGEN_ENABLED" }) do
