@@ -188,15 +188,16 @@ local function RaidTank(unit)
 	return false
 end
 
--- The off-tanks, at most two: the raid's tanks first (as the raid frames show them), then the bots the realm
--- says tank, then the damage bots that could. Healers never.
+-- The off-tanks, at most two: the bots the realm says tank first (it refuses tank orders to the others), then
+-- the damage bots that could. Within each, the raid's tanks first: the flag may be old (a tank turned damage
+-- since the raid was built), so it only breaks ties. Healers never.
 function mt.Candidates()
 	local list, rank = {}, {}
 	for name, info in pairs(mt.info) do
 		local unit = UnitOf(name)
 		if unit and (info.role == "tank" or (info.role == "dps" and info.can)) then
 			table.insert(list, name)
-			rank[name] = (RaidTank(unit) and 2 or 0) + (info.role == "tank" and 1 or 0)
+			rank[name] = (info.role == "tank" and 2 or 0) + (RaidTank(unit) and 1 or 0)
 		end
 	end
 	table.sort(list, function(a, b)
