@@ -221,7 +221,8 @@ function mt.Candidates()
 	local list, rank = {}, {}
 	for name, info in pairs(mt.info) do
 		local unit = UnitOf(name)
-		if unit and (info.role == "tank" or (info.role == "dps" and info.can)) then
+		-- Only a bot that is here: online and in the player's zone (one left in a city cannot off-tank).
+		if unit and UnitIsConnected(unit) and SameZone(unit) and (info.role == "tank" or (info.role == "dps" and info.can)) then
 			table.insert(list, name)
 			-- A bot switched from the bar stays on it: a tank turned damage does not give its row to another.
 			rank[name] = (SameZone(unit) and 8 or 0) + (info.keep and 4 or 0) + (info.role == "tank" and 2 or 0)
@@ -257,6 +258,10 @@ end
 
 -- The replies: TS fills the rows, TK updates the bot's line (or blinks it red with the reason).
 function mt.OnAddon(sender, message)
+	-- The last answers, for "/sbl mt".
+	mt.log = mt.log or {}
+	table.insert(mt.log, string.format("%d %s: %s", GetTime(), sender, (message:gsub("	", " | "))))
+	if #mt.log > 12 then table.remove(mt.log, 1) end
 	local f = {}
 	for field in (message .. "\t"):gmatch("([^\t]*)\t") do table.insert(f, field) end
 	if f[1] == "TS" and f[2] and f[2] ~= "" then
@@ -300,7 +305,8 @@ function mt.OnAddon(sender, message)
 				info.role, info.can = "tank", true
 			end
 			if result == "ok" then
-				info.error = nil
+				-- An answer from the bot itself: it is here, as fresh as a "tank status" line.
+				info.error, info.at = nil, GetTime()
 				if action == "spec" then
 					info.role = target or info.role
 					if info.role ~= "tank" then info.icon, info.target, info.hold = 0, nil, false end
@@ -649,6 +655,20 @@ function SquidBotsLite_ToggleMainTank()
 	else
 		mt.RunKey("mainon", 1)
 	end
+end
+
+-- "/sbl mt": what the bar knows of each bot, to understand a row that is missing.
+function SquidBotsLite_MainTankDebug()
+	local now = GetTime()
+	Print(string.format("Main Tank: zone %s, asked %ds ago, waiting %s, no answer %s, rows: %s", GetRealZoneText() or "?",
+		now - (mt.askedAt or 0), tostring(mt.waitUntil ~= nil), tostring(mt.noAnswer), table.concat(mt.Candidates(), ", ")))
+	for name, info in pairs(mt.info) do
+		local unit = UnitOf(name)
+		Print(string.format("  [%s] role %s, can %s, keep %s, seen %ds ago, unit %s, online %s, same zone %s, target %s",
+			name, tostring(info.role), tostring(info.can), tostring(info.keep), now - (info.at or 0), tostring(unit),
+			tostring(unit and UnitIsConnected(unit) and true or false), tostring(unit and SameZone(unit)), tostring(info.target)))
+	end
+	for _, line in ipairs(mt.log or {}) do Print("  " .. line) end
 end
 
 -- The clear's data changed (SquidBotsLite.lua): its line on the bar follows.

@@ -3518,6 +3518,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		ShowSpecs()
 	elseif command == "questask" and SquidBotsLite_QuestAsk then
 		SquidBotsLite_QuestAsk(rest)
+	elseif command == "mt" and SquidBotsLite_MainTankDebug then
+		SquidBotsLite_MainTankDebug()
 	elseif command == "roles" then
 		SquidBotsLiteDB.autoRoles = string.lower(rest) ~= "off"
 		Print(SquidBotsLiteDB.autoRoles and L.ROLES_ON or L.ROLES_OFF)
