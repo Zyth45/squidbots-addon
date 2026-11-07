@@ -252,7 +252,7 @@ function A.Online()
 	for _, name in ipairs(SquidBotsLite_OnlineAlts and SquidBotsLite_OnlineAlts() or {}) do Add(name) end
 	for name, at in pairs(A.seen) do
 		local member = A.members[name]
-		if now - at < SEEN_FOR and not (member and now - member.at > TEAM_SILENT) then Add(name) end
+		if IsAlt(name) and now - at < SEEN_FOR and not (member and now - member.at > TEAM_SILENT) then Add(name) end
 	end
 	table.sort(list)
 	return list
@@ -1648,10 +1648,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		-- The Main Tank bar's replies come from any bot of the raid, not only from an alt (MainTank.lua); and a
 		-- line this file does not know, from someone not an alt, is not one of the team's.
 		if f[1] == "TK" or f[1] == "TS" then return end
-		if not Handle[f[1]] and not IsAlt(arg4) then return end
-		-- A HELLO back from a bot that is not an alt (the Main Tank bar said HELLO to it): not one of the team.
-		if f[1] == "HELLO" and not IsAlt(arg4) then
-			Handle.HELLO(arg4, f)
+		-- Only the account's alts make the team. A random bot that knows the addon (the Main Tank bar said HELLO
+		-- or gave it an order) sends TEAM and the like too: its HELLO is answered, the rest is not ours.
+		if not IsAlt(arg4) then
+			if f[1] == "HELLO" then Handle.HELLO(arg4, f) end
 			return
 		end
 		A.seen[arg4], A.gone[arg4] = GetTime(), nil
