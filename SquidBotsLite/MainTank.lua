@@ -172,14 +172,35 @@ end
 
 -- The rows: the bots that are tanks, or damage dealers able to tank (a healer is never offered: one click would
 -- leave the raid without its heals), tanks first, then by name; two at most.
+-- A tank the raid shows: the raid panel's Main Tank flag (".playerbots coa raid" sets it on its tanks) or the
+-- Dungeon Finder role, what the raid frames draw as the tank icon.
+local function RaidTank(unit)
+	if not unit then return false end
+	local index = unit:match("^raid(%d+)$")
+	if index then
+		local role = select(10, GetRaidRosterInfo(tonumber(index)))
+		if role == "MAINTANK" then return true end
+	end
+	if UnitGroupRolesAssigned then
+		local tank = UnitGroupRolesAssigned(unit)
+		if tank == true or tank == "TANK" then return true end
+	end
+	return false
+end
+
+-- The off-tanks, at most two: the raid's tanks first (as the raid frames show them), then the bots the realm
+-- says tank, then the damage bots that could. Healers never.
 function mt.Candidates()
-	local list = {}
+	local list, rank = {}, {}
 	for name, info in pairs(mt.info) do
-		if UnitOf(name) and (info.role == "tank" or (info.role == "dps" and info.can)) then table.insert(list, name) end
+		local unit = UnitOf(name)
+		if unit and (info.role == "tank" or (info.role == "dps" and info.can)) then
+			table.insert(list, name)
+			rank[name] = (RaidTank(unit) and 2 or 0) + (info.role == "tank" and 1 or 0)
+		end
 	end
 	table.sort(list, function(a, b)
-		local ta, tb = mt.info[a].role == "tank", mt.info[b].role == "tank"
-		if ta ~= tb then return ta end
+		if rank[a] ~= rank[b] then return rank[a] > rank[b] end
 		return a < b
 	end)
 	while #list > ROWS do table.remove(list) end
