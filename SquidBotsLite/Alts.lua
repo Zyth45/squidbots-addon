@@ -1658,7 +1658,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		local handler = Handle[f[1]]
 		if handler then handler(arg4, f) end
 	elseif event == "CHAT_MSG_SYSTEM" then
-		local added = arg1:match("^add%a*: (.-) %- ok$")
+		local added = arg1:match("^add: (.-) %- ok$") or arg1:match("^addaccount: (.-) %- ok$")
 		if added then
 			A.seen[added], A.gone[added], A.left[added] = GetTime(), nil, nil
 			A.RefreshTeam()

@@ -2083,7 +2083,7 @@ end
 -- for the WotLK classes (blank for a CoA class), and a CoA name may hold a space. The random bots of the
 -- group come last with a +, so a + counts only for a name once seen offline (an alt) or out of the group.
 local function ParseRoster(text)
-	local list, inParty, seen = {}, {}, {}
+	local list, inParty, seen, signs = {}, {}, {}, {}
 	for i = 1, 4 do
 		local name = UnitName("party" .. i)
 		if name then inParty[name] = true end
@@ -2100,8 +2100,10 @@ local function ParseRoster(text)
 			local head, last = rest:match("^(.-)%s+(%S+)$")
 			local name = (last and WOTLK_CLASSES[last]) and head or rest
 			if name ~= "" then
+				signs[name] = sign
 				if sign == "-" then
 					SquidBotsLiteDB.alts[name] = true
+					if SquidBotsLiteDB.altsUnsure then SquidBotsLiteDB.altsUnsure[name] = nil end
 					-- Seen offline in "bot list": a character of this account, not of a linked one.
 					if SquidBotsLiteDB.linkedAlts then SquidBotsLiteDB.linkedAlts[name] = nil end
 				end
@@ -2110,6 +2112,27 @@ local function ParseRoster(text)
 					seen[name] = true
 				end
 			end
+		end
+	end
+	-- 2.9.5: one cleanup of the alts kept by older versions, which took any "addclass: X - ok" (a random bot) for an
+	-- alt, for ever. "bot list" names every character of the account, "-" offline and "+" online; a random bot is
+	-- only ever there as a "+" of the group. So: "-", or "+" out of the group, an alt; not listed, gone (unless of a
+	-- linked account, which the list never names); "+" in the group, an alt or a random bot: off the alts until seen
+	-- offline or logged in again by the player ("add: X - ok").
+	if SquidBotsLiteDB.altsChecked ~= 1 then
+		SquidBotsLiteDB.altsUnsure = SquidBotsLiteDB.altsUnsure or {}
+		for name in pairs(SquidBotsLiteDB.alts) do
+			local sign, linked = signs[name], SquidBotsLiteDB.linkedAlts and SquidBotsLiteDB.linkedAlts[name]
+			if sign == "+" and inParty[name] then
+				SquidBotsLiteDB.alts[name], SquidBotsLiteDB.altsUnsure[name] = nil, true
+				if SquidBotsLiteDB.linkedAlts then SquidBotsLiteDB.linkedAlts[name] = nil end
+			elseif not sign and not linked then
+				SquidBotsLiteDB.alts[name] = nil
+			end
+		end
+		SquidBotsLiteDB.altsChecked = 1
+		for i = #list, 1, -1 do
+			if not SquidBotsLiteDB.alts[list[i].name] and signs[list[i].name] ~= "-" and inParty[list[i].name] then table.remove(list, i) end
 		end
 	end
 	-- "bot list" names only this account's characters: those of a linked account logged in from here are kept
@@ -2671,11 +2694,12 @@ end
 local function OnSystem(message)
 	-- "add: Name - ok" / "addaccount: Name - ok": a character logged in by the player is one of their alts, also
 	-- those of a linked account, which "bot list" alone never shows offline.
-	local added = message:match("^add%a*: (.-) %- ok$")
+	local added = message:match("^add: (.-) %- ok$") or message:match("^addaccount: (.-) %- ok$")
 	local removed = message:match("^remove: (.-) %- ok$")
 	if added or removed then SetAltOnline(added or removed, added and true or false) end
 	-- "add: Name - <reason>" or a "Failure: ..." line: the row goes back to what it was.
-	local refused = message:match("^add%a*: (.-) %- ") or message:match("^remove: (.-) %- ")
+	local refused = message:match("^add: (.-) %- ") or message:match("^addaccount: (.-) %- ")
+		or message:match("^remove: (.-) %- ")
 	if refused and not added and not removed then SetAltOnline(refused, nil) end
 	if message:find("^Failure") then
 		for _, alt in ipairs(roster) do alt.pending = nil end
@@ -2684,6 +2708,7 @@ local function OnSystem(message)
 	if added then
 		SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
 		SquidBotsLiteDB.alts[added] = true
+		if SquidBotsLiteDB.altsUnsure then SquidBotsLiteDB.altsUnsure[added] = nil end
 		-- Not in the last roster as one of this account's: a character of a linked account.
 		local own = false
 		for _, alt in ipairs(roster) do if alt.name == added and not alt.linked then own = true end end
@@ -2703,6 +2728,8 @@ local function OnSystem(message)
 		rosterAskedAt, hideRosterUntil = nil, GetTime() + 1
 		roster = ParseRoster(text)
 		RefreshAlts()
+		-- The alts bar follows the list (an alt confirmed, a random bot dropped by the cleanup).
+		if SquidBotsLite_Alts and SquidBotsLite_Alts.RefreshTeam then SquidBotsLite_Alts.RefreshTeam() end
 		AskAltStats()
 		if SquidBotsLite_MissionsRoster then SquidBotsLite_MissionsRoster() end
 		return true
@@ -3424,6 +3451,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		BuildOverlays()
 		BuildToasts()
 		BuildAlts()
+		if SquidBotsLiteDB.altsChecked ~= 1 then refreshAt = GetTime() + 8 end
 		BuildSpecs()
 		RefreshTexts()
 		for _, e in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
