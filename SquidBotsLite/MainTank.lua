@@ -12,7 +12,7 @@
 -- assists the player again. A realm without the module never answers: the bar greys out and says so.
 
 local PREFIX, ROWS, ICON, ROW_H, WIDTH = "SQBA", 2, 18, 24, 312
-local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH = 4, 8, 20, 1.2
+local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH, STATUS_TRIES = 6, 8, 20, 1.2, 3
 
 local STRINGS = {
 	en = {
@@ -30,6 +30,7 @@ local STRINGS = {
 		SPEC = "Tank / damage", TIP_SPEC = "Switches %s between its tank and damage specs, out of combat. Now: %s.",
 		ROLE_tank = "tank", ROLE_dps = "damage", ROLE_heal = "healer",
 		ASKING = "Asking the bots...", NO_BOT = "No bot of your group can tank.",
+		NO_ANSWER = "No answer from the bots yet: asked again in a moment.",
 		NO_SERVER = "The realm does not answer the Main Tank bar (it needs CoA Bots 2.9.4).",
 		NO_GROUP = "Join a group with bots first.",
 		NO_KNOWN_BOT = "No bot of the group known yet: give the group an order (follow), or wait for one to answer.",
@@ -57,6 +58,7 @@ local STRINGS = {
 		SPEC = "Tank / DPS", TIP_SPEC = "Fait passer %s de sa spé tank à sa spé DPS, ou l'inverse, hors combat. Maintenant : %s.",
 		ROLE_tank = "tank", ROLE_dps = "DPS", ROLE_heal = "soigneur",
 		ASKING = "Je demande aux bots...", NO_BOT = "Aucun bot du groupe ne peut tanker.",
+		NO_ANSWER = "Pas encore de réponse des bots : nouvelle demande dans un instant.",
 		NO_SERVER = "Le royaume ne répond pas à la barre Main Tank (il faut CoA Bots 2.9.4).",
 		NO_GROUP = "Rejoignez d'abord un groupe avec des bots.",
 		NO_KNOWN_BOT = "Aucun bot du groupe connu pour l'instant : donnez un ordre au groupe (suivre), ou attendez qu'un bot réponde.",
@@ -145,25 +147,40 @@ end
 
 -- "tank status all" goes to one bot, and only to a bot: one that answered the bar before, an alt, a bot known
 -- to the addon (it answered, joined as a role, a "Bot" surname). Never to a member who may be a player.
-function mt.AskStatus()
+-- "retry": the bot asked before did not answer (dead, far, lagging in a big fight): another one is asked, the
+-- living ones first, a bot that answered the bar before first among them.
+function mt.AskStatus(retry)
 	mt.askAt = nil
-	local me, to, members = UnitName("player"), nil, 0
+	if not retry then mt.tried, mt.tries = {}, 0 end
+	mt.tried = mt.tried or {}
+	local me, to, best, members = UnitName("player"), nil, -1, 0
 	for _, unit in ipairs(GroupUnits()) do
 		local name = UnitName(unit)
 		if name and name ~= me and name ~= UNKNOWNOBJECT and UnitIsConnected(unit) then
 			members = members + 1
-			if mt.info[name] then to = name end
-			if not to and SquidBotsLite_IsBot and SquidBotsLite_IsBot(name) then to = name end
+			local known = mt.info[name] and true or false
+			if not mt.tried[name] and (known or (SquidBotsLite_IsBot and SquidBotsLite_IsBot(name))) then
+				local score = (UnitIsDeadOrGhost(unit) and 0 or 2) + (known and 1 or 0)
+				if score > best then to, best = name, score end
+			end
 		end
 	end
 	mt.askedAt = GetTime()
 	mt.nextRefresh = mt.askedAt + REFRESH_EVERY
+	if retry and not to then
+		-- Every bot asked once: the list stays as it was, asked again at the next refresh.
+		mt.noAnswer, mt.waitUntil = true, nil
+		mt.Refresh()
+		return
+	end
 	mt.noBot = members > 0 and not to
 	if not to then
 		mt.info, mt.waitUntil = {}, nil
 		mt.Refresh()
 		return
 	end
+	mt.tried[to] = true
+	mt.tries = (mt.tries or 0) + 1
 	mt.Hello()
 	mt.Send(to, "tank status all")
 	mt.waitUntil = mt.askedAt + STATUS_WAIT
@@ -232,7 +249,7 @@ function mt.OnAddon(sender, message)
 	local f = {}
 	for field in (message .. "\t"):gmatch("([^\t]*)\t") do table.insert(f, field) end
 	if f[1] == "TS" and f[2] and f[2] ~= "" then
-		mt.supported = true
+		mt.supported, mt.noAnswer = true, nil
 		local info = mt.info[f[2]] or {}
 		info.role, info.can, info.at = f[3], f[4] == "1", GetTime()
 		info.icon, info.target = tonumber(f[5]) or 0, (f[6] and f[6] ~= "-" and f[6] ~= "") and f[6] or nil
@@ -266,6 +283,11 @@ function mt.OnAddon(sender, message)
 			-- pinned target dies) gets no role here: only "tank status" makes it an off-tank of the bar.
 			local info = mt.info[sender] or { at = GetTime() }
 			mt.info[sender] = info
+			-- The realm only takes a target, a taunt, a swap or a placement from a tank: an "ok" to one of them
+			-- makes the bot an off-tank even when "tank status" did not list it (an answer lost in a big fight).
+			if result == "ok" and not info.role and (action == "target" or action == "taunt" or action == "swap" or action == "hold") then
+				info.role, info.can = "tank", true
+			end
 			if result == "ok" then
 				info.error = nil
 				if action == "spec" then
@@ -559,6 +581,8 @@ function mt.Refresh()
 		note = T("ASKING")
 	elseif mt.noBot then
 		note = T("NO_KNOWN_BOT")
+	elseif #bots == 0 and mt.noAnswer then
+		note = T("NO_ANSWER")
 	elseif #bots == 0 then
 		note = T("NO_BOT")
 	end
@@ -713,14 +737,24 @@ frame:SetScript("OnUpdate", function(_, delta)
 	if mt.waitUntil and now >= mt.waitUntil then
 		mt.waitUntil = nil
 		local answered = false
-		for name, info in pairs(mt.info) do
-			if info.at and info.at >= mt.askedAt then answered = true else mt.info[name] = nil end
+		for _, info in pairs(mt.info) do
+			if info.at and info.at >= mt.askedAt then answered = true end
 		end
-		if not answered and mt.supported ~= true then
+		if answered then
+			-- An explicit answer: the bots it no longer lists have left the off-tanks.
+			for name, info in pairs(mt.info) do
+				if not (info.at and info.at >= mt.askedAt) then mt.info[name] = nil end
+			end
+		elseif mt.supported == true then
+			-- No answer, on a realm that answered before: the list stays, another bot is asked.
+			mt.noAnswer = true
+			if (mt.tries or 0) < STATUS_TRIES then mt.AskStatus(true) end
+		else
 			mt.supported = false
 			Print(T("NO_SERVER"))
 		end
-		if mt.pending then mt.pendingAt = now end
+		-- A key pressed meanwhile: run once the answers are in (or no other bot is left to ask).
+		if mt.pending and not mt.waitUntil then mt.pendingAt = now end
 		mt.Refresh()
 	end
 	if mt.pending and mt.pendingAt and now >= mt.pendingAt then
