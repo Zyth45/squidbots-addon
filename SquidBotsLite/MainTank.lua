@@ -214,7 +214,8 @@ function mt.Candidates()
 		local unit = UnitOf(name)
 		if unit and (info.role == "tank" or (info.role == "dps" and info.can)) then
 			table.insert(list, name)
-			rank[name] = (info.role == "tank" and 2 or 0) + (RaidTank(unit) and 1 or 0)
+			-- A bot switched from the bar stays on it: a tank turned damage does not give its row to another.
+			rank[name] = (info.keep and 4 or 0) + (info.role == "tank" and 2 or 0) + (RaidTank(unit) and 1 or 0)
 		end
 	end
 	table.sort(list, function(a, b)
@@ -251,7 +252,7 @@ function mt.OnAddon(sender, message)
 	if f[1] == "TS" and f[2] and f[2] ~= "" then
 		mt.supported, mt.noAnswer = true, nil
 		local info = mt.info[f[2]] or {}
-		info.role, info.can, info.at = f[3], f[4] == "1", GetTime()
+		info.role, info.can, info.at = f[3], f[4] == "1" or info.keep or false, GetTime()
 		info.icon, info.target = tonumber(f[5]) or 0, (f[6] and f[6] ~= "-" and f[6] ~= "") and f[6] or nil
 		mt.info[f[2]] = info
 		-- A key pressed before the bar knew its off-tanks: done once the answers are in.
@@ -293,6 +294,10 @@ function mt.OnAddon(sender, message)
 				if action == "spec" then
 					info.role = target or info.role
 					if info.role ~= "tank" then info.icon, info.target, info.hold = 0, nil, false end
+					-- It has a tank spec (it just switched from or to it): it keeps its row, as damage with its Tank
+					-- button, whatever the next "tank status" says; that one is asked a moment later.
+					info.can, info.keep = true, true
+					mt.askAt = GetTime() + 2
 				elseif action == "clear" then
 					info.icon, info.target, info.hold = 0, nil, false
 				elseif action == "hold" then
@@ -743,7 +748,7 @@ frame:SetScript("OnUpdate", function(_, delta)
 		if answered then
 			-- An explicit answer: the bots it no longer lists have left the off-tanks.
 			for name, info in pairs(mt.info) do
-				if not (info.at and info.at >= mt.askedAt) then mt.info[name] = nil end
+				if not (info.at and info.at >= mt.askedAt) and not info.keep then mt.info[name] = nil end
 			end
 		elseif mt.supported == true then
 			-- No answer, on a realm that answered before: the list stays, another bot is asked.
