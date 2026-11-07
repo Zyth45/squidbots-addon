@@ -264,7 +264,16 @@ function mt.OnAddon(sender, message)
 	if #mt.log > 12 then table.remove(mt.log, 1) end
 	local f = {}
 	for field in (message .. "\t"):gmatch("([^\t]*)\t") do table.insert(f, field) end
-	if f[1] == "TS" and f[2] and f[2] ~= "" then
+	if f[1] == "TS" and f[2] == "-" then
+		-- 2.9.5: "TS	-" ends an answer (a realm that sends it): the answer is whole, so the bots it did not list
+		-- leave the off-tanks now, and an answer with no tank in it reads "no bot can tank", not "no answer".
+		mt.supported, mt.noAnswer, mt.waitUntil, mt.endLine = true, nil, nil, true
+		for name, info in pairs(mt.info) do
+			if not (info.at and info.at >= (mt.askedAt or 0)) and not info.keep then mt.info[name] = nil end
+		end
+		if mt.pending then mt.pendingAt = GetTime() end
+		mt.Refresh()
+	elseif f[1] == "TS" and f[2] and f[2] ~= "" then
 		mt.supported, mt.noAnswer = true, nil
 		local info = mt.info[f[2]] or {}
 		info.role, info.can, info.at = f[3], f[4] == "1" or info.keep or false, GetTime()
