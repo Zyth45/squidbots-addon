@@ -407,10 +407,7 @@ function mt.Build()
 	f.leave:SetWidth(96)
 	f.leave:SetHeight(18)
 	f.leave:SetPoint("TOPLEFT", 8, -5)
-	f.leave:SetScript("OnClick", function()
-		f:Hide()
-		if SquidBotsLite_ShowDcPanel then SquidBotsLite_ShowDcPanel() end
-	end)
+	f.leave:SetScript("OnClick", function() SquidBotsLite_LeaveMainTank() end)
 	f.leave:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_TOP")
 		GameTooltip:SetText(T("LEAVE"), 1, 0.82, 0)
@@ -484,7 +481,9 @@ function mt.Build()
 		mt.pending, mt.pendingAt = nil, nil
 		if mt.supported ~= false then mt.ClearAll() end
 		mt.SetMain(false, true)
+		if SquidBotsLite_RefreshBar then SquidBotsLite_RefreshBar() end
 	end)
+	f:SetScript("OnShow", function() if SquidBotsLite_RefreshBar then SquidBotsLite_RefreshBar() end end)
 	mt.frame = f
 end
 
@@ -597,6 +596,17 @@ end
 -- The Dungeon clear panel's Main Tank button: the bar opens (Main tank on), never closes.
 function SquidBotsLite_OpenMainTank()
 	if not (mt.frame and mt.frame:IsShown()) then SquidBotsLite_ToggleMainTank() end
+end
+
+function SquidBotsLite_MainTankShown()
+	return mt.frame and mt.frame:IsShown() and true or false
+end
+
+-- Leave Tank (the bar's button, or the Main Tank button clicked again): Main tank off, the bar closes, the
+-- Dungeon clear panel comes back.
+function SquidBotsLite_LeaveMainTank()
+	if mt.frame then mt.frame:Hide() end
+	if SquidBotsLite_ShowDcPanel then SquidBotsLite_ShowDcPanel() end
 end
 
 -- Key bindings (Bindings.xml): SquidBotsLite_MainTank("target", 1) and so on.

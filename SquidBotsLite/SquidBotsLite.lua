@@ -19,6 +19,8 @@ local STRINGS = {
 		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
 		TIP_PULL_DC = "Dungeon clear is running: it chooses the pulls (pull mode in its panel). Auto pull comes back when the clear stops.",
 		TIP_DUNGEON = "Dungeon mode: bots stick to you, avoid ground effects, engage with you.",
+		MAINTANK_BAR = "Main Tank", TIP_MAINTANK = "You tank: the off-tank bar opens, Main tank on (a running Dungeon clear stops). Your bots keep their boss strategies. Click again: Leave Tank.",
+		TIP_MAINTANK_SOLO = "Join a group first.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
 		TIP_ALTS = "Your other characters: log them in as bots, summon them, open their sheet (gear, bags, quests, mounts).",
 		TIP_MOVE = "Shift-drag to move the bar, Ctrl + mouse wheel to resize it.",
@@ -131,6 +133,8 @@ local STRINGS = {
 		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
 		TIP_PULL_DC = "Dungeon clear est en cours : c'est lui qui choisit les pulls (mode de pull dans son panneau). Le pull auto revient quand le clear s'arrête.",
 		TIP_DUNGEON = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous.",
+		MAINTANK_BAR = "Main Tank", TIP_MAINTANK = "Vous tankez : la barre des off-tanks s'ouvre, Main tank actif (un Dungeon clear en cours s'arrête). Vos bots gardent leurs stratégies de boss. Nouveau clic : Quitter tank.",
+		TIP_MAINTANK_SOLO = "Rejoignez d'abord un groupe.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
 		TIP_ALTS = "Vos autres personnages : connectez-les en bots, appelez-les, ouvrez leur fiche (équipement, sacs, quêtes, montures).",
 		TIP_MOVE = "Maj + glisser pour déplacer la barre, Ctrl + molette pour la redimensionner.",
@@ -254,7 +258,7 @@ local MAX_TOASTS = 8
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
 local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 3, 37, 52
-local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "recruit", "release" }
+local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "recruit", "maintank", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
 local PROBE_DELAY, PROBE_WINDOW, PROBE_RETRY = 3, 10, 30
@@ -1515,8 +1519,10 @@ end
 -- The bar
 -- ---------------------------------------------------------------------------
 Highlight = function()
+	local tanking = SquidBotsLite_MainTankShown and SquidBotsLite_MainTankShown()
 	for key, button in pairs(buttons) do
 		local active = key == state.order or (key == "passive" and state.passive) or (key == "pull" and not state.autoPull)
+			or (key == "maintank" and tanking)
 		button.ring:SetVertexColor(active and 1 or 0.35, active and 0.82 or 0.35, active and 0 or 0.35)
 	end
 	local passive = buttons.passive
@@ -1536,6 +1542,18 @@ Highlight = function()
 		pull.icon:SetDesaturated(dc.enabled and 1 or nil)
 		pull.caption:SetText(L[pull.label])
 	end
+	-- Main Tank: grey out of a group (unless the bar is still open, to leave it).
+	local mainTank = buttons.maintank
+	if mainTank then
+		local usable = tanking or GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0
+		mainTank.icon:SetDesaturated(not usable and 1 or nil)
+		mainTank.tip = usable and "TIP_MAINTANK" or "TIP_MAINTANK_SOLO"
+	end
+end
+
+-- The Main Tank bar opened or closed (MainTank.lua): the button on the bar follows.
+function SquidBotsLite_RefreshBar()
+	if bar then Highlight() end
 end
 
 -- Size and place of the bar, and whether it shows, are kept per character (SquidBotsLiteCharDB): a healer
@@ -1731,6 +1749,10 @@ local function BuildBar()
 			ShowMenu(RecruitMenu())
 		end },
 		-- Whispered to the dead only: "release" tells a living bot to stop following and wait.
+		-- 2.9.4: the off-tank bar (MainTank.lua), the same as the Dungeon clear panel's Main Tank button.
+		{ "maintank", "Interface\\Icons\\INV_Shield_05", "MAINTANK_BAR", "TIP_MAINTANK", function()
+			dc.MainTank()
+		end },
 		{ "release", "Interface\\Icons\\Spell_Holy_Resurrection", "RELEASE", "TIP_RELEASE", function()
 			for _, name in ipairs(DeadMembers()) do Whisper(name, "release") end
 		end },
@@ -3077,11 +3099,7 @@ function dc.BuildPanel()
 	f.manual:SetPoint("BOTTOMLEFT", 16, 14)
 	-- 2.9.4: the raid tank bar (MainTank.lua).
 	-- The panel gives way to the bar (MainTank.lua); its Leave Tank brings the panel back.
-	f.mt = dc.Button(f, 100, "DC_MT", function()
-		if not SquidBotsLite_OpenMainTank then return end
-		f:Hide()
-		SquidBotsLite_OpenMainTank()
-	end, "TIP_DC_MT")
+	f.mt = dc.Button(f, 100, "DC_MT", function() dc.MainTank() end, "TIP_DC_MT")
 	f.mt:SetHeight(18)
 	f.mt:SetPoint("BOTTOMRIGHT", -16, 14)
 	-- 2.9.4: the panel opens by itself once per dungeon or raid (dc.AutoCheck); this box turns that off.
@@ -3146,9 +3164,25 @@ dc.keep:SetScript("OnUpdate", function(self)
 	end
 end)
 
--- Leave Tank on the Main Tank bar: back to the panel.
+-- Leave Tank on the Main Tank bar: back to the panel (on a realm with the module).
 function SquidBotsLite_ShowDcPanel()
-	dc.ShowPanel()
+	if dc.module == "on" or dc.module == "off" then dc.ShowPanel() end
+end
+
+-- 2.9.4: the Main Tank buttons (the bar's and the panel's): the panel gives way to the Main Tank bar, Main tank
+-- on (a running clear stops: MainTank.lua); again while the bar is open, Leave Tank.
+function dc.MainTank()
+	if not SquidBotsLite_OpenMainTank then return end
+	if SquidBotsLite_MainTankShown() then
+		SquidBotsLite_LeaveMainTank()
+		return
+	end
+	if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then
+		Print(L.TIP_MAINTANK_SOLO)
+		return
+	end
+	if dc.panel then dc.panel:Hide() end
+	SquidBotsLite_OpenMainTank()
 end
 
 function dc.TogglePanel()
@@ -3395,6 +3429,8 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		dc.OnWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)
 	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+		-- In a group or not: the Main Tank button greys out or not.
+		if bar then Highlight() end
 		-- An alt logging in joins the group: its row is confirmed sooner than by the list.
 		for _, alt in ipairs(roster) do
 			if alt.pending then refreshAt = math.min(refreshAt or math.huge, GetTime() + 0.5) end
