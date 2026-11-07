@@ -806,13 +806,19 @@ frame:SetScript("OnUpdate", function(_, delta)
 			for name, info in pairs(mt.info) do
 				if not (info.at and info.at >= mt.askedAt - FORGET_AFTER) and not info.keep then mt.info[name] = nil end
 			end
-		elseif mt.supported == true then
-			-- No answer, on a realm that answered before: the list stays, another bot is asked.
+		else
+			-- No answer: the list stays, another bot is asked (a fresh raid: the first one may be mid-teleport).
 			mt.noAnswer = true
 			if (mt.tries or 0) < STATUS_TRIES then mt.AskStatus(true) end
-		else
-			mt.supported = false
-			Print(T("NO_SERVER"))
+			if not mt.waitUntil and mt.supported ~= true then
+				-- Every try silent, on a realm that never answered: said once a session, and not final (the
+				-- refresh keeps asking; any TK or TS turns the bar on again).
+				mt.supported = false
+				if not mt.toldNoServer then
+					mt.toldNoServer = true
+					Print(T("NO_SERVER"))
+				end
+			end
 		end
 		-- A key pressed meanwhile: run once the answers are in (or no other bot is left to ask).
 		if mt.pending and not mt.waitUntil then mt.pendingAt = now end
@@ -824,7 +830,7 @@ frame:SetScript("OnUpdate", function(_, delta)
 		mt.RunKey(key.action, key.index)
 	end
 	if not shown then return end
-	if not mt.waitUntil and not mt.askAt and now >= mt.nextRefresh and mt.supported then mt.AskStatus() end
+	if not mt.waitUntil and not mt.askAt and now >= mt.nextRefresh and mt.supported ~= nil then mt.AskStatus() end
 	-- A failed order blinks its line red for a moment.
 	for _, row in ipairs(mt.rows) do
 		if row.flashUntil then
