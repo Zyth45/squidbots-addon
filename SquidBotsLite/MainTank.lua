@@ -12,7 +12,7 @@
 -- assists the player again. A realm without the module never answers: the bar greys out and says so.
 
 local PREFIX, ROWS, ICON, ROW_H, WIDTH = "SQBA", 2, 18, 24, 312
-local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH, STATUS_TRIES = 6, 8, 20, 1.2, 3
+local STATUS_WAIT, TAUNT_CD, REFRESH_EVERY, FLASH, STATUS_TRIES, FORGET_AFTER = 6, 8, 20, 1.2, 3, 60
 
 local STRINGS = {
 	en = {
@@ -116,6 +116,15 @@ local function UnitOf(name)
 	end
 end
 
+-- In the player's zone (the raid panel says where each member is; a party member: taken as here). A bot left in
+-- a city cannot off-tank in Molten Core, and it may answer "tank status" with the bots of its own map only.
+local function SameZone(unit)
+	local index = unit and unit:match("^raid(%d+)$")
+	if not index then return true end
+	local zone = select(7, GetRaidRosterInfo(tonumber(index)))
+	return not zone or zone == "" or zone == GetRealZoneText()
+end
+
 -- The bot's name in its class colour, from the group.
 local function ClassName(name)
 	local unit = UnitOf(name)
@@ -160,7 +169,7 @@ function mt.AskStatus(retry)
 			members = members + 1
 			local known = mt.info[name] and true or false
 			if not mt.tried[name] and (known or (SquidBotsLite_IsBot and SquidBotsLite_IsBot(name))) then
-				local score = (UnitIsDeadOrGhost(unit) and 0 or 2) + (known and 1 or 0)
+				local score = (SameZone(unit) and 4 or 0) + (UnitIsDeadOrGhost(unit) and 0 or 2) + (known and 1 or 0)
 				if score > best then to, best = name, score end
 			end
 		end
@@ -215,7 +224,8 @@ function mt.Candidates()
 		if unit and (info.role == "tank" or (info.role == "dps" and info.can)) then
 			table.insert(list, name)
 			-- A bot switched from the bar stays on it: a tank turned damage does not give its row to another.
-			rank[name] = (info.keep and 4 or 0) + (info.role == "tank" and 2 or 0) + (RaidTank(unit) and 1 or 0)
+			rank[name] = (SameZone(unit) and 8 or 0) + (info.keep and 4 or 0) + (info.role == "tank" and 2 or 0)
+				+ (RaidTank(unit) and 1 or 0)
 		end
 	end
 	table.sort(list, function(a, b)
@@ -746,9 +756,10 @@ frame:SetScript("OnUpdate", function(_, delta)
 			if info.at and info.at >= mt.askedAt then answered = true end
 		end
 		if answered then
-			-- An explicit answer: the bots it no longer lists have left the off-tanks.
+			-- Answers from different bots may each list part of the raid (a bot on another map lists its own
+			-- map): a bot leaves the list only when no answer has listed it for a minute, never on one answer.
 			for name, info in pairs(mt.info) do
-				if not (info.at and info.at >= mt.askedAt) and not info.keep then mt.info[name] = nil end
+				if not (info.at and info.at >= mt.askedAt - FORGET_AFTER) and not info.keep then mt.info[name] = nil end
 			end
 		elseif mt.supported == true then
 			-- No answer, on a realm that answered before: the list stays, another bot is asked.
