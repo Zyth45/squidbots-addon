@@ -657,6 +657,27 @@ function SquidBotsLite_ToggleMainTank()
 	end
 end
 
+-- A pinned target died: its line is free at once (the realm's "TK target dead" or the next status may come later,
+-- or not at all when another bot killed it). The same name; and when the dead one still carries a raid icon, the
+-- line's icon, so that one of two Lava Annihilators dying does not free the other's line (a mark may already be
+-- gone at death: no icon on the dead one, the name decides).
+function mt.PinnedDied(name, flags)
+	if not name then return end
+	local marks = flags and (flags % 0x10000000 - flags % 0x00100000) or 0
+	local changed = false
+	for _, info in pairs(mt.info) do
+		if info.target == name then
+			local icon = info.icon or 0
+			local bit = icon > 0 and 0x00100000 * 2 ^ (icon - 1) or 0
+			if icon == 0 or marks == 0 or (flags % (bit * 2) >= bit) then
+				info.icon, info.target = 0, nil
+				changed = true
+			end
+		end
+	end
+	if changed then mt.Refresh() end
+end
+
 -- "/sbl mt": what the bar knows of each bot, to understand a row that is missing.
 function SquidBotsLite_MainTankDebug()
 	local now = GetTime()
@@ -726,10 +747,11 @@ BindingNames()
 
 local frame = CreateFrame("Frame")
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE",
-	"PLAYER_TARGET_CHANGED", "RAID_TARGET_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
+	"PLAYER_TARGET_CHANGED", "RAID_TARGET_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
+	"COMBAT_LOG_EVENT_UNFILTERED" }) do
 	frame:RegisterEvent(event)
 end
-frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
+frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, ...)
 	if event == "PLAYER_LOGIN" then
 		BindingNames()
 	elseif event == "PLAYER_ENTERING_WORLD" then
@@ -740,6 +762,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		if arg1 == PREFIX and arg3 == "WHISPER" and arg4 and arg2 and (arg2:find("^TK\t") or arg2:find("^TS\t")) then
 			mt.OnAddon(arg4, arg2)
 		end
+	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+		-- 3.3.5: timestamp, event, source GUID, name, flags, dest GUID, name, flags.
+		if arg2 == "UNIT_DIED" then mt.PinnedDied(select(7, arg1, arg2, arg3, arg4, ...), select(8, arg1, arg2, arg3, arg4, ...)) end
 	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
 		-- Who can tank may have changed: asked again a moment later, once the roster settles.
 		if mt.frame and mt.frame:IsShown() then mt.askAt = GetTime() + 2 end
