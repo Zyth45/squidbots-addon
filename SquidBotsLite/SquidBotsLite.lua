@@ -1542,19 +1542,13 @@ Highlight = function()
 		pull.icon:SetDesaturated(dc.enabled and 1 or nil)
 		pull.caption:SetText(L[pull.label])
 	end
-	-- Main Tank: grey out of a group (unless the bar is still open, to leave it).
-	local mainTank = buttons.maintank
-	if mainTank then
-		local usable = tanking or GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0
-		mainTank.icon:SetDesaturated(not usable and 1 or nil)
-		mainTank.tip = usable and "TIP_MAINTANK" or "TIP_MAINTANK_SOLO"
-	end
 end
 
 -- The Main Tank bar opened or closed (MainTank.lua): the button on the bar follows.
 function SquidBotsLite_RefreshBar()
 	if bar then Highlight() end
 end
+
 
 -- Size and place of the bar, and whether it shows, are kept per character (SquidBotsLiteCharDB): a healer
 -- and a tank of the same account rarely want the bar at the same spot.
@@ -1653,6 +1647,11 @@ end
 -- neighbours (half of each caption either side of its icon), not the widest caption twice. "Active" and
 -- "Passive" are both counted, so the bar does not move when the button flips.
 local function LayoutBar()
+	-- A hidden Main Tank button leaves no gap (Release, hidden too, is last and keeps its place).
+	local order = {}
+	for _, key in ipairs(BAR_ORDER) do
+		if key ~= "maintank" or not buttons.maintank or buttons.maintank:IsShown() then table.insert(order, key) end
+	end
 	local measure = buttons.follow.caption
 	local shown = measure:GetText()
 	local function Width(text)
@@ -1660,7 +1659,7 @@ local function LayoutBar()
 		return measure:GetStringWidth() or 0
 	end
 	local widths = {}
-	for i, key in ipairs(BAR_ORDER) do
+	for i, key in ipairs(order) do
 		local button = buttons[key]
 		widths[i] = key == "passive" and math.max(Width(L.ACTIVE), Width(L.PASSIVE))
 			or key == "pull" and math.max(Width(L.PULL_ON), Width(L.PULL_OFF)) or Width(L[button.label])
@@ -1671,13 +1670,24 @@ local function LayoutBar()
 		step = math.max(step, (widths[i] + widths[i + 1]) / 2)
 	end
 	step = step > 0 and math.max(MIN_STEP, math.ceil(step) + CAPTION_GAP) or FALLBACK_STEP
-	for i, key in ipairs(BAR_ORDER) do
+	for i, key in ipairs(order) do
 		buttons[key]:ClearAllPoints()
 		buttons[key]:SetPoint("TOPLEFT", 3 + (i - 1) * step, 0)
 	end
-	bar:SetWidth(#BAR_ORDER * step)
+	bar:SetWidth(#order * step)
 	-- The bar runs a little past its last button: what sits over it (Missions.lua) lines up on that button.
-	bar.last = buttons[BAR_ORDER[#BAR_ORDER]]
+	bar.last = buttons[order[#order]]
+end
+
+-- 2.9.4: the Main Tank button shows only in a raid of more than 5. Hidden while the Main Tank bar is open, the
+-- bar stays: its Leave Tank turns Main tank off.
+local function RefreshMainTankButton()
+	local button = buttons.maintank
+	if not button then return end
+	local show = GetNumRaidMembers() > 5
+	if show == (button:IsShown() and true or false) then return end
+	if show then button:Show() else button:Hide() end
+	LayoutBar()
 end
 
 local function RefreshTexts()
@@ -1761,7 +1771,9 @@ local function BuildBar()
 		BarButton(def[1], def[2], def[3], def[4], def[5])
 	end
 	buttons.release:Hide()
+	buttons.maintank:Hide()
 	RefreshTexts()
+	RefreshMainTankButton()
 	Highlight()
 	if SquidBotsLiteCharDB.hidden then
 		bar:Hide()
@@ -3435,8 +3447,8 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		dc.OnWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)
 	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
-		-- In a group or not: the Main Tank button greys out or not.
-		if bar then Highlight() end
+		-- A raid of more than 5 or not: the Main Tank button shows or hides.
+		if bar then RefreshMainTankButton() end
 		-- An alt logging in joins the group: its row is confirmed sooner than by the list.
 		for _, alt in ipairs(roster) do
 			if alt.pending then refreshAt = math.min(refreshAt or math.huge, GetTime() + 0.5) end
