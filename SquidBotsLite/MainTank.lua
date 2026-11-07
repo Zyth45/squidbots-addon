@@ -262,7 +262,9 @@ function mt.OnAddon(sender, message)
 				mt.Fail(sender, action, result)
 			end
 		else
-			local info = mt.info[sender] or { role = "tank", can = true, at = GetTime() }
+			-- A bot not known from "tank status" (an answer that comes by itself, like the realm's "clear" when a
+			-- pinned target dies) gets no role here: only "tank status" makes it an off-tank of the bar.
+			local info = mt.info[sender] or { at = GetTime() }
 			mt.info[sender] = info
 			if result == "ok" then
 				info.error = nil
