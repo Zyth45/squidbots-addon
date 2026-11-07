@@ -2114,8 +2114,9 @@ local function ParseRoster(text)
 			end
 		end
 	end
-	-- 2.9.5: one cleanup of the alts kept by older versions, which took any "addclass: X - ok" (a random bot) for an
-	-- alt, for ever. "bot list" names every character of the account, "-" offline and "+" online; a random bot is
+	-- 2.9.5: one cleanup of the alts kept by older versions: a team saved from a group with random bots in it, then
+	-- logged in, made "add: <random bot> - ok" lines, taken for alts for ever (and older SavedVariables may hold
+	-- others). "bot list" names every character of the account, "-" offline and "+" online; a random bot is
 	-- only ever there as a "+" of the group. So: "-", or "+" out of the group, an alt; not listed, gone (unless of a
 	-- linked account, which the list never names); "+" in the group, an alt or a random bot: off the alts until seen
 	-- offline or logged in again by the player ("add: X - ok").
@@ -2309,9 +2310,12 @@ local function QueueBots(command, names)
 	for _, name in ipairs(names) do table.insert(loginQueue, command .. " " .. name) end
 end
 
+-- A team's alts (a team saved before 2.9.5 from a group may name random bots: left out).
 local function TeamNames(name)
 	local names = {}
-	for _, n in ipairs((SquidBotsLiteDB.teams or {})[name] or {}) do table.insert(names, n) end
+	for _, n in ipairs((SquidBotsLiteDB.teams or {})[name] or {}) do
+		if SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[n] then table.insert(names, n) end
+	end
 	return names
 end
 
@@ -2320,14 +2324,19 @@ local function GroupNames()
 	local raid = GetNumRaidMembers()
 	for i = 1, (raid > 0 and raid or 4) do
 		local n = UnitName((raid > 0 and "raid" or "party") .. i)
-		if n and n ~= me and n ~= UNKNOWNOBJECT then table.insert(names, n) end
+		-- Only the player's alts: a random bot of the group logged in by "add" would be taken for an alt.
+		if n and n ~= me and n ~= UNKNOWNOBJECT and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[n] then
+			table.insert(names, n)
+		end
 	end
 	return names
 end
 
 local function OnlineAltNames()
 	local names = {}
-	for _, alt in ipairs(roster) do if alt.online then table.insert(names, alt.name) end end
+	for _, alt in ipairs(roster) do
+		if alt.online and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[alt.name] then table.insert(names, alt.name) end
+	end
 	return names
 end
 
