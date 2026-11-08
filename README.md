@@ -100,6 +100,11 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**2.9.5** (2026-11-08, for CoA Bots 2.9.5)
+- **Start event** (Main Tank bar): when Dungeon clear has a boss event ready (doors, gongs, waves) while you are the main tank, a button under the clear's line says "Start event: <name>". One click and the clear plays it ("dc go" in the group chat); it greys out while the event runs and goes away when it ends or is cancelled. Needs CoA Bots 2.9.5.
+- **Alts bar**: random bots of a raid no longer show among your alts. A team saved from a group could hold random bots, and logging it in made them alts for ever: teams now save and log in only your alts, and one check against the server's character list (a few seconds after login) removes the wrong names already kept. An alt online in your group at that moment comes back once it is seen offline or you log it in again.
+- Main Tank bar: with CoA Bots 2.9.5 the bots' answer has an end, so an off-tank that left goes at once and "no bot can tank" is no longer mixed up with "no answer yet".
+
 **2.9.4** (2026-11-06, for CoA Bots 2.9.4)
 - **Main Tank bar** (Dungeon clear panel > Main Tank, or a key binding): in a raid you tank the boss and lead up to two off-tank bots. Per bot: off-tank on my target (the server marks it with an icon), taunt (with its cooldown shown), swap, placement (it comes where you stand), clear, and a tank / damage switch out of combat. A line shows what each one holds. The bar is Main tank: the panel's Main Tank button closes the panel and opens the bar, you are the main tank (a running Dungeon clear stops, you lead); Leave Tank on the bar turns it off and brings the panel back. The bar shows the clear's next boss and the bosses killed (n/N). Dungeon clear started: the bar closes. Key bindings for the bar and off-tank 1 (on my target, taunt, swap, placement), off-tank 2 optional. Needs CoA Bots 2.9.4: on an older realm the bar greys out and says so.
 - **Dungeon clear panel opens by itself** once when you enter a dungeon or a raid (after the fight if you are in one), to remind you it is there. Not in battlegrounds or arenas, not again after a reload or a run back from the graveyard. A box in the panel turns it off.
