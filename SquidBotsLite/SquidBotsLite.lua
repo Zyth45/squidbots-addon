@@ -88,7 +88,7 @@ local STRINGS = {
 		ALTS_LOOK = "Keeps its look (wardrobe, mounts) if the server has CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Click: open its bot sheet.", ALTS_GOLD = "Gold: %s", ALTS_XP = "XP: %d%% (rested %d%%)",
 		INVITE = "Invite", ASKED = "Asked in %s: %s",
-		ASK_NONE = "No %s answered: only bots within 2 levels of you can. Ask again in a minute, or bring one of your alts (My alts).", NO_CHANNEL = "Join the Zone or Newcomers channel first (or /sbl channel <name>).",
+		ASK_NONE = "No %s answered: only bots within 2 levels of you can. Ask again in a minute, or bring one of your alts (My alts).", NO_CHANNEL = "Could not join the %s channel: type /join %s, then ask again (or /sbl channel <name>).", JOINING = "Not in the Zone or Newcomers channel: joining %s, the ask follows.",
 		NOT_IN_GROUP = "You are not in a group with bots.",
 		LOW_MANA = "Low mana", PULLING = "Pulling", REZ = "Rez",
 		M_FOLLOW = "Follow me", M_STAY = "Stay here", M_ATTACK = "Attack my target", M_SUMMON = "Come to me",
@@ -204,7 +204,7 @@ local STRINGS = {
 		ALTS_LOOK = "Garde son apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Clic : ouvrir sa fiche.", ALTS_GOLD = "Or : %s", ALTS_XP = "XP : %d%% (reposé %d%%)",
 		INVITE = "Inviter", ASKED = "Demandé dans %s : %s",
-		ASK_NONE = "Aucun %s n'a répondu : seuls les bots à 2 niveaux de vous peuvent le faire. Redemandez dans une minute, ou prenez un de vos alts (Mes alts).", NO_CHANNEL = "Rejoignez le channel Zone ou Newcomers (ou /sbl channel <nom>).",
+		ASK_NONE = "Aucun %s n'a répondu : seuls les bots à 2 niveaux de vous peuvent le faire. Redemandez dans une minute, ou prenez un de vos alts (Mes alts).", NO_CHANNEL = "Impossible de rejoindre le canal %s : tapez /join %s, puis redemandez (ou /sbl channel <nom>).", JOINING = "Pas dans le canal Zone ou Newcomers : SquidBots Lite rejoint %s, la demande suit.",
 		NOT_IN_GROUP = "Vous n'êtes pas en groupe avec des bots.",
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
 		M_FOLLOW = "Me suivre", M_STAY = "Rester ici", M_ATTACK = "Attaquer ma cible", M_SUMMON = "Venir à moi",
@@ -526,6 +526,46 @@ local function FindChannel()
 	end
 end
 
+-- 3.0: "lfg bot ..." goes in the Zone or Newcomers channel (the server listens there). Not in one: the addon joins
+-- the chosen one (/sbl channel) or Newcomers, shows it in the main chat frame, and sends once the client lists it.
+local JOIN_WAIT = 5
+local joinWait = CreateFrame("Frame")
+joinWait:Hide()
+local function SendLfg(message, after)
+	local id, name = FindChannel()
+	if id then
+		SendChatMessage(message, "CHANNEL", nil, id)
+		Print(string.format(L.ASKED, name, message))
+		if after then after() end
+		return
+	end
+	local want = (SquidBotsLiteDB.channel and SquidBotsLiteDB.channel ~= "") and SquidBotsLiteDB.channel or "Newcomers"
+	if joinWait:IsShown() then
+		-- Already joining: this ask replaces the one waiting.
+		joinWait.message, joinWait.after = message, after
+		return
+	end
+	JoinChannelByName(want, nil, DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME:GetID())
+	if DEFAULT_CHAT_FRAME and ChatFrame_AddChannel then ChatFrame_AddChannel(DEFAULT_CHAT_FRAME, want) end
+	Print(string.format(L.JOINING, want))
+	joinWait.message, joinWait.after, joinWait.want, joinWait.untilAt = message, after, want, GetTime() + JOIN_WAIT
+	joinWait:Show()
+end
+-- The wait for an offer after an ask (set below Ask).
+local AskWait
+joinWait:SetScript("OnUpdate", function(self)
+	local id, name = FindChannel()
+	if id then
+		self:Hide()
+		SendChatMessage(self.message, "CHANNEL", nil, id)
+		Print(string.format(L.ASKED, name, self.message))
+		if self.after then self.after() end
+	elseif GetTime() > self.untilAt then
+		self:Hide()
+		Print(string.format(L.NO_CHANNEL, self.want, self.want))
+	end
+end)
+
 local function Ask(roles)
 	if SquidBotsLiteDB.gm then
 		for role in roles:gmatch("%a+") do
@@ -533,16 +573,12 @@ local function Ask(roles)
 		end
 		return
 	end
-	local id, name = FindChannel()
-	if not id then
-		Print(L.NO_CHANNEL)
-		return
-	end
-	local message = "lfg bot " .. roles
-	SendChatMessage(message, "CHANNEL", nil, id)
-	Print(string.format(L.ASKED, name, message))
-	-- No offer at all for a role a while later: say why (the server only sends bots close to the player's level)
-	-- and what to do, instead of leaving the player waiting.
+	SendLfg("lfg bot " .. roles, function() AskWait(roles) end)
+end
+
+-- No offer at all for a role a while later: say why (the server only sends bots close to the player's level)
+-- and what to do, instead of leaving the player waiting.
+AskWait = function(roles)
 	local asked = GetTime()
 	state.askTimer = state.askTimer or CreateFrame("Frame")
 	state.askTimer:SetScript("OnUpdate", function(frame)
@@ -590,16 +626,10 @@ function lfgc.SetUntil(class, at)
 end
 
 function lfgc.Send(class, role)
-	local id, name = FindChannel()
-	if not id then
-		Print(L.NO_CHANNEL)
-		return
-	end
-	local message = "lfg bot " .. string.lower(class) .. " " .. role
-	SendChatMessage(message, "CHANNEL", nil, id)
-	Print(string.format(L.ASKED, name, message))
-	lfgc.asked = lfgc.asked or {}
-	lfgc.asked[class] = GetTime()
+	SendLfg("lfg bot " .. string.lower(class) .. " " .. role, function()
+		lfgc.asked = lfgc.asked or {}
+		lfgc.asked[class] = GetTime()
+	end)
 end
 
 -- The cooldown starts only once a class ask got an offer: an offer of that class soon after the ask starts it.
