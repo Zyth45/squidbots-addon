@@ -240,12 +240,14 @@ local STRINGS = {
 }
 
 local L
+-- 3.0: the file's constants, in one table (a Lua main chunk holds at most 200 locals).
+local K = {}
 local CLASSES = {
 	"Barbarian", "Witch Doctor", "Felsworn", "Witch Hunter", "Stormbringer", "Knight of Xoroth", "Guardian",
 	"Templar", "Bloodmage", "Ranger", "Chronomancer", "Necromancer", "Pyromancer", "Cultist", "Starcaller",
 	"Sun Cleric", "Tinker", "Venomancer", "Reaper", "Primalist", "Runemaster",
 }
-local ROLE_ICON = "Interface\\LFGFrame\\UI-LFG-ICON-ROLES"
+K.ROLE_ICON = "Interface\\LFGFrame\\UI-LFG-ICON-ROLES"
 -- Ascension's texture is 256 x 256 with 66-pixel icons (leader, heal / tank, dps / a black disc below the tank),
 -- not Blizzard's 64 x 64 one with 19-pixel icons.
 local ROLE_COORDS = {
@@ -254,24 +256,24 @@ local ROLE_COORDS = {
 	dps = { 68 / 256, 132 / 256, 68 / 256, 133 / 256 },
 }
 local CHANNELS = { "Zone", "Newcomers", "World" }
-local OFFER_SECONDS = 120
+K.OFFER_SECONDS = 120
 -- An ask with no offer for a role after this many seconds gets a hint in the chat.
-local ASK_WAIT = 12
+K.ASK_WAIT = 12
 -- "Ask for all three" brings 7 offers by default (2 tanks, 2 healers, 3 damage: CoaLfg*Offers on the server).
-local MAX_TOASTS = 8
+K.MAX_TOASTS = 8
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
-local CAPTION_SIZE, CAPTION_GAP, MIN_STEP, FALLBACK_STEP = 8, 3, 37, 52
+K.CAPTION_SIZE, K.CAPTION_GAP, K.MIN_STEP, K.FALLBACK_STEP = 8, 3, 37, 52
 local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "recruit", "maintank", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
--- its role on its own first), and the "Strategies: ..." answer is hidden for PROBE_WINDOW seconds.
-local PROBE_DELAY, PROBE_WINDOW, PROBE_RETRY = 3, 10, 30
+-- its role on its own first), and the "Strategies: ..." answer is hidden for K.PROBE_WINDOW seconds.
+K.PROBE_DELAY, K.PROBE_WINDOW, K.PROBE_RETRY = 3, 10, 30
 local FORMATIONS = { { "near", "F_NEAR" }, { "line", "F_LINE" }, { "circle", "F_CIRCLE" }, { "shield", "F_SHIELD" },
 	{ "arrow", "F_ARROW" }, { "queue", "F_QUEUE" } }
 -- The Passive button shows the bots' current state: a charge arrow while they fight, Zzz while passive.
-local ICON_ACTIVE, ICON_PASSIVE = "Interface\\Icons\\Ability_Warrior_Charge", "Interface\\Icons\\Spell_Nature_Sleep"
+K.ICON_ACTIVE, K.ICON_PASSIVE = "Interface\\Icons\\Ability_Warrior_Charge", "Interface\\Icons\\Spell_Nature_Sleep"
 -- The tank's auto pull (on by default for a CoA tank): an arrow while it pulls, a shield while it waits.
-local ICON_PULL_ON, ICON_PULL_OFF = "Interface\\Icons\\Ability_Marksmanship", "Interface\\Icons\\INV_Shield_06"
+K.ICON_PULL_ON, K.ICON_PULL_OFF = "Interface\\Icons\\Ability_Marksmanship", "Interface\\Icons\\INV_Shield_06"
 -- The panels: a dark plain background under the dialog border, since the dialog background let the floating
 -- names of the world show through. The role buttons use square icons, like the bar.
 local PANEL_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -369,7 +371,7 @@ end
 
 -- The game's red buttons (UIPanelButtonTemplate) made flat: dark, a thin gold border, a gold glow under the
 -- mouse and when lit (LockHighlight: the open tab, the active mode). Text, clicks and scripts are unchanged.
-local FLAT_EDGE = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
+K.FLAT_EDGE = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
 function ui.Flatten(button)
 	if button.flat then return end
 	button.flat = true
@@ -384,7 +386,7 @@ function ui.Flatten(button)
 		texture:SetPoint("BOTTOMRIGHT", -1, 1)
 	end
 	button:GetHighlightTexture():SetBlendMode("ADD")
-	button:SetBackdrop(FLAT_EDGE)
+	button:SetBackdrop(K.FLAT_EDGE)
 	button:SetBackdropBorderColor(1, 0.82, 0, 0.35)
 end
 
@@ -491,7 +493,7 @@ end
 local function SetRoleIcon(texture, role)
 	local c = role and ROLE_COORDS[role]
 	if c then
-		texture:SetTexture(ROLE_ICON)
+		texture:SetTexture(K.ROLE_ICON)
 		texture:SetTexCoord(c[1], c[2], c[3], c[4])
 		texture:Show()
 	else
@@ -582,13 +584,13 @@ AskWait = function(roles)
 	local asked = GetTime()
 	state.askTimer = state.askTimer or CreateFrame("Frame")
 	state.askTimer:SetScript("OnUpdate", function(frame)
-		if GetTime() - asked < ASK_WAIT then return end
+		if GetTime() - asked < K.ASK_WAIT then return end
 		frame:SetScript("OnUpdate", nil)
 		local missing = {}
 		for role in roles:gmatch("%a+") do
 			local found = false
 			for _, offer in ipairs(toasts) do
-				if offer.role == role and offer.expires - OFFER_SECONDS >= asked then found = true end
+				if offer.role == role and offer.expires - K.OFFER_SECONDS >= asked then found = true end
 			end
 			if not found then table.insert(missing, L["ROLE_" .. string.upper(role)] or role) end
 		end
@@ -670,7 +672,7 @@ function lfgc.Menu()
 end
 
 -- A menu closes on its own once the mouse has left it this many seconds (the game keeps it open otherwise).
-local MENU_HIDE_DELAY = 1
+K.MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteMenu", UIParent, "UIDropDownMenuTemplate")
 -- The game closes a menu only on a click in the world, not over an addon window, and its own hide delay does
 -- not apply to these menus: a menu of the addon closes a second after the mouse left it, or on a click on our panels.
@@ -699,7 +701,7 @@ menuWatch:SetScript("OnUpdate", function(self)
 		end
 	else
 		self.left = self.left or now
-		if now - self.left > MENU_HIDE_DELAY then
+		if now - self.left > K.MENU_HIDE_DELAY then
 			CloseDropDownMenus()
 			self:Hide()
 		end
@@ -717,7 +719,7 @@ local function ShowMenu(items)
 		CloseDropDownMenus()
 		return
 	end
-	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", K.MENU_HIDE_DELAY)
 	SquidBotsLite_WatchMenu()
 end
 
@@ -927,7 +929,7 @@ end
 -- A WotLK class has no CoA specialization: on a Warcraft Reborn realm every bot is one, with the three classic
 -- trees of its class (Blizzard order). Their list is the table below, "wcr" asks the bot its tree and
 -- "wcr spec <0-2>" switches it; an answer naming one of the class's trees (in English) gives the active one.
-local SPEC_WAIT, SPEC_HIDE, SPEC_REASK, REAPPLY_AFTER = 5, 8, 30, 1.5   -- seconds
+K.SPEC_WAIT, K.SPEC_HIDE, K.SPEC_REASK, K.REAPPLY_AFTER = 5, 8, 30, 1.5   -- seconds
 local ROLE_WORDS = { tank = "tank", healer = "heal", damage = "dps" }
 local ROLE_KEYS = { tank = "ROLE_TANK", heal = "ROLE_HEAL", dps = "ROLE_DPS" }
 local ROLES = { "tank", "heal", "dps" }
@@ -956,7 +958,7 @@ local WCR_CLASSES = {
 local EXCLUDED_SPECS = { Eternal = true }
 -- Orders the addon sends to one bot after a switch (the server resets its strategies), kept out of the chat.
 local REAPPLY_ORDERS = { ["co +passive"] = true, ["nc -coa auto pull"] = true, ["co -wait for attack,+avoid aoe"] = true, stay = true }
-local SPEC_ROWS = 4
+K.SPEC_ROWS = 4
 local knownBot = {}
 -- 3.0: who is a bot, asked to the server instead of read from the name (AiPlayerbot.CoaBotSurname 0 or 2 gives
 -- random bots no "Bot" surname, or a common one). The addon sends "WHO?" on the group's addon channel (SQBA, unseen
@@ -1084,7 +1086,7 @@ local function AskSpecs(name)
 	specAskedAt[name] = GetTime()
 	specAskedOnce[name] = GetTime()
 	specSilent[name] = nil
-	specHideUntil[name] = GetTime() + SPEC_HIDE
+	specHideUntil[name] = GetTime() + K.SPEC_HIDE
 	local token = WcrToken(name)
 	if token then
 		local info = specsByName[name]
@@ -1142,8 +1144,8 @@ local function PickSpec(name, specName)
 	specsByName[name].current = specName
 	roleByName[name] = spec.role
 	Remember(name, specName, spec.role)
-	specHideUntil[name] = GetTime() + SPEC_HIDE
-	reapplyAt[name] = GetTime() + REAPPLY_AFTER
+	specHideUntil[name] = GetTime() + K.SPEC_HIDE
+	reapplyAt[name] = GetTime() + K.REAPPLY_AFTER
 	if spec.index then
 		Whisper(name, "wcr spec " .. spec.index)
 	else
@@ -1180,7 +1182,7 @@ end
 
 -- The server resets a bot's strategies on a switch: the bar's state is given back to that bot.
 local function Reapply(name)
-	specHideUntil[name] = GetTime() + SPEC_HIDE
+	specHideUntil[name] = GetTime() + K.SPEC_HIDE
 	if state.passive then
 		Whisper(name, "co +passive")
 		if CurrentRole(name) == "tank" then Whisper(name, "nc -coa auto pull") end
@@ -1465,7 +1467,7 @@ local function RefreshSpecs()
 		if mine then button.ring:Show() else button.ring:Hide() end
 	end
 	-- As tall as the rows shown: no empty space under one or two bots.
-	local shown = math.max(1, math.min(#members, SPEC_ROWS))
+	local shown = math.max(1, math.min(#members, K.SPEC_ROWS))
 	if specsFrame.rowsShown ~= shown then
 		specsFrame.rowsShown = shown
 		specsFrame:SetHeight(176 + shown * 26)
@@ -1518,7 +1520,7 @@ end
 local function BuildSpecs()
 	specsFrame = CreateFrame("Frame", "SquidBotsLiteSpecs", UIParent)
 	specsFrame:SetWidth(400)
-	specsFrame:SetHeight(176 + SPEC_ROWS * 26)
+	specsFrame:SetHeight(176 + K.SPEC_ROWS * 26)
 	specsFrame:SetPoint("CENTER")
 	specsFrame:SetBackdrop(PANEL_BACKDROP)
 	specsFrame:SetBackdropColor(0.04, 0.04, 0.05, 1)
@@ -1546,7 +1548,7 @@ local function BuildSpecs()
 		button:SetPoint("TOPLEFT", 100 + (i - 1) * 24, -36)
 		specsFrame.myRole[role] = button
 	end
-	for i = 1, SPEC_ROWS do
+	for i = 1, K.SPEC_ROWS do
 		local row = CreateFrame("Frame", nil, specsFrame)
 		row:SetWidth(368)
 		row:SetHeight(24)
@@ -1584,7 +1586,7 @@ local function BuildSpecs()
 	specsFrame.balance = CreateFrame("Button", nil, specsFrame, "UIPanelButtonTemplate")
 	specsFrame.balance:SetWidth(150)
 	specsFrame.balance:SetHeight(22)
-	specsFrame.balance:SetPoint("TOPLEFT", 16, -74 - SPEC_ROWS * 26)
+	specsFrame.balance:SetPoint("TOPLEFT", 16, -74 - K.SPEC_ROWS * 26)
 	specsFrame.balance:SetScript("OnClick", function()
 		if not balancePending then BalanceGroup() end
 	end)
@@ -1621,12 +1623,12 @@ ShowSpecs = function()
 end
 
 -- Called with the other refreshes: a silent bot is marked, a bot that joins while the panel is open is asked,
--- a pending "Balance the group" goes on once every bot answered (or after SPEC_WAIT), and a switched bot gets
+-- a pending "Balance the group" goes on once every bot answered (or after K.SPEC_WAIT), and a switched bot gets
 -- the bar's state back.
 local function TickSpecs()
 	local now = GetTime()
 	for name, at in pairs(specAskedAt) do
-		if now - at > SPEC_WAIT then
+		if now - at > K.SPEC_WAIT then
 			specAskedAt[name] = nil
 			pendingRole[name] = nil
 			specSilent[name] = true
@@ -1641,7 +1643,7 @@ local function TickSpecs()
 	if specsFrame and specsFrame:IsShown() then
 		for _, name in ipairs(PartyNames()) do
 			local info = specsByName[name]
-			if not info and not specAskedAt[name] and (not specAskedOnce[name] or now - specAskedOnce[name] > SPEC_REASK) then
+			if not info and not specAskedAt[name] and (not specAskedOnce[name] or now - specAskedOnce[name] > K.SPEC_REASK) then
 				AskSpecs(name)
 			end
 		end
@@ -1651,7 +1653,7 @@ local function TickSpecs()
 		for _, name in ipairs(PartyNames()) do
 			if specAskedAt[name] then waiting = true end
 		end
-		if not waiting or now - balancePending > SPEC_WAIT then BalanceGroup() end
+		if not waiting or now - balancePending > K.SPEC_WAIT then BalanceGroup() end
 	end
 	RefreshSpecs()
 end
@@ -1714,14 +1716,14 @@ Highlight = function()
 	end
 	local passive = buttons.passive
 	if passive then
-		passive.icon:SetTexture(state.passive and ICON_PASSIVE or ICON_ACTIVE)
+		passive.icon:SetTexture(state.passive and K.ICON_PASSIVE or K.ICON_ACTIVE)
 		passive.label = state.passive and "PASSIVE" or "ACTIVE"
 		passive.tip = state.passive and "TIP_PASSIVE" or "TIP_ACTIVE"
 		passive.caption:SetText(L[passive.label])
 	end
 	local pull = buttons.pull
 	if pull then
-		pull.icon:SetTexture(state.autoPull and ICON_PULL_ON or ICON_PULL_OFF)
+		pull.icon:SetTexture(state.autoPull and K.ICON_PULL_ON or K.ICON_PULL_OFF)
 		pull.label = state.autoPull and "PULL_ON" or "PULL_OFF"
 		pull.tip = state.autoPull and "TIP_PULL_ON" or "TIP_PULL_OFF"
 		-- While a clear runs, mod-dungeon-clear takes "coa auto pull" off the tank and puts it back after: greyed out.
@@ -1739,7 +1741,7 @@ end
 
 -- Size and place of the bar, and whether it shows, are kept per character (SquidBotsLiteCharDB): a healer
 -- and a tank of the same account rarely want the bar at the same spot.
-local SCALE_MIN, SCALE_MAX = 0.5, 2
+K.SCALE_MIN, K.SCALE_MAX = 0.5, 2
 
 local function PlaceBar()
 	local p = SquidBotsLiteCharDB.point
@@ -1752,7 +1754,7 @@ local function PlaceBar()
 end
 
 local function SetBarScale(scale, quiet)
-	scale = math.floor(math.max(SCALE_MIN, math.min(SCALE_MAX, scale)) * 100 + 0.5) / 100
+	scale = math.floor(math.max(K.SCALE_MIN, math.min(K.SCALE_MAX, scale)) * 100 + 0.5) / 100
 	SquidBotsLiteCharDB.scale = scale
 	if bar then bar:SetScale(scale) end
 	if not quiet then Print(string.format(L.SCALE_SET, scale)) end
@@ -1781,7 +1783,7 @@ local function BarButton(key, icon, label, tip, onClick)
 	button.ring:SetAlpha(0.8)
 	button.caption = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	local font, _, flags = button.caption:GetFont()
-	button.caption:SetFont(font, CAPTION_SIZE, flags)
+	button.caption:SetFont(font, K.CAPTION_SIZE, flags)
 	button.caption:SetPoint("TOP", button, "BOTTOM", 0, -1)
 	button.label, button.tip, button.onClick = label, tip, onClick
 	button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
@@ -1856,7 +1858,7 @@ local function LayoutBar()
 	for i = 1, #widths - 1 do
 		step = math.max(step, (widths[i] + widths[i + 1]) / 2)
 	end
-	step = step > 0 and math.max(MIN_STEP, math.ceil(step) + CAPTION_GAP) or FALLBACK_STEP
+	step = step > 0 and math.max(K.MIN_STEP, math.ceil(step) + K.CAPTION_GAP) or K.FALLBACK_STEP
 	for i, key in ipairs(order) do
 		buttons[key]:ClearAllPoints()
 		buttons[key]:SetPoint("TOPLEFT", 3 + (i - 1) * step, 0)
@@ -1904,7 +1906,7 @@ end
 
 local function BuildBar()
 	bar = CreateFrame("Frame", "SquidBotsLiteBar", UIParent)
-	bar:SetWidth(#BAR_ORDER * FALLBACK_STEP)
+	bar:SetWidth(#BAR_ORDER * K.FALLBACK_STEP)
 	bar:SetHeight(48)
 	bar:SetMovable(true)
 	bar:SetClampedToScreen(true)
@@ -1920,10 +1922,10 @@ local function BuildBar()
 		{ "attack", "Interface\\Icons\\Ability_DualWield", "ATTACK", "TIP_ATTACK", function()
 			if SendOrder("attack") then SetOrder("attack") end
 		end },
-		{ "passive", ICON_ACTIVE, "ACTIVE", "TIP_ACTIVE", function()
+		{ "passive", K.ICON_ACTIVE, "ACTIVE", "TIP_ACTIVE", function()
 			if SetPassive(not state.passive) then state.passive = not state.passive; Highlight() end
 		end },
-		{ "pull", ICON_PULL_ON, "PULL_ON", "TIP_PULL_ON", function()
+		{ "pull", K.ICON_PULL_ON, "PULL_ON", "TIP_PULL_ON", function()
 			if dc.enabled then Print(L.TIP_PULL_DC) return end
 			SetAutoPull(not state.autoPull)
 		end },
@@ -2160,7 +2162,7 @@ end
 -- Offer toasts
 -- ---------------------------------------------------------------------------
 local function BuildToasts()
-	for i = 1, MAX_TOASTS do
+	for i = 1, K.MAX_TOASTS do
 		local toast = CreateFrame("Frame", nil, bar)
 		toast:SetWidth(330)
 		toast:SetHeight(34)
@@ -2233,13 +2235,13 @@ end
 -- ---------------------------------------------------------------------------
 -- My alts: the player's other characters, logged in as bots
 -- ---------------------------------------------------------------------------
-local ALT_ROWS = 8
-local ALT_ROW_H = 50
-local ALT_TOP = 74
+K.ALT_ROWS = 8
+K.ALT_ROW_H = 50
+K.ALT_TOP = 74
 -- "Bot list" names the alts only; their level and class are noted whenever they are seen (played, or in the
 -- group) and kept account-wide in SquidBotsLiteDB.altInfo.
-local SHEET_ICON = "Interface\\Icons\\Achievement_Character_Human_Male"
-local ROSTER_WAIT, AFTER_TOGGLE = 5, 3   -- seconds: answer to "bot list", new list after a log in / out
+K.SHEET_ICON = "Interface\\Icons\\Achievement_Character_Human_Male"
+K.ROSTER_WAIT, K.AFTER_TOGGLE = 5, 3   -- seconds: answer to "bot list", new list after a log in / out
 local WOTLK_CLASSES = { Druid = true, Hunter = true, Mage = true, Paladin = true, Priest = true, Rogue = true,
 	Shaman = true, Warlock = true, Warrior = true, DeathKnight = true }
 local altsFrame, altRows, roster = nil, {}, {}
@@ -2256,7 +2258,7 @@ local function AskRoster()
 end
 -- For Missions.lua: ask the roster again, and the alts logged in as bots now.
 SquidBotsLite_AskRoster = function()
-	if altsFrame and not (rosterAskedAt and GetTime() - rosterAskedAt < ROSTER_WAIT) then AskRoster() end
+	if altsFrame and not (rosterAskedAt and GetTime() - rosterAskedAt < K.ROSTER_WAIT) then AskRoster() end
 end
 function SquidBotsLite_OnlineAlts()
 	local list = {}
@@ -2474,9 +2476,9 @@ end)
 local function RefreshAlts()
 	if not altsFrame then return end
 	NoteGroup()
-	-- 25 alts for a raid: the list scrolls (wheel or bar), ALT_ROWS at a time.
-	altsFrame:SetHeight(ALT_TOP + math.max(1, math.min(#roster, ALT_ROWS)) * ALT_ROW_H + 44)
-	FauxScrollFrame_Update(altsFrame.scroll, #roster, ALT_ROWS, ALT_ROW_H)
+	-- 25 alts for a raid: the list scrolls (wheel or bar), K.ALT_ROWS at a time.
+	altsFrame:SetHeight(K.ALT_TOP + math.max(1, math.min(#roster, K.ALT_ROWS)) * K.ALT_ROW_H + 44)
+	FauxScrollFrame_Update(altsFrame.scroll, #roster, K.ALT_ROWS, K.ALT_ROW_H)
 	local offset = FauxScrollFrame_GetOffset(altsFrame.scroll)
 	local online = 0
 	for _, alt in ipairs(roster) do if alt.online then online = online + 1 end end
@@ -2682,7 +2684,7 @@ local function AccountsMenu()
 		table.insert(items, { text = name, hasArrow = true, notCheckable = true, menuList = {
 			{ text = L.A_LOGIN_ALL, notCheckable = true, func = function()
 				BotCommand("addaccount " .. name)
-				refreshAt = GetTime() + AFTER_TOGGLE + 2
+				refreshAt = GetTime() + K.AFTER_TOGGLE + 2
 			end },
 			{ text = L.A_UNLINK, notCheckable = true, func = function()
 				AccountCommand("unlink " .. name)
@@ -2701,13 +2703,13 @@ local function TickLogins()
 	if #loginQueue == 0 or GetTime() < loginNext then return end
 	loginNext = GetTime() + 1
 	BotCommand(table.remove(loginQueue, 1))
-	if #loginQueue == 0 and altsFrame and altsFrame:IsShown() then refreshAt = GetTime() + AFTER_TOGGLE end
+	if #loginQueue == 0 and altsFrame and altsFrame:IsShown() then refreshAt = GetTime() + K.AFTER_TOGGLE end
 end
 
 local function BuildAlts()
 	altsFrame = CreateFrame("Frame", "SquidBotsLiteAlts", UIParent)
 	altsFrame:SetWidth(548)
-	altsFrame:SetHeight(ALT_TOP + ALT_ROWS * ALT_ROW_H + 44)
+	altsFrame:SetHeight(K.ALT_TOP + K.ALT_ROWS * K.ALT_ROW_H + 44)
 	altsFrame:SetPoint("CENTER")
 	altsFrame:SetBackdrop(PANEL_BACKDROP)
 	altsFrame:SetBackdropColor(0.04, 0.04, 0.05, 0.96)
@@ -2752,14 +2754,14 @@ local function BuildAlts()
 	altsFrame.count:SetPoint("RIGHT", altsFrame.refresh, "LEFT", -8, 0)
 	ui.Rule(altsFrame, -66)
 	altsFrame.status = altsFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	altsFrame.status:SetPoint("TOPLEFT", 20, -ALT_TOP - 8)
+	altsFrame.status:SetPoint("TOPLEFT", 20, -K.ALT_TOP - 8)
 	altsFrame.status:SetWidth(450)
 	altsFrame.status:SetJustifyH("LEFT")
-	for i = 1, ALT_ROWS do
+	for i = 1, K.ALT_ROWS do
 		local row = CreateFrame("Frame", nil, altsFrame)
 		row:SetWidth(492)
-		row:SetHeight(ALT_ROW_H - 4)
-		row:SetPoint("TOPLEFT", 16, -ALT_TOP - (i - 1) * ALT_ROW_H)
+		row:SetHeight(K.ALT_ROW_H - 4)
+		row:SetPoint("TOPLEFT", 16, -K.ALT_TOP - (i - 1) * K.ALT_ROW_H)
 		-- Its portrait or class icon, with the friends list's dot: green logged in, grey offline.
 		row.icon = row:CreateTexture(nil, "ARTWORK")
 		row.icon:SetWidth(34)
@@ -2806,7 +2808,7 @@ local function BuildAlts()
 			BotCommand((alt.online and "remove " or "add ") .. alt.name)
 			alt.pending, alt.pendingAt = alt.online and "out" or "in", GetTime()
 			-- Only a safety net: the "- ok" line or the group's change asks the list again at once.
-			refreshAt = GetTime() + AFTER_TOGGLE + 5
+			refreshAt = GetTime() + K.AFTER_TOGGLE + 5
 			RefreshAlts()
 		end)
 		row.toggle:SetPoint("RIGHT", -10, 0)
@@ -2817,7 +2819,7 @@ local function BuildAlts()
 			if alt then Whisper(alt.name, "summon") end
 		end)
 		row.summon:SetPoint("RIGHT", row.toggle, "LEFT", -6, 0)
-		row.sheet = ui.IconButton(row, 26, SHEET_ICON, function() return L.ALTS_SHEET, L.TIP_SHEET end, function(self)
+		row.sheet = ui.IconButton(row, 26, K.SHEET_ICON, function() return L.ALTS_SHEET, L.TIP_SHEET end, function(self)
 			local alt = self:GetParent().alt
 			if alt and SquidBotsLite_OpenSheet then
 				SquidBotsLiteDB.sheetOpened = true
@@ -2865,10 +2867,10 @@ local function BuildAlts()
 		altRows[i] = row
 	end
 	altsFrame.scroll = CreateFrame("ScrollFrame", "SquidBotsLiteAltsScroll", altsFrame, "FauxScrollFrameTemplate")
-	altsFrame.scroll:SetPoint("TOPLEFT", 16, -ALT_TOP)
+	altsFrame.scroll:SetPoint("TOPLEFT", 16, -K.ALT_TOP)
 	altsFrame.scroll:SetPoint("BOTTOMRIGHT", -36, 44)
 	altsFrame.scroll:SetScript("OnVerticalScroll", function(self, offset)
-		FauxScrollFrame_OnVerticalScroll(self, offset, ALT_ROW_H, RefreshAlts)
+		FauxScrollFrame_OnVerticalScroll(self, offset, K.ALT_ROW_H, RefreshAlts)
 	end)
 	-- Under the rows, so that their buttons still take the clicks; the rows pass the wheel on to it.
 	altsFrame.scroll:SetFrameLevel(altsFrame:GetFrameLevel())
@@ -2876,7 +2878,7 @@ local function BuildAlts()
 		row:EnableMouseWheel(true)
 		row:SetScript("OnMouseWheel", function(_, delta)
 			local bar = _G.SquidBotsLiteAltsScrollScrollBar
-			bar:SetValue(bar:GetValue() - delta * ALT_ROW_H)
+			bar:SetValue(bar:GetValue() - delta * K.ALT_ROW_H)
 		end)
 	end
 	altsFrame.footer = altsFrame:CreateTexture(nil, "ARTWORK")
@@ -2912,7 +2914,7 @@ local function SetAltOnline(name, online)
 		end
 	end
 	-- Several alts logging in one after the other: one list at the end of the queue (TickLogins), not one each.
-	refreshAt = GetTime() + (#loginQueue > 0 and AFTER_TOGGLE or 0.5)
+	refreshAt = GetTime() + (#loginQueue > 0 and K.AFTER_TOGGLE or 0.5)
 	RefreshAlts()
 end
 SquidBotsLite_AltOnline = function(name, online) if altsFrame then SetAltOnline(name, online) end end
@@ -2923,7 +2925,7 @@ local function TickAlts()
 	-- Runs with the panel closed too: Missions and the dashboard ask the list without it.
 	if refreshAt and now >= refreshAt then
 		AskRoster()
-	elseif rosterAskedAt and now - rosterAskedAt > ROSTER_WAIT then
+	elseif rosterAskedAt and now - rosterAskedAt > K.ROSTER_WAIT then
 		rosterAskedAt = nil
 		altsFrame.status:SetText(L.ALTS_NO_REPLY)
 	end
@@ -3005,10 +3007,10 @@ local function ProbeRoles()
 		local unit = "party" .. i
 		local name = UnitName(unit)
 		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and UnitIsConnected(unit)
-			and (not probedAt[name] or now - probedAt[name] >= PROBE_RETRY)
+			and (not probedAt[name] or now - probedAt[name] >= K.PROBE_RETRY)
 			and LooksLikeBot(name) then
 			firstSeen[name] = firstSeen[name] or now
-			if now - firstSeen[name] >= PROBE_DELAY then
+			if now - firstSeen[name] >= K.PROBE_DELAY then
 				probedAt[name] = now
 				Whisper(name, "co ?")
 			end
@@ -3017,7 +3019,7 @@ local function ProbeRoles()
 end
 
 local function InProbeWindow(name)
-	return probedAt[name] and GetTime() - probedAt[name] < PROBE_WINDOW
+	return probedAt[name] and GetTime() - probedAt[name] < K.PROBE_WINDOW
 end
 
 -- A bot still on its way (dungeon finder, loading screen) can answer "co ?" long after the window: its strategies are
@@ -3099,10 +3101,10 @@ local function OnWhisper(message, sender)
 	for i = #toasts, 1, -1 do
 		if toasts[i].name == sender then table.remove(toasts, i) end
 	end
-	table.insert(toasts, { name = sender, level = level, class = class, role = role, expires = GetTime() + OFFER_SECONDS })
+	table.insert(toasts, { name = sender, level = level, class = class, role = role, expires = GetTime() + K.OFFER_SECONDS })
 	lfgc.OnOffer(class)
 	-- Too many offers: drop the oldest of the role with the most offers (damage first), so a tank and a healer stay.
-	while #toasts > MAX_TOASTS do
+	while #toasts > K.MAX_TOASTS do
 		local count = { tank = 0, heal = 0, dps = 0 }
 		for _, offer in ipairs(toasts) do count[offer.role] = (count[offer.role] or 0) + 1 end
 		local drop = "dps"
@@ -3820,7 +3822,7 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		local scale = tonumber((string.gsub(rest or "", ",", "."))) -- "1,2" as French players write it
 		if rest == "" then
 			Print(string.format(L.SCALE_SET, SquidBotsLiteCharDB.scale or 1))
-		elseif scale and scale >= SCALE_MIN and scale <= SCALE_MAX then
+		elseif scale and scale >= K.SCALE_MIN and scale <= K.SCALE_MAX then
 			SetBarScale(scale)
 		else
 			Print(L.SCALE_BAD)
