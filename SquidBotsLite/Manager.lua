@@ -21,7 +21,8 @@ local STRINGS = {
 		PET_CAT_craft = "Professions", PETS_FAV = "Favourite", PETS_USE = "Use", PETS_DISMISS = "Dismiss",
 		PETS_AUTO = "Uses them by itself", PETS_IS_FAV = "favourite", PETS_IS_OUT = "out", PETS_UNKNOWN = "not learned",
 		PETS_HINT = "One favourite per use: the alt summons it by itself when needed (loot out of combat, class and profession books when it can learn something). Use calls it now.",
-		PETS_NO_CMD = "No answer: this realm's CoA Bots has no pet command yet (3.0 or later).", PETS_ERR = "Refused: %s.",
+		PETS_NO_CMD = "No answer: this realm's CoA Bots has no pet command yet (3.0 or later).", PETS_ERR = "Refused: %s.", PETS_ERR_unknown = "this alt does not know that companion", PETS_ERR_dead = "the alt is dead",
+		PETS_ERR_combat = "in combat", PETS_ERR_mounted = "mounted", PETS_ERR_raid = "no loot pet in a raid", PETS_ERR_cast = "the summon failed",
 		FOR_GROUND = "favourite on the ground", FOR_FLYING = "favourite in the air",
 		MOUNT_SEARCH = "Search a mount...", MOUNT_NONE = "No mount matches \"%s\".",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
@@ -75,7 +76,8 @@ local STRINGS = {
 		PET_CAT_craft = "Métiers", PETS_FAV = "Favori", PETS_USE = "Sortir", PETS_DISMISS = "Renvoyer",
 		PETS_AUTO = "Les utilise tout seul", PETS_IS_FAV = "favori", PETS_IS_OUT = "sorti", PETS_UNKNOWN = "pas appris",
 		PETS_HINT = "Un favori par usage : l'alt le sort tout seul au besoin (butin hors combat, livres de classe et de métiers quand il peut apprendre). Sortir l'appelle maintenant.",
-		PETS_NO_CMD = "Pas de réponse : le CoA Bots de ce royaume n'a pas encore la commande pet (3.0 ou plus).", PETS_ERR = "Refusé : %s.",
+		PETS_NO_CMD = "Pas de réponse : le CoA Bots de ce royaume n'a pas encore la commande pet (3.0 ou plus).", PETS_ERR = "Refusé : %s.", PETS_ERR_unknown = "cet alt ne connaît pas cette mascotte", PETS_ERR_dead = "l'alt est mort",
+		PETS_ERR_combat = "en combat", PETS_ERR_mounted = "sur sa monture", PETS_ERR_raid = "pas de familier de butin en raid", PETS_ERR_cast = "l'invocation a échoué",
 		FOR_GROUND = "préférée au sol", FOR_FLYING = "préférée en vol",
 		MOUNT_SEARCH = "Chercher une monture...", MOUNT_NONE = "Aucune monture ne correspond à « %s ».",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
@@ -1738,11 +1740,13 @@ SquidBotsLite_Pets = {
 		{ id = 83086, entry = 79026, cat = "loot", name = "Kleptomanic Demon" },
 		{ id = 83050, entry = 79025, cat = "quest", name = "Wondrous Wisdomball" },
 		{ id = 979602, entry = 75115, cat = "class", name = "Book of Ascension" },
+		{ id = 499992, entry = 499992, cat = "class", name = "Book of Ascension" },
 		{ id = 499908, entry = 75137, cat = "class", name = "Bloody Book of Ascension" },
 		{ id = 105307, entry = 108587, cat = "class", name = "Book of Conquest" },
 		{ id = 750750, entry = 57500, cat = "craft", name = "Book of Artisans" },
 	},
-	ROWS = 7, WAIT = 6.5,
+	-- 8 rows: the server sends both Books of Ascension (979602 and 499992).
+	ROWS = 8, WAIT = 6.5,
 	list = nil, pending = nil, fav = {}, out = 0, auto = true, askedAt = nil, answered = false,
 }
 local PT = SquidBotsLite_Pets
@@ -1820,8 +1824,8 @@ function PT.Build(page)
 	for i = 1, PT.ROWS do
 		local row = CreateFrame("Frame", nil, page)
 		row:SetWidth(440)
-		row:SetHeight(38)
-		row:SetPoint("TOPLEFT", 6, -34 - (i - 1) * 40)
+		row:SetHeight(36)
+		row:SetPoint("TOPLEFT", 6, -34 - (i - 1) * 38)
 		row.icon = row:CreateTexture(nil, "ARTWORK")
 		row.icon:SetWidth(30)
 		row.icon:SetHeight(30)
@@ -1901,7 +1905,7 @@ function PT.Render(page)
 	if answered then page.auto:Enable() else page.auto:Disable() end
 	page.autoText:SetText(T("PETS_AUTO"))
 	local silent = not answered and PT.askedAt and GetTime() - PT.askedAt > PT.WAIT - 0.5
-	page.note:SetText(silent and T("PETS_NO_CMD") or PT.err and ("|cffff6060" .. string.format(T("PETS_ERR"), PT.err) .. "|r") or "")
+	page.note:SetText(silent and T("PETS_NO_CMD") or PT.err and ("|cffff6060" .. string.format(T("PETS_ERR"), T("PETS_ERR_" .. PT.err) or PT.err) .. "|r") or "")
 end
 
 function SquidBotsLite_OpenSheet(name)
