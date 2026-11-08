@@ -17,6 +17,11 @@ local STRINGS = {
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
+		PETS = "Pets", PET_CAT_loot = "Loot", PET_CAT_quest = "Quests", PET_CAT_class = "Class trainer",
+		PET_CAT_craft = "Professions", PETS_FAV = "Favourite", PETS_USE = "Use", PETS_DISMISS = "Dismiss",
+		PETS_AUTO = "Uses them by itself", PETS_IS_FAV = "favourite", PETS_IS_OUT = "out", PETS_UNKNOWN = "not learned",
+		PETS_HINT = "One favourite per use: the alt summons it by itself when needed (loot out of combat, class and profession books when it can learn something). Use calls it now.",
+		PETS_NO_CMD = "No answer: this realm's CoA Bots has no pet command yet (3.0 or later).",
 		FOR_GROUND = "favourite on the ground", FOR_FLYING = "favourite in the air",
 		MOUNT_SEARCH = "Search a mount...", MOUNT_NONE = "No mount matches \"%s\".",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
@@ -66,6 +71,11 @@ local STRINGS = {
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
+		PETS = "Familiers", PET_CAT_loot = "Butin", PET_CAT_quest = "Quêtes", PET_CAT_class = "Maître de classe",
+		PET_CAT_craft = "Métiers", PETS_FAV = "Favori", PETS_USE = "Sortir", PETS_DISMISS = "Renvoyer",
+		PETS_AUTO = "Les utilise tout seul", PETS_IS_FAV = "favori", PETS_IS_OUT = "sorti", PETS_UNKNOWN = "pas appris",
+		PETS_HINT = "Un favori par usage : l'alt le sort tout seul au besoin (butin hors combat, livres de classe et de métiers quand il peut apprendre). Sortir l'appelle maintenant.",
+		PETS_NO_CMD = "Pas de réponse : le CoA Bots de ce royaume n'a pas encore la commande pet (3.0 ou plus).",
 		FOR_GROUND = "préférée au sol", FOR_FLYING = "préférée en vol",
 		MOUNT_SEARCH = "Chercher une monture...", MOUNT_NONE = "Aucune monture ne correspond à « %s ».",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
@@ -1421,6 +1431,7 @@ local TABS = { { "gear", "GEAR", BuildGear, "Interface\\Icons\\INV_Chest_Chain_0
 	{ "quests", "QUESTS", BuildQuests, "Interface\\GossipFrame\\AvailableQuestIcon" },
 	{ "talents", "TALENTS", BuildTalents, "Interface\\Icons\\INV_Misc_Book_11" },
 	{ "mounts", "MOUNTS", BuildMounts, "Interface\\Icons\\Ability_Mount_RidingHorse" },
+	{ "pets", "PETS", function(page) SquidBotsLite_Pets.Build(page) end, "Interface\\Icons\\INV_Misc_Book_09" },
 	{ "info", "INFO", BuildInfo, "Interface\\Icons\\INV_Misc_Note_01" } }
 -- The Strategies tab (BuildStrats) is kept out for now: too easy to break a bot with it (decision 12/10).
 -- Put { "strats", "STRATS", BuildStrats } back in TABS to show it.
@@ -1547,6 +1558,7 @@ Render = function()
 	elseif tab == "bags" then RenderBags(pages.bags)
 	elseif tab == "quests" then RenderQuests(pages.quests)
 	elseif tab == "mounts" then RenderMounts(pages.mounts)
+	elseif tab == "pets" then SquidBotsLite_Pets.Render(pages.pets)
 	elseif tab == "talents" then RenderTalents(pages.talents)
 	elseif tab == "strats" then RenderStrats(pages.strats)
 	else RenderInfo(pages.info) end
@@ -1563,6 +1575,8 @@ local function Load()
 		Ask("quests", "quests all")
 	elseif tab == "mounts" then
 		if petMode then SquidBotsLite_AskLootPets() else Ask("mounts", "mount ?") end
+	elseif tab == "pets" then
+		SquidBotsLite_Pets.Ask()
 	elseif tab == "talents" then
 		Ask("talents", "talents ?")
 	elseif tab == "strats" then
@@ -1576,7 +1590,8 @@ end
 
 local function Build()
 	sheet = CreateFrame("Frame", "SquidBotsLiteSheet", UIParent)
-	sheet:SetWidth(470)
+	-- 3.0: 520 wide (was 470): seven tabs.
+	sheet:SetWidth(520)
 	sheet:SetHeight(540)
 	sheet:SetPoint("CENTER", 120, 0)
 	sheet:SetBackdrop(BACKDROP)
@@ -1605,7 +1620,7 @@ local function Build()
 		local b = CreateFrame("Button", nil, sheet, "UIPanelButtonTemplate")
 		b:SetWidth(70)
 		b:SetHeight(22)
-		b:SetPoint("TOPLEFT", 16 + (i - 1) * 73, -36)
+		b:SetPoint("TOPLEFT", 12 + (i - 1) * 72, -36)
 		b:SetScript("OnClick", function() tab = def[1]; Load() end)
 		-- A small icon before the name, the name a size smaller to make room.
 		b:SetNormalFontObject(GameFontNormalSmall)
@@ -1711,6 +1726,179 @@ function SquidBotsLite_OnLootPet(name, f)
 	end
 end
 
+-- ---------------------------------------------------------------------------
+-- 3.0: the Pets tab. The alt's companions by use (loot, quests, class trainer, professions), one favourite per use
+-- that it summons by itself. Protocol: docs/PETS-PROTOCOLE-3.0.md ("pet list|set|use|dismiss|auto", "PET ..." lines).
+-- ---------------------------------------------------------------------------
+SquidBotsLite_Pets = {
+	CATEGORIES = { "loot", "quest", "class", "craft" },
+	-- What the tab shows before (or without) an answer; the server's lines replace it.
+	KNOWN = {
+		{ id = 9930889, entry = 44022, cat = "loot", name = "Lootbot 3000" },
+		{ id = 83086, entry = 79026, cat = "loot", name = "Kleptomanic Demon" },
+		{ id = 83050, entry = 79025, cat = "quest", name = "Wondrous Wisdomball" },
+		{ id = 979602, entry = 75115, cat = "class", name = "Book of Ascension" },
+		{ id = 499908, entry = 75137, cat = "class", name = "Bloody Book of Ascension" },
+		{ id = 105307, entry = 108587, cat = "class", name = "Book of Conquest" },
+		{ id = 750750, entry = 57500, cat = "craft", name = "Book of Artisans" },
+	},
+	ROWS = 7, WAIT = 6.5,
+	list = nil, pending = nil, fav = {}, out = 0, auto = true, askedAt = nil, answered = false,
+}
+local PT = SquidBotsLite_Pets
+
+function PT.Reset()
+	PT.list, PT.pending, PT.fav, PT.out, PT.auto, PT.askedAt, PT.answered = nil, nil, {}, 0, true, nil, false
+end
+
+function PT.Send(command)
+	if not current then return end
+	if SquidBotsLite_Alts and SquidBotsLite_Alts.Handle then SquidBotsLite_Alts.Handle.PET = PT.OnLine end
+	PT.askedAt = GetTime()
+	Whisper(command)
+	local name, wait, t = current, CreateFrame("Frame"), 0
+	wait:SetScript("OnUpdate", function(self, delta)
+		t = t + delta
+		if t < PT.WAIT then return end
+		self:SetScript("OnUpdate", nil)
+		if current == name and sheet and sheet:IsShown() and tab == "pets" then PT.Render(pages.pets) end
+	end)
+end
+
+function PT.Ask() PT.Send("pet list") end
+
+function PT.OnLine(name, f)
+	if name ~= current then return end
+	if f[2] == "pet" then
+		local id = tonumber(f[3] or "")
+		if id then
+			PT.pending = PT.pending or {}
+			table.insert(PT.pending, { id = id, entry = tonumber(f[4] or ""), cat = f[5], known = f[6] == "1",
+				name = (f[7] and f[7] ~= "") and f[7] or GetSpellInfo(id) or ("#" .. id) })
+		end
+	elseif f[2] == "fav" and f[3] then
+		PT.favPending = PT.favPending or {}
+		PT.favPending[f[3]] = tonumber(f[4] or "") or 0
+	elseif f[2] == "out" then
+		PT.out = tonumber(f[3] or "") or 0
+	elseif f[2] == "auto" then
+		PT.auto = f[3] ~= "0"
+	elseif f[2] == "-" then
+		PT.list, PT.pending = PT.pending or PT.list or {}, nil
+		PT.fav, PT.favPending = PT.favPending or PT.fav, nil
+		PT.answered = true
+		if sheet and sheet:IsShown() and tab == "pets" then PT.Render(pages.pets) end
+	end
+end
+
+-- The rows: the server's list, in use order, else the companions the tab knows (greyed until an answer).
+function PT.Shown()
+	local order = {}
+	for i, cat in ipairs(PT.CATEGORIES) do order[cat] = i end
+	local list = {}
+	for _, p in ipairs(PT.list or PT.KNOWN) do table.insert(list, p) end
+	table.sort(list, function(a, b)
+		local ca, cb = order[a.cat] or 9, order[b.cat] or 9
+		if ca ~= cb then return ca < cb end
+		if (a.known and 1 or 0) ~= (b.known and 1 or 0) then return a.known == true end
+		return a.name < b.name
+	end)
+	return list
+end
+
+function PT.Build(page)
+	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.hint:SetPoint("TOPLEFT", 10, -2)
+	page.hint:SetWidth(430)
+	page.hint:SetJustifyH("LEFT")
+	page.rows = {}
+	for i = 1, PT.ROWS do
+		local row = CreateFrame("Frame", nil, page)
+		row:SetWidth(440)
+		row:SetHeight(38)
+		row:SetPoint("TOPLEFT", 6, -34 - (i - 1) * 40)
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(30)
+		row.icon:SetHeight(30)
+		row.icon:SetPoint("LEFT", 2, 0)
+		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -1)
+		row.name:SetWidth(220)
+		row.name:SetJustifyH("LEFT")
+		row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.kind:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 8, 1)
+		row.kind:SetWidth(220)
+		row.kind:SetJustifyH("LEFT")
+		row.use = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.use:SetWidth(70)
+		row.use:SetHeight(22)
+		row.use:SetPoint("RIGHT", -2, 0)
+		row.use:SetScript("OnClick", function(self) if self.pet then PT.Send("pet use " .. self.pet.id) end end)
+		row.fav = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+		row.fav:SetWidth(80)
+		row.fav:SetHeight(22)
+		row.fav:SetPoint("RIGHT", row.use, "LEFT", -4, 0)
+		row.fav:SetScript("OnClick", function(self)
+			local p = self.pet
+			if not p then return end
+			-- A second click on the favourite: none (the alt takes the first it knows).
+			PT.Send("pet set " .. p.cat .. " " .. ((PT.fav[p.cat] == p.id) and 0 or p.id))
+		end)
+		page.rows[i] = row
+	end
+	page.dismiss = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.dismiss:SetWidth(100)
+	page.dismiss:SetHeight(22)
+	page.dismiss:SetPoint("BOTTOMLEFT", 10, 2)
+	page.dismiss:SetScript("OnClick", function() PT.Send("pet dismiss") end)
+	page.auto = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+	page.auto:SetWidth(24)
+	page.auto:SetHeight(24)
+	page.auto:SetPoint("LEFT", page.dismiss, "RIGHT", 16, 0)
+	page.auto:SetScript("OnClick", function(self) PT.Send("pet auto " .. (self:GetChecked() and "on" or "off")) end)
+	page.autoText = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	page.autoText:SetPoint("LEFT", page.auto, "RIGHT", 2, 0)
+	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	page.note:SetPoint("BOTTOMLEFT", page.dismiss, "TOPLEFT", 0, 6)
+	page.note:SetWidth(430)
+	page.note:SetJustifyH("LEFT")
+end
+
+function PT.Render(page)
+	if not page or not page.rows then return end
+	page.hint:SetText(T("PETS_HINT"))
+	local answered = PT.answered
+	local list = PT.Shown()
+	for i, row in ipairs(page.rows) do
+		local p = list[i]
+		if p then
+			local _, _, icon = GetSpellInfo(p.id)
+			row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+			row.icon:SetDesaturated(not (answered and p.known))
+			row.name:SetText(p.name)
+			local words = { T("PET_CAT_" .. p.cat) or p.cat }
+			if answered and not p.known then table.insert(words, "|cff808080" .. T("PETS_UNKNOWN") .. "|r") end
+			if PT.fav[p.cat] == p.id then table.insert(words, "|cffffd100" .. T("PETS_IS_FAV") .. "|r") end
+			if PT.out == p.id then table.insert(words, "|cff40ff40" .. T("PETS_IS_OUT") .. "|r") end
+			row.kind:SetText(table.concat(words, "  ·  "))
+			row.fav.pet, row.use.pet = p, p
+			row.fav:SetText(T("PETS_FAV"))
+			row.use:SetText(T("PETS_USE"))
+			if answered and p.known then row.fav:Enable(); row.use:Enable() else row.fav:Disable(); row.use:Disable() end
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+	page.dismiss:SetText(T("PETS_DISMISS"))
+	if answered and PT.out ~= 0 then page.dismiss:Enable() else page.dismiss:Disable() end
+	page.auto:SetChecked(PT.auto)
+	if answered then page.auto:Enable() else page.auto:Disable() end
+	page.autoText:SetText(T("PETS_AUTO"))
+	local silent = not answered and PT.askedAt and GetTime() - PT.askedAt > PT.WAIT - 0.5
+	page.note:SetText(silent and T("PETS_NO_CMD") or "")
+end
+
 function SquidBotsLite_OpenSheet(name)
 	if not name or name == "" then
 		name = UnitName("target")
@@ -1721,6 +1909,7 @@ function SquidBotsLite_OpenSheet(name)
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
 		if pages.mounts and pages.mounts.search then pages.mounts.search:SetText(""); pages.mounts.search:ClearFocus() end
 		pets, petsPending, petState, petAskedAt, petApp = {}, nil, nil, nil, false
+		SquidBotsLite_Pets.Reset()
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
 		bagMode = "bags"

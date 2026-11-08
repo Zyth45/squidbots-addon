@@ -100,6 +100,10 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 ## Changes
 
+**3.0** (in progress, for CoA Bots 3.0)
+- **Pets** tab on the bot sheet (between Mounts and Info): the alt's companions by use (loot, quests, class trainer, professions: Lootbot 3000, Kleptomanic Demon, Wondrous Wisdomball, the Books of Ascension and Conquest, Book of Artisans). One favourite per use, that the alt summons by itself when needed; Use calls one now, Dismiss sends it away. Needs CoA Bots 3.0.
+- **LFG**: not in the Zone or Newcomers channel, the addon joins Newcomers (or your /sbl channel) and sends the ask, instead of stopping.
+
 **2.9.5** (2026-11-08, for CoA Bots 2.9.5)
 - **LFG specific bot** (Recruit menu): pick a class, then a role it can play (tank, heal, damage), and the addon asks "lfg bot <class> <role>" in the usual channel. Up to 2 bots answer, and each class can be asked once a minute (once it got an offer; the realm sets the delay): only that class greys out with its seconds left, every other class stays available, so a whole group takes a minute. Needs CoA Bots 2.9.5.
 - **Start event** (Main Tank bar): when Dungeon clear has a boss event ready (doors, gongs, waves) while you are the main tank, a button under the clear's line says "Start event: <name>". One click and the clear plays it ("dc go" in the group chat); it greys out while the event runs and goes away when it ends or is cancelled. Needs CoA Bots 2.9.5.
