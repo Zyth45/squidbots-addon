@@ -157,7 +157,7 @@ local function NoteClass(name, classId)
 end
 
 local function IsAlt(name)
-	return name and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name] and not name:find(" ", 1, true)
+	return name and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]
 end
 
 function D.OnStat(name, f)
@@ -272,7 +272,7 @@ function D.Names()
 	-- 2.9.5: only alts (older versions kept cards of random bots taken for alts), and the characters played.
 	local alts = SquidBotsLiteDB.alts or {}
 	for name, e in pairs(store) do
-		if (alts[name] or e.self) and not name:find(" ", 1, true) then Add(name) end
+		if alts[name] or e.self then Add(name) end
 	end
 	for name in pairs(alts) do Add(name) end
 	table.sort(list, function(a, b)

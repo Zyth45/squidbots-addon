@@ -2227,18 +2227,26 @@ local function ParseRoster(text)
 			if not SquidBotsLiteDB.alts[list[i].name] and signs[list[i].name] ~= "-" and inParty[list[i].name] then table.remove(list, i) end
 		end
 	end
-	-- 2.9.5: every roster. A player's name has no space: "Enminthi Bot" is a random bot (CoaBotSurname), taken for an
-	-- alt by older versions (a team's "add: X - ok", kept as a linked account's). Not listed and not linked: gone.
+	-- 2.9.5: every roster. "Enminthi Bot" (the random bots' surname, CoaBotSurname) was taken for an alt by older
+	-- versions (a team's "add: X - ok", kept as a linked account's). The roster wins: a name it gives as this
+	-- account's ("-", or "+" out of the group) stays an alt whatever its shape ("Dez Alt", "Squid Herbs"). A " Bot"
+	-- name it does not give so is a random bot; any other name it does not list and not linked is gone.
+	local function OwnInRoster(name)
+		return signs[name] == "-" or (signs[name] == "+" and not inParty[name])
+	end
+	local function RandomBot(name)
+		return name:find(" Bot$") ~= nil and not OwnInRoster(name)
+	end
 	for name in pairs(SquidBotsLiteDB.alts) do
-		if name:find(" ", 1, true) or (next(signs) and not signs[name] and not (SquidBotsLiteDB.linkedAlts and SquidBotsLiteDB.linkedAlts[name])) then
+		if RandomBot(name) or (next(signs) and not signs[name] and not (SquidBotsLiteDB.linkedAlts and SquidBotsLiteDB.linkedAlts[name])) then
 			SquidBotsLiteDB.alts[name] = nil
 		end
 	end
 	for name in pairs(SquidBotsLiteDB.linkedAlts or {}) do
-		if name:find(" ", 1, true) then SquidBotsLiteDB.linkedAlts[name] = nil end
+		if RandomBot(name) then SquidBotsLiteDB.linkedAlts[name] = nil end
 	end
 	for i = #list, 1, -1 do
-		if list[i].name:find(" ", 1, true) then table.remove(list, i) end
+		if RandomBot(list[i].name) then table.remove(list, i) end
 	end
 	SquidBotsLite_PurgeNonAlts()
 	-- "bot list" names only this account's characters: those of a linked account logged in from here are kept
@@ -2258,7 +2266,6 @@ end
 function SquidBotsLite_PurgeNonAlts()
 	local alts, me = SquidBotsLiteDB.alts or {}, UnitName("player")
 	local function Keep(name, entry)
-		if name:find(" ", 1, true) then return false end
 		return alts[name] or name == me or (type(entry) == "table" and entry.self)
 			or (SquidBotsLiteDB.altsUnsure and SquidBotsLiteDB.altsUnsure[name])
 	end
@@ -2841,7 +2848,12 @@ local function OnSystem(message)
 		for _, alt in ipairs(roster) do alt.pending = nil end
 		RefreshAlts()
 	end
-	if added and added:find(" ", 1, true) then added = nil end
+	-- A " Bot" name that is not this account's (last roster) and not logged in with "addaccount": a random bot.
+	if added and added:find(" Bot$") and not message:find("^addaccount: ") then
+		local own = false
+		for _, alt in ipairs(roster) do if alt.name == added and not alt.linked then own = true end end
+		if not own then added = nil end
+	end
 	if added then
 		SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
 		SquidBotsLiteDB.alts[added] = true
