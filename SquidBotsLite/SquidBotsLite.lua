@@ -28,7 +28,7 @@ local STRINGS = {
 		PROFILES = "Profiles", P_FARM = "Farm (hunt, loot, eat)", P_STRICT = "Strict follow",
 		P_DUNGEON = "Dungeon mode", P_LEAVE_DUNGEON = "Leave dungeon mode",
 		ASK_TANK = "Ask for a tank", ASK_HEAL = "Ask for a healer", ASK_DPS = "Ask for damage", ASK_ALL = "Ask for all three",
-		LFG_CLASS = "LFG specific bot", LFG_CLASS_TITLE = "A bot of a class", LFG_EVERY = "One ask per class every 5 min", LFG_WAIT = "%s: wait %d s",
+		LFG_CLASS = "LFG specific bot", LFG_CLASS_TITLE = "A bot of a class", LFG_EVERY = "One ask per class every minute", LFG_WAIT = "%s: wait %d s",
 		ROLE_TANK_SHORT = "Tank", ROLE_HEAL_SHORT = "Heal", ROLE_DPS_SHORT = "DPS",
 		GM_ON = "GM mode on: bots are called with .playerbots coa.",
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
@@ -144,7 +144,7 @@ local STRINGS = {
 		PROFILES = "Profils", P_FARM = "Farm (chasse, butin, repas)", P_STRICT = "Suivi strict",
 		P_DUNGEON = "Mode donjon", P_LEAVE_DUNGEON = "Quitter le mode donjon",
 		ASK_TANK = "Demander un tank", ASK_HEAL = "Demander un soigneur", ASK_DPS = "Demander des DPS", ASK_ALL = "Demander les trois",
-		LFG_CLASS = "LFG bot précis", LFG_CLASS_TITLE = "Un bot d'une classe", LFG_EVERY = "Une demande par classe toutes les 5 min", LFG_WAIT = "%s : attendez %d s",
+		LFG_CLASS = "LFG bot précis", LFG_CLASS_TITLE = "Un bot d'une classe", LFG_EVERY = "Une demande par classe par minute", LFG_WAIT = "%s : attendez %d s",
 		ROLE_TANK_SHORT = "Tank", ROLE_HEAL_SHORT = "Soin", ROLE_DPS_SHORT = "DPS",
 		GM_ON = "Mode GM activé : les bots sont appelés avec .playerbots coa.",
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
@@ -561,11 +561,11 @@ local function Ask(roles)
 end
 
 -- 2.9.5: "lfg bot <class> <role>" (CoA Bots 2.9.5): one bot of a class, in the same channel as the other asks.
--- One bot answers. The server allows one ask per class and account every CoaLfgClassCooldown seconds (300 by
--- default) and answers an ask on cooldown by role only ("You can ask for a Tinker again in N s"): the addon keeps
+-- Up to 2 bots answer. The server allows one ask per class and account every CoaLfgClassCooldown seconds (60 by
+-- default, the realm may change it) and answers an ask on cooldown by role only ("You can ask for a Tinker again in N s"): the addon keeps
 -- the end of each class's cooldown (account-wide) and greys only that class, the others stay clickable.
 -- ROLES: the roles the server can match for each class.
-local lfgc = { COOLDOWN = 300, OFFER_WAIT = 20, ROLES = {
+local lfgc = { COOLDOWN = 60, OFFER_WAIT = 20, ROLES = {
 	Barbarian = { "dps" }, ["Witch Doctor"] = { "heal", "dps" }, Felsworn = { "tank", "dps" },
 	["Witch Hunter"] = { "tank", "dps" }, Stormbringer = { "dps" }, ["Knight of Xoroth"] = { "tank", "dps" },
 	Guardian = { "tank", "dps" }, Templar = { "tank", "dps" },
@@ -581,7 +581,7 @@ function lfgc.Wait(class)
 	local untils = SquidBotsLiteDB.lfgClassUntil
 	if type(untils) ~= "table" then return end
 	local left = untils[class] and untils[class] - time()
-	if left and left > 0 and left <= lfgc.COOLDOWN + 5 then return math.ceil(left) end
+	if left and left > 0 and left <= 3600 then return math.ceil(left) end
 end
 
 function lfgc.SetUntil(class, at)
