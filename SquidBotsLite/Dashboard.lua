@@ -156,7 +156,12 @@ local function NoteClass(name, classId)
 	end
 end
 
+local function IsAlt(name)
+	return name and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name] and not name:find(" ", 1, true)
+end
+
 function D.OnStat(name, f)
+	if not IsAlt(name) then return end
 	local e = D.Entry(name)
 	e.level, e.xp, e.xpMax = tonumber(f[2]), tonumber(f[3]) or 0, tonumber(f[4]) or 0
 	e.money, e.free, e.slots = tonumber(f[5]) or 0, tonumber(f[6]), tonumber(f[7])
@@ -167,6 +172,7 @@ function D.OnStat(name, f)
 end
 
 function D.OnProf(name, f)
+	if not IsAlt(name) then return end
 	local e = D.Entry(name)
 	e.profFree = tonumber(f[2])
 	e.profs = {}
@@ -194,6 +200,7 @@ function D.NoteSelf()
 	local name = UnitName("player")
 	if not name or name == UNKNOWNOBJECT then return end
 	local e = D.Entry(name)
+	e.self = true
 	local level = UnitLevel("player")
 	e.level = level
 	local max = UnitXPMax("player") or 0
@@ -262,8 +269,12 @@ function D.Names()
 		end
 	end
 	for name in pairs(online) do Add(name) end
-	for name in pairs(store) do Add(name) end
-	for name in pairs(SquidBotsLiteDB.alts or {}) do Add(name) end
+	-- 2.9.5: only alts (older versions kept cards of random bots taken for alts), and the characters played.
+	local alts = SquidBotsLiteDB.alts or {}
+	for name, e in pairs(store) do
+		if (alts[name] or e.self) and not name:find(" ", 1, true) then Add(name) end
+	end
+	for name in pairs(alts) do Add(name) end
 	table.sort(list, function(a, b)
 		if (online[a] or false) ~= (online[b] or false) then return online[a] ~= nil end
 		local la, lb = (store[a] and store[a].level) or 0, (store[b] and store[b].level) or 0
