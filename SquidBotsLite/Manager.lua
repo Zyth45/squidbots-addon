@@ -21,7 +21,7 @@ local STRINGS = {
 		PET_CAT_craft = "Professions", PETS_FAV = "Favourite", PETS_USE = "Use", PETS_DISMISS = "Dismiss",
 		PETS_AUTO = "Uses them by itself", PETS_IS_FAV = "favourite", PETS_IS_OUT = "out", PETS_UNKNOWN = "not learned",
 		PETS_HINT = "One favourite per use: the alt summons it by itself when needed (loot out of combat, class and profession books when it can learn something). Use calls it now.",
-		PETS_NO_CMD = "No answer: this realm's CoA Bots has no pet command yet (3.0 or later).",
+		PETS_NO_CMD = "No answer: this realm's CoA Bots has no pet command yet (3.0 or later).", PETS_ERR = "Refused: %s.",
 		FOR_GROUND = "favourite on the ground", FOR_FLYING = "favourite in the air",
 		MOUNT_SEARCH = "Search a mount...", MOUNT_NONE = "No mount matches \"%s\".",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
@@ -75,7 +75,7 @@ local STRINGS = {
 		PET_CAT_craft = "Métiers", PETS_FAV = "Favori", PETS_USE = "Sortir", PETS_DISMISS = "Renvoyer",
 		PETS_AUTO = "Les utilise tout seul", PETS_IS_FAV = "favori", PETS_IS_OUT = "sorti", PETS_UNKNOWN = "pas appris",
 		PETS_HINT = "Un favori par usage : l'alt le sort tout seul au besoin (butin hors combat, livres de classe et de métiers quand il peut apprendre). Sortir l'appelle maintenant.",
-		PETS_NO_CMD = "Pas de réponse : le CoA Bots de ce royaume n'a pas encore la commande pet (3.0 ou plus).",
+		PETS_NO_CMD = "Pas de réponse : le CoA Bots de ce royaume n'a pas encore la commande pet (3.0 ou plus).", PETS_ERR = "Refusé : %s.",
 		FOR_GROUND = "préférée au sol", FOR_FLYING = "préférée en vol",
 		MOUNT_SEARCH = "Chercher une monture...", MOUNT_NONE = "Aucune monture ne correspond à « %s ».",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
@@ -554,7 +554,7 @@ tradeWatch:SetScript("OnEvent", function()
 	-- A trade with one of the group's bots opens its sheet on the bags (/sbl sheettrade off to stop).
 	local partner = UnitName("NPC")
 	if partner and SquidBotsLiteDB.sheetOnTrade ~= false and SquidBotsLite_OpenSheet and UnitOf(partner)
-		and (partner:find(" Bot$") or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[partner])) then
+		and ((SquidBotsLite_IsBot and SquidBotsLite_IsBot(partner)) or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[partner])) then
 		tab = "bags"
 		SquidBotsLite_OpenSheet(partner)
 	end
@@ -1749,6 +1749,7 @@ local PT = SquidBotsLite_Pets
 
 function PT.Reset()
 	PT.list, PT.pending, PT.fav, PT.out, PT.auto, PT.askedAt, PT.answered = nil, nil, {}, 0, true, nil, false
+	PT.err, PT.errPending, PT.favPending = nil, nil, nil
 end
 
 function PT.Send(command)
@@ -1783,9 +1784,13 @@ function PT.OnLine(name, f)
 		PT.out = tonumber(f[3] or "") or 0
 	elseif f[2] == "auto" then
 		PT.auto = f[3] ~= "0"
+	elseif f[2] == "err" then
+		-- A refused use / dismiss / set (in combat, in a raid...): shown until the next answer.
+		PT.errPending = f[3] or "?"
 	elseif f[2] == "-" then
 		PT.list, PT.pending = PT.pending or PT.list or {}, nil
 		PT.fav, PT.favPending = PT.favPending or PT.fav, nil
+		PT.err, PT.errPending = PT.errPending, nil
 		PT.answered = true
 		if sheet and sheet:IsShown() and tab == "pets" then PT.Render(pages.pets) end
 	end
@@ -1896,7 +1901,7 @@ function PT.Render(page)
 	if answered then page.auto:Enable() else page.auto:Disable() end
 	page.autoText:SetText(T("PETS_AUTO"))
 	local silent = not answered and PT.askedAt and GetTime() - PT.askedAt > PT.WAIT - 0.5
-	page.note:SetText(silent and T("PETS_NO_CMD") or "")
+	page.note:SetText(silent and T("PETS_NO_CMD") or PT.err and ("|cffff6060" .. string.format(T("PETS_ERR"), PT.err) .. "|r") or "")
 end
 
 function SquidBotsLite_OpenSheet(name)

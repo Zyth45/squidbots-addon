@@ -102,6 +102,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 **3.0** (in progress, for CoA Bots 3.0)
 - **Pets** tab on the bot sheet (between Mounts and Info): the alt's companions by use (loot, quests, class trainer, professions: Lootbot 3000, Kleptomanic Demon, Wondrous Wisdomball, the Books of Ascension and Conquest, Book of Artisans). One favourite per use, that the alt summons by itself when needed; Use calls one now, Dismiss sends it away. Needs CoA Bots 3.0.
+- **Bots without the "Bot" surname**: the addon asks the server which members of the group are bots (an unseen addon message), so roles, sheets and the alts cleanup keep working when the realm gives random bots no surname or a common one (`AiPlayerbot.CoaBotSurname` 0 or 2). An older realm: the " Bot" surname still tells. Nothing is ever whispered to a real player.
 - **LFG**: not in the Zone or Newcomers channel, the addon joins Newcomers (or your /sbl channel) and sends the ask, instead of stopping.
 
 **2.9.5** (2026-11-08, for CoA Bots 2.9.5)

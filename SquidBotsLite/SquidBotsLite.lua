@@ -528,8 +528,8 @@ end
 
 -- 3.0: "lfg bot ..." goes in the Zone or Newcomers channel (the server listens there). Not in one: the addon joins
 -- the chosen one (/sbl channel) or Newcomers, shows it in the main chat frame, and sends once the client lists it.
-local JOIN_WAIT = 5
 local joinWait = CreateFrame("Frame")
+joinWait.WAIT = 5
 joinWait:Hide()
 local function SendLfg(message, after)
 	local id, name = FindChannel()
@@ -548,7 +548,7 @@ local function SendLfg(message, after)
 	JoinChannelByName(want, nil, DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME:GetID())
 	if DEFAULT_CHAT_FRAME and ChatFrame_AddChannel then ChatFrame_AddChannel(DEFAULT_CHAT_FRAME, want) end
 	Print(string.format(L.JOINING, want))
-	joinWait.message, joinWait.after, joinWait.want, joinWait.untilAt = message, after, want, GetTime() + JOIN_WAIT
+	joinWait.message, joinWait.after, joinWait.want, joinWait.untilAt = message, after, want, GetTime() + joinWait.WAIT
 	joinWait:Show()
 end
 -- The wait for an offer after an ask (set below Ask).
@@ -958,6 +958,70 @@ local EXCLUDED_SPECS = { Eternal = true }
 local REAPPLY_ORDERS = { ["co +passive"] = true, ["nc -coa auto pull"] = true, ["co -wait for attack,+avoid aoe"] = true, stay = true }
 local SPEC_ROWS = 4
 local knownBot = {}
+-- 3.0: who is a bot, asked to the server instead of read from the name (AiPlayerbot.CoaBotSurname 0 or 2 gives
+-- random bots no "Bot" surname, or a common one). The addon sends "WHO?" on the group's addon channel (SQBA, unseen
+-- by players); each bot of the group whispers back "IAM <random|alt> <master|->". Kept per realm. A realm that
+-- never answered (older CoA Bots): the " Bot" surname still tells. Nothing is ever whispered to a member that
+-- is not known as a bot. Protocol: docs/BOT-DETECTION-3.0.md.
+local who = { asked = 0, ASK_GAP = 10, RETRY = 300, askedName = {} }
+
+function who.Store()
+	SquidBotsLiteDB.botKind = SquidBotsLiteDB.botKind or {}
+	local realm = GetRealmName() or "?"
+	SquidBotsLiteDB.botKind[realm] = SquidBotsLiteDB.botKind[realm] or {}
+	return SquidBotsLiteDB.botKind[realm]
+end
+
+function who.Supported()
+	return SquidBotsLiteDB.whoRealms and SquidBotsLiteDB.whoRealms[GetRealmName() or "?"] == true
+end
+
+-- "random", "alt", or nil (not known as a bot).
+function who.Kind(name)
+	if not name then return end
+	local kind = who.Store()[name]
+	if kind then return kind end
+	if not who.Supported() and name:find(" Bot$") then return "random" end
+end
+
+function who.Ask()
+	local raid = GetNumRaidMembers() > 0
+	if not raid and GetNumPartyMembers() == 0 then return end
+	local now = GetTime()
+	if now - who.asked < who.ASK_GAP then return end
+	local store, unknown = who.Store(), {}
+	local count = raid and GetNumRaidMembers() or GetNumPartyMembers()
+	for i = 1, count do
+		local name = UnitName((raid and "raid" or "party") .. i)
+		if name and name ~= UNKNOWNOBJECT and name ~= UnitName("player") and not store[name]
+			and not (who.askedName[name] and now - who.askedName[name] < who.RETRY) then
+			table.insert(unknown, name)
+		end
+	end
+	if #unknown == 0 then return end
+	who.asked = now
+	for _, name in ipairs(unknown) do who.askedName[name] = now end
+	SendAddonMessage("SQBA", "WHO?", raid and "RAID" or "PARTY")
+end
+
+function who.OnAddon(prefix, message, channel, sender)
+	if prefix ~= "SQBA" or channel ~= "WHISPER" or not sender then return end
+	local kind = message and message:match("^IAM\t(%a+)")
+	if kind ~= "random" and kind ~= "alt" then return end
+	who.Store()[sender] = kind
+	knownBot[sender] = true
+	SquidBotsLiteDB.whoRealms = SquidBotsLiteDB.whoRealms or {}
+	SquidBotsLiteDB.whoRealms[GetRealmName() or "?"] = true
+end
+
+who.frame = CreateFrame("Frame")
+for _, event in ipairs({ "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do
+	who.frame:RegisterEvent(event)
+end
+who.frame:SetScript("OnEvent", function(_, event, ...)
+	if not SquidBotsLiteDB then return end
+	if event == "CHAT_MSG_ADDON" then who.OnAddon(...) else who.Ask() end
+end)
 local specsByName, specAskedAt, specHideUntil, pendingRole, reapplyAt, specAskedOnce, specSilent = {}, {}, {}, {}, {}, {}, {}
 local specsFrame, specRows = nil, {}
 local balancePending
@@ -999,9 +1063,10 @@ end
 -- A bot of the player's group, CoA class or WotLK class alike.
 local function IsCoaBot(name)
 	-- An alt of this account (seen offline in My alts, or logged in by the player) is a bot of theirs too.
-	return knownBot[name] or name:find(" Bot$") ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]) == true
+	return knownBot[name] or who.Kind(name) ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]) == true
 end
 function SquidBotsLite_IsBot(name) return name and IsCoaBot(name) end
+function SquidBotsLite_BotKind(name) return who.Kind(name) end
 
 -- The three trees of a WotLK class bot, named in the addon's language: no list to wait for.
 local function WcrList(token)
@@ -2257,7 +2322,7 @@ local function ParseRoster(text)
 			if not SquidBotsLiteDB.alts[list[i].name] and signs[list[i].name] ~= "-" and inParty[list[i].name] then table.remove(list, i) end
 		end
 	end
-	-- 2.9.5: every roster. "Enminthi Bot" (the random bots' surname, CoaBotSurname) was taken for an alt by older
+	-- 2.9.5: every roster (3.0: a random bot as the server says, else its " Bot" surname). "Enminthi Bot" was taken for an alt by older
 	-- versions (a team's "add: X - ok", kept as a linked account's). The roster wins: a name it gives as this
 	-- account's ("-", or "+" out of the group) stays an alt whatever its shape ("Dez Alt", "Squid Herbs"). A " Bot"
 	-- name it does not give so is a random bot; any other name it does not list and not linked is gone.
@@ -2265,7 +2330,7 @@ local function ParseRoster(text)
 		return signs[name] == "-" or (signs[name] == "+" and not inParty[name])
 	end
 	local function RandomBot(name)
-		return name:find(" Bot$") ~= nil and not OwnInRoster(name)
+		return who.Kind(name) == "random" and not OwnInRoster(name)
 	end
 	for name in pairs(SquidBotsLiteDB.alts) do
 		if RandomBot(name) or (next(signs) and not signs[name] and not (SquidBotsLiteDB.linkedAlts and SquidBotsLiteDB.linkedAlts[name])) then
@@ -2878,11 +2943,12 @@ local function OnSystem(message)
 		for _, alt in ipairs(roster) do alt.pending = nil end
 		RefreshAlts()
 	end
-	-- A " Bot" name that is not this account's (last roster) and not logged in with "addaccount": a random bot.
-	if added and added:find(" Bot$") and not message:find("^addaccount: ") then
+	-- "add" of a name that is not this account's (last roster) and not "addaccount": a random bot, whatever its name
+	-- (3.0: the surname may be gone). Before any roster, the server's answer or the " Bot" surname tells.
+	if added and not message:find("^addaccount: ") then
 		local own = false
 		for _, alt in ipairs(roster) do if alt.name == added and not alt.linked then own = true end end
-		if not own then added = nil end
+		if not own and (#roster > 0 or who.Kind(added) == "random") then added = nil end
 	end
 	if added then
 		SquidBotsLiteDB.alts = SquidBotsLiteDB.alts or {}
@@ -2928,7 +2994,7 @@ end)
 -- kept out of the chat. Only members known as bots are asked (a bot answer, the "Bot" surname, an alt of
 -- this account): a real player of the group would see the whisper (PTR report). /sbl roles off stops it.
 local function LooksLikeBot(name)
-	return knownBot[name] or name:find(" Bot$") ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name])
+	return IsCoaBot(name)
 end
 
 local function ProbeRoles()
