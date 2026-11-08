@@ -102,6 +102,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 **2.9.5** (2026-11-08, for CoA Bots 2.9.5)
 - **Start event** (Main Tank bar): when Dungeon clear has a boss event ready (doors, gongs, waves) while you are the main tank, a button under the clear's line says "Start event: <name>". One click and the clear plays it ("dc go" in the group chat); it greys out while the event runs and goes away when it ends or is cancelled. Needs CoA Bots 2.9.5.
+- **Loot pet** (bot sheet, Mounts tab > Loot pet): the companion your alt summons out of combat, picked like the favourite mount. Lootbot 3000 and the Kleptomanic Demon loot by themselves and come first; Automatic choice or No pet. A search box filters a large collection. Needs CoA Bots 2.9.5 with AiPlayerbot.AltLootCompanion = 1.
 - **Alts bar**: random bots of a raid no longer show among your alts. A team saved from a group could hold random bots, and logging it in made them alts for ever: teams now save and log in only your alts, and one check against the server's character list (a few seconds after login) removes the wrong names already kept. An alt online in your group at that moment comes back once it is seen offline or you log it in again.
 - Main Tank bar: with CoA Bots 2.9.5 the bots' answer has an end, so an off-tank that left goes at once and "no bot can tank" is no longer mixed up with "no answer yet".
 

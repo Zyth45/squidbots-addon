@@ -23,6 +23,13 @@ local STRINGS = {
 		MOUNT_HINT = "Click a mount: your bot rides it from now on. One ground and one flying favourite; a ground-and-flying mount is both. Automatic choice: the bot picks again.",
 		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
 		NO_MOUNTS = "No mount known: give this alt a mount, it rides when you ride.",
+		LOOT_PET = "Loot pet", BACK_MOUNTS = "Mounts", PET_AUTO = "Automatic choice", PET_OFF = "No pet",
+		PET_SEARCH = "Search a companion...", PET_NONE = "No companion matches \"%s\".", PET_LOOTS = "loots by itself",
+		PET_FAV = "favourite", NO_PETS = "No companion known: give this alt one (or Lootbot 3000).",
+		NO_PET_CMD = "No answer: this realm's CoA Bots has no loot pet yet (2.9.5 or later).",
+		PET_IS_OFF = "This alt summons no companion. Automatic choice turns it back on.",
+		PET_HINT = "Click a companion: this alt summons it out of combat. Lootbot 3000 and the Kleptomanic Demon loot by themselves. The realm needs AiPlayerbot.AltLootCompanion = 1.",
+		TIP_LOOT_PET = "The companion this alt summons out of combat, and that loots for it when it can.",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
 		NOT_A_MEMBER = "%s is not in your group.",
 		STRATS = "Strategies", COMBAT = "In combat", NONCOMBAT = "Out of combat", ADD = "Add...",
@@ -64,6 +71,13 @@ local STRINGS = {
 		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Une préférée au sol, une en vol ; une monture sol et vol compte pour les deux. Choix automatique : le bot choisit à nouveau.",
 		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
 		NO_MOUNTS = "Aucune monture connue : donnez une monture à cet alt, il monte quand vous montez.",
+		LOOT_PET = "Familier de butin", BACK_MOUNTS = "Montures", PET_AUTO = "Choix automatique", PET_OFF = "Aucun familier",
+		PET_SEARCH = "Chercher une mascotte...", PET_NONE = "Aucune mascotte ne correspond à « %s ».", PET_LOOTS = "ramasse seul",
+		PET_FAV = "préférée", NO_PETS = "Aucune mascotte connue : donnez-en une à cet alt (ou Lootbot 3000).",
+		NO_PET_CMD = "Pas de réponse : le CoA Bots de ce royaume n'a pas encore le familier de butin (2.9.5 ou plus).",
+		PET_IS_OFF = "Cet alt n'invoque aucune mascotte. Choix automatique le remet.",
+		PET_HINT = "Cliquez une mascotte : cet alt l'invoque hors combat. Lootbot 3000 et le Démon kleptomane ramassent seuls. Le royaume doit avoir AiPlayerbot.AltLootCompanion = 1.",
+		TIP_LOOT_PET = "La mascotte que cet alt invoque hors combat, et qui ramasse pour lui quand elle sait le faire.",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
 		STRATS = "Stratégies", COMBAT = "En combat", NONCOMBAT = "Hors combat", ADD = "Ajouter...",
@@ -120,6 +134,9 @@ local strats = { co = {}, nc = {} }
 local bagMode = "bags"
 local queue = {}
 local mountOffset = 0
+-- 2.9.5: the loot pet (the Mounts tab's second list). pets: { id, entry, name, loots, fav }; petState: the alt's
+-- favourite and whether it summons; petAskedAt: no answer after a while, an older realm.
+local pets, petsPending, petState, petAskedAt, petMode = {}, nil, nil, nil, false
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -1195,9 +1212,10 @@ local RenderMounts
 -- The mounts the search box keeps: a part of the name, any case. Empty box: all of them.
 local function ShownMounts(page)
 	local search = page.search and strlower(strtrim(page.search:GetText() or "")) or ""
-	if search == "" then return mounts, search end
+	local source = petMode and pets or mounts
+	if search == "" then return source, search end
 	local list = {}
-	for _, m in ipairs(mounts) do
+	for _, m in ipairs(source) do
 		if strlower(m.name or ""):find(search, 1, true) then table.insert(list, m) end
 	end
 	return list, search
@@ -1247,7 +1265,12 @@ local function BuildMounts(page)
 		end)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		row:SetScript("OnClick", function(self)
-			if self.mount then Whisper("mount " .. self.mount.id); AfterChange() end
+			if self.mount and petMode then
+				-- The alt answers every "loot pet" command with its list: no need to ask again.
+				Whisper("loot pet " .. self.mount.id)
+			elseif self.mount then
+				Whisper("mount " .. self.mount.id); AfterChange()
+			end
 		end)
 		row:EnableMouseWheel(true)
 		row:SetScript("OnMouseWheel", function(_, delta)
@@ -1269,10 +1292,41 @@ local function BuildMounts(page)
 	page.auto:SetWidth(150)
 	page.auto:SetHeight(22)
 	page.auto:SetPoint("TOPLEFT", 10, -26 - (MOUNT_ROWS * 24) - 6)
-	page.auto:SetScript("OnClick", function() Whisper("mount clear"); AfterChange() end)
+	page.auto:SetScript("OnClick", function()
+		if petMode then Whisper("loot pet auto") else Whisper("mount clear"); AfterChange() end
+	end)
+	-- 2.9.5: the loot pet: the same list, the alt's companions.
+	page.off = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.off:SetWidth(110)
+	page.off:SetHeight(22)
+	page.off:SetPoint("LEFT", page.auto, "RIGHT", 6, 0)
+	page.off:SetScript("OnClick", function() Whisper("loot pet off") end)
+	page.switch = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+	page.switch:SetWidth(120)
+	page.switch:SetHeight(20)
+	page.switch:SetPoint("TOPRIGHT", -30, -2)
+	page.switch:SetScript("OnClick", function()
+		petMode = not petMode
+		mountOffset = 0
+		page.search:SetText("")
+		page.search:ClearFocus()
+		if petMode then SquidBotsLite_AskLootPets() else Ask("mounts", "mount ?") end
+		RenderMounts(page)
+	end)
+	page.switch:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(T("LOOT_PET"), 1, 0.82, 0)
+		GameTooltip:AddLine(T("TIP_LOOT_PET"), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	page.switch:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	page.hint:SetPoint("TOPLEFT", page.auto, "TOPRIGHT", 8, 2)
 	page.hint:SetWidth(270)
+	page.hintPets = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.hintPets:SetPoint("TOPLEFT", page.auto, "BOTTOMLEFT", 0, -4)
+	page.hintPets:SetWidth(380)
+	page.hintPets:SetJustifyH("LEFT")
 	page.hint:SetJustifyH("LEFT")
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
@@ -1283,14 +1337,36 @@ RenderMounts = function(page)
 	local shown, search = ShownMounts(page)
 	page.count = #shown
 	mountOffset = math.max(0, math.min(mountOffset, #shown - MOUNT_ROWS))
-	page.searchHint:SetText(search == "" and not page.typing and T("MOUNT_SEARCH") or "")
-	if #mounts == 0 then
-		page.note:SetText(capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
+	page.switch:SetText(T(petMode and "BACK_MOUNTS" or "LOOT_PET"))
+	if petMode then
+		page.searchHint:SetText(search == "" and not page.typing and T("PET_SEARCH") or "")
+		if petsPending == nil and #pets == 0 and petAskedAt and GetTime() - petAskedAt > 6 and not petState then
+			page.note:SetText(T("NO_PET_CMD"))
+		elseif #pets == 0 then
+			page.note:SetText(petState and T("NO_PETS") or "")
+		elseif #shown == 0 then
+			page.note:SetText(string.format(T("PET_NONE"), page.search:GetText()))
+		else
+			page.note:SetText("")
+		end
+		page.auto:SetText(T("PET_AUTO"))
+		page.off:SetText(T("PET_OFF"))
+		page.off:Show()
+		page.hint:SetText("")
+		page.hintPets:SetText((petState and not petState.on) and ("|cffffd100" .. T("PET_IS_OFF") .. "|r") or T("PET_HINT"))
+		page.hintPets:Show()
 	else
-		page.note:SetText(#shown == 0 and string.format(T("MOUNT_NONE"), page.search:GetText()) or "")
+		page.searchHint:SetText(search == "" and not page.typing and T("MOUNT_SEARCH") or "")
+		if #mounts == 0 then
+			page.note:SetText(capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
+		else
+			page.note:SetText(#shown == 0 and string.format(T("MOUNT_NONE"), page.search:GetText()) or "")
+		end
+		page.auto:SetText(T("AUTO_MOUNT"))
+		page.off:Hide()
+		page.hint:SetText(T("MOUNT_HINT"))
+		page.hintPets:Hide()
 	end
-	page.auto:SetText(T("AUTO_MOUNT"))
-	page.hint:SetText(T("MOUNT_HINT"))
 	local kinds = { ground = T("GROUND"), flying = T("FLYING"), both = T("BOTH") }
 	-- The server marks a favourite without saying for what. A ground-and-flying favourite next to a ground one
 	-- is the flying favourite (and the other way round): the list says which, so the old one does not look stuck.
@@ -1312,8 +1388,13 @@ RenderMounts = function(page)
 		if m then
 			row.icon:SetTexture(select(3, GetSpellInfo(m.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 			row.name:SetText(m.name)
-			row.kind:SetText((kinds[m.kind] or m.kind or "") .. (m.preferred and ("  |cffffd100" .. FavouriteFor(m) .. "|r") or ""))
-			if m.preferred then row.check:Show() else row.check:Hide() end
+			if petMode then
+				row.kind:SetText((m.loots and T("PET_LOOTS") or "") .. (m.fav and ("  |cffffd100" .. T("PET_FAV") .. "|r") or ""))
+				if m.fav then row.check:Show() else row.check:Hide() end
+			else
+				row.kind:SetText((kinds[m.kind] or m.kind or "") .. (m.preferred and ("  |cffffd100" .. FavouriteFor(m) .. "|r") or ""))
+				if m.preferred then row.check:Show() else row.check:Hide() end
+			end
 			row:Show()
 		else
 			row:Hide()
@@ -1468,7 +1549,7 @@ local function Load()
 	elseif tab == "quests" then
 		Ask("quests", "quests all")
 	elseif tab == "mounts" then
-		Ask("mounts", "mount ?")
+		if petMode then SquidBotsLite_AskLootPets() else Ask("mounts", "mount ?") end
 	elseif tab == "talents" then
 		Ask("talents", "talents ?")
 	elseif tab == "strats" then
@@ -1559,6 +1640,51 @@ local function Build()
 end
 
 -- Opened from a bot's menu, the My alts panel, or /sbl bot <name>.
+-- 2.9.5: the loot pet. The alt answers "loot pet list" (and every "loot pet ..." command) on the addon channel:
+-- "LP pet <spellId> <entry> <name> <loots 1|0>" per companion, "LP fav <spellId|0> <summons 1|0>", "LP -" (end).
+function SquidBotsLite_AskLootPets()
+	if not current then return end
+	if SquidBotsLite_Alts and SquidBotsLite_Alts.Handle and not SquidBotsLite_Alts.Handle.LP then
+		SquidBotsLite_Alts.Handle.LP = SquidBotsLite_OnLootPet
+	end
+	petAskedAt = GetTime()
+	Whisper("loot pet list")
+	-- No answer: the note says so (an older realm).
+	local name, wait = current, CreateFrame("Frame")
+	local t = 0
+	wait:SetScript("OnUpdate", function(self, delta)
+		t = t + delta
+		if t < 6.5 then return end
+		self:SetScript("OnUpdate", nil)
+		if current == name and sheet and sheet:IsShown() and tab == "mounts" and petMode then RenderMounts(pages.mounts) end
+	end)
+end
+
+function SquidBotsLite_OnLootPet(name, f)
+	if name ~= current then return end
+	if f[2] == "pet" then
+		petsPending = petsPending or {}
+		local id = tonumber(f[3] or "")
+		if id then
+			table.insert(petsPending, { id = id, entry = tonumber(f[4] or ""), name = (f[5] and f[5] ~= "") and f[5]
+				or GetSpellInfo(id) or ("#" .. id), loots = f[6] == "1" })
+		end
+	elseif f[2] == "fav" then
+		petState = { fav = tonumber(f[3] or "") or 0, on = f[4] ~= "0" }
+	elseif f[2] == "-" then
+		pets, petsPending = petsPending or {}, nil
+		petState = petState or { fav = 0, on = true }
+		for _, p in ipairs(pets) do p.fav = p.id == petState.fav end
+		-- The companions that loot by themselves first, then the favourite, then by name.
+		table.sort(pets, function(a, b)
+			if a.fav ~= b.fav then return a.fav end
+			if a.loots ~= b.loots then return a.loots end
+			return a.name < b.name
+		end)
+		if sheet and sheet:IsShown() and tab == "mounts" and petMode then RenderMounts(pages.mounts) end
+	end
+end
+
 function SquidBotsLite_OpenSheet(name)
 	if not name or name == "" then
 		name = UnitName("target")
@@ -1568,6 +1694,7 @@ function SquidBotsLite_OpenSheet(name)
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
 		if pages.mounts and pages.mounts.search then pages.mounts.search:SetText(""); pages.mounts.search:ClearFocus() end
+		pets, petsPending, petState, petAskedAt = {}, nil, nil, nil
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
 		bagMode = "bags"
