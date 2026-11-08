@@ -26,6 +26,8 @@ local STRINGS = {
 		FOR_GROUND = "favourite on the ground", FOR_FLYING = "favourite in the air",
 		MOUNT_SEARCH = "Search a mount...", MOUNT_NONE = "No mount matches \"%s\".",
 		GROUND = "ground", FLYING = "flying", BOTH = "ground and flying",
+		MOUNT_ALL = "All", MOUNT_F_GROUND = "Ground", MOUNT_F_FLYING = "Flying", MOUNT_COUNT = "%d mounts",
+		MOUNT_FAVS = "Favourites:  %s on the ground,  %s in the air", MOUNT_AUTO_WORD = "automatic",
 		MOUNT_HINT = "Click a mount: your bot rides it from now on. One ground and one flying favourite; a ground-and-flying mount is both. Automatic choice: the bot picks again.",
 		NO_MOUNT_CMD = "No answer: this server's CoA Bots has no mount command yet (2.1 or later).",
 		NO_MOUNTS = "No mount known: give this alt a mount, it rides when you ride.",
@@ -81,6 +83,8 @@ local STRINGS = {
 		FOR_GROUND = "préférée au sol", FOR_FLYING = "préférée en vol",
 		MOUNT_SEARCH = "Chercher une monture...", MOUNT_NONE = "Aucune monture ne correspond à « %s ».",
 		GROUND = "sol", FLYING = "vol", BOTH = "sol et vol",
+		MOUNT_ALL = "Toutes", MOUNT_F_GROUND = "Sol", MOUNT_F_FLYING = "Vol", MOUNT_COUNT = "%d montures",
+		MOUNT_FAVS = "Préférées :  %s au sol,  %s en vol", MOUNT_AUTO_WORD = "automatique",
 		MOUNT_HINT = "Cliquez une monture : votre bot la prend désormais. Une préférée au sol, une en vol ; une monture sol et vol compte pour les deux. Choix automatique : le bot choisit à nouveau.",
 		NO_MOUNT_CMD = "Pas de réponse : le CoA Bots de ce serveur n'a pas encore la commande des montures (2.1 ou plus).",
 		NO_MOUNTS = "Aucune monture connue : donnez une monture à cet alt, il monte quand vous montez.",
@@ -125,7 +129,7 @@ local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interfac
 -- The bot answers line by line; a listing is over once it stays quiet this long. The server drops a line it
 -- already sent in the last 2 s (AiPlayerbot.RepeatDelay), so a new request waits that long.
 local QUIET, GIVE_UP, REPEAT_DELAY = 0.7, 6, 2.1
-local BAG_COLS, BAG_ROWS, QUEST_ROWS, MOUNT_ROWS = 8, 6, 14, 10
+local BAG_COLS, BAG_ROWS, QUEST_ROWS, MOUNT_ROWS = 8, 6, 14, 12
 -- Inventory slot ids of the 3.3.5 client, left column, right column, then weapons.
 local GEAR_LEFT = { 1, 2, 3, 15, 5, 4, 19, 9 }
 local GEAR_RIGHT = { 10, 6, 7, 8, 11, 12, 13, 14 }
@@ -148,9 +152,8 @@ local strats = { co = {}, nc = {} }
 local bagMode = "bags"
 local queue = {}
 local mountOffset = 0
--- 2.9.5: the loot pet (the Mounts tab's second list). pets: { id, entry, name, loots, fav }; petState: the alt's
--- favourite and whether it summons; petAskedAt: no answer after a while, an older realm.
-local pets, petsPending, petState, petAskedAt, petMode, petApp = {}, nil, nil, nil, false, false
+-- 3.0: the Mounts tab's filter: "all", "ground" or "flying" (the loot pet moved to the Pets tab).
+local mountKind = "all"
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -1223,48 +1226,69 @@ end
 
 local RenderMounts
 
--- The mounts the search box keeps: a part of the name, any case. Empty box: all of them.
+-- The mounts shown: the kind chosen (a ground-and-flying mount is in both) and the search box (a part of the name,
+-- any case). The favourites first, then by name.
 local function ShownMounts(page)
 	local search = page.search and strlower(strtrim(page.search:GetText() or "")) or ""
-	local source = petMode and pets or mounts
-	if search == "" or (petMode and (search:find("|hspell:", 1, true) or search:find("^%d+$"))) then return source, search end
 	local list = {}
-	for _, m in ipairs(source) do
-		if strlower(m.name or ""):find(search, 1, true) then table.insert(list, m) end
+	for _, m in ipairs(mounts) do
+		local kindOk = mountKind == "all" or m.kind == mountKind or m.kind == "both"
+		if kindOk and (search == "" or strlower(m.name or ""):find(search, 1, true)) then table.insert(list, m) end
 	end
+	table.sort(list, function(x, y)
+		if (x.preferred and 1 or 0) ~= (y.preferred and 1 or 0) then return x.preferred == true end
+		return (x.name or "") < (y.name or "")
+	end)
 	return list, search
 end
 
+local MOUNT_COLORS = { ground = { 0.85, 0.7, 0.45 }, flying = { 0.5, 0.8, 1 }, both = { 0.55, 0.9, 0.55 } }
+
 local function BuildMounts(page)
 	page.search = CreateFrame("EditBox", "SquidBotsLiteMountSearch", page, "InputBoxTemplate")
-	page.search:SetWidth(220)
+	page.search:SetWidth(190)
 	page.search:SetHeight(20)
 	page.search:SetPoint("TOPLEFT", 18, -2)
 	page.search:SetAutoFocus(false)
 	page.search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
-	page.search:SetScript("OnEnterPressed", function(self)
-		-- The loot pet: a companion's link or spell id makes it the favourite (any companion loots with the
-		-- Loot-Transfigurator, the list shows only those that loot by themselves).
-		local text = self:GetText() or ""
-		local id = petMode and (text:match("|Hspell:(%d+)") or text:match("^%s*(%d+)%s*$"))
-		if id then
-			Whisper("loot pet " .. id)
-			self:SetText("")
-		end
-		self:ClearFocus()
-	end)
+	page.search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 	page.search:SetScript("OnTextChanged", function() mountOffset = 0; RenderMounts(page) end)
 	page.search:SetScript("OnEditFocusGained", function() page.typing = true; RenderMounts(page) end)
 	page.search:SetScript("OnEditFocusLost", function() page.typing = nil; RenderMounts(page) end)
 	page.searchHint = page.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	page.searchHint:SetPoint("LEFT", 4, 0)
+	-- The kind filter: All, Ground, Flying.
+	page.kinds = {}
+	for i, kind in ipairs({ "all", "ground", "flying" }) do
+		local b = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+		b:SetWidth(62)
+		b:SetHeight(20)
+		b:SetPoint("LEFT", page.search, "RIGHT", 10 + (i - 1) * 64, 0)
+		b:SetNormalFontObject(GameFontNormalSmall)
+		b:SetHighlightFontObject(GameFontHighlightSmall)
+		b:SetScript("OnClick", function() mountKind = kind; mountOffset = 0; RenderMounts(page) end)
+		b.kind = kind
+		page.kinds[i] = b
+	end
+	page.count = 0
+	page.countText = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.countText:SetPoint("TOPRIGHT", -12, -6)
+	page.favs = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	page.favs:SetPoint("TOPLEFT", 14, -28)
+	page.favs:SetWidth(470)
+	page.favs:SetJustifyH("LEFT")
 	page.rows = {}
 	for i = 1, MOUNT_ROWS do
 		local row = CreateFrame("Button", nil, page)
-		row:SetWidth(370)
-		row:SetHeight(22)
-		row:SetPoint("TOPLEFT", 10, -26 - (i - 1) * 24)
+		row:SetWidth(456)
+		row:SetHeight(23)
+		row:SetPoint("TOPLEFT", 10, -46 - (i - 1) * 24)
 		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		-- Every other row a shade lighter: the eye follows the line to its kind.
+		row.stripe = row:CreateTexture(nil, "BACKGROUND")
+		row.stripe:SetAllPoints()
+		row.stripe:SetTexture("Interface\\Buttons\\WHITE8X8")
+		row.stripe:SetVertexColor(1, 1, 1, i % 2 == 0 and 0.04 or 0)
 		row.icon = row:CreateTexture(nil, "ARTWORK")
 		row.icon:SetWidth(20)
 		row.icon:SetHeight(20)
@@ -1276,10 +1300,12 @@ local function BuildMounts(page)
 		row.check:SetPoint("RIGHT", -4, 0)
 		row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		row.name:SetPoint("LEFT", 28, 0)
-		row.name:SetWidth(220)
+		row.name:SetWidth(240)
 		row.name:SetJustifyH("LEFT")
-		row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-		row.kind:SetPoint("LEFT", 252, 0)
+		row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		row.kind:SetPoint("LEFT", 276, 0)
+		row.kind:SetWidth(156)
+		row.kind:SetJustifyH("LEFT")
 		row:SetScript("OnEnter", function(self)
 			if self.mount then
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -1289,12 +1315,7 @@ local function BuildMounts(page)
 		end)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		row:SetScript("OnClick", function(self)
-			if self.mount and petMode then
-				-- The alt answers every "loot pet" command with its list: no need to ask again.
-				Whisper("loot pet " .. self.mount.id)
-			elseif self.mount then
-				Whisper("mount " .. self.mount.id); AfterChange()
-			end
+			if self.mount then Whisper("mount " .. self.mount.id); AfterChange() end
 		end)
 		row:EnableMouseWheel(true)
 		row:SetScript("OnMouseWheel", function(_, delta)
@@ -1304,10 +1325,10 @@ local function BuildMounts(page)
 		page.rows[i] = row
 	end
 	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
-	page.up:SetPoint("TOPRIGHT", -6, -26)
+	page.up:SetPoint("TOPLEFT", page.rows[1], "TOPRIGHT", 4, 0)
 	page.up:SetScript("OnClick", function() mountOffset = math.max(0, mountOffset - MOUNT_ROWS); RenderMounts(page) end)
 	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
-	page.down:SetPoint("TOPRIGHT", -6, -26 - (MOUNT_ROWS * 24) + 16)
+	page.down:SetPoint("BOTTOMLEFT", page.rows[MOUNT_ROWS], "BOTTOMRIGHT", 4, 0)
 	page.down:SetScript("OnClick", function()
 		if mountOffset + MOUNT_ROWS < (page.count or 0) then mountOffset = mountOffset + MOUNT_ROWS end
 		RenderMounts(page)
@@ -1315,42 +1336,11 @@ local function BuildMounts(page)
 	page.auto = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.auto:SetWidth(150)
 	page.auto:SetHeight(22)
-	page.auto:SetPoint("TOPLEFT", 10, -26 - (MOUNT_ROWS * 24) - 6)
-	page.auto:SetScript("OnClick", function()
-		if petMode then Whisper("loot pet auto") else Whisper("mount clear"); AfterChange() end
-	end)
-	-- 2.9.5: the loot pet: the same list, the alt's companions.
-	page.off = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-	page.off:SetWidth(110)
-	page.off:SetHeight(22)
-	page.off:SetPoint("LEFT", page.auto, "RIGHT", 6, 0)
-	page.off:SetScript("OnClick", function() Whisper("loot pet off") end)
-	page.switch = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-	page.switch:SetWidth(120)
-	page.switch:SetHeight(20)
-	page.switch:SetPoint("TOPRIGHT", -30, -2)
-	page.switch:SetScript("OnClick", function()
-		petMode = not petMode
-		mountOffset = 0
-		page.search:SetText("")
-		page.search:ClearFocus()
-		if petMode then SquidBotsLite_AskLootPets() else Ask("mounts", "mount ?") end
-		RenderMounts(page)
-	end)
-	page.switch:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_TOP")
-		GameTooltip:SetText(T("LOOT_PET"), 1, 0.82, 0)
-		GameTooltip:AddLine(T("TIP_LOOT_PET"), 1, 1, 1, true)
-		GameTooltip:Show()
-	end)
-	page.switch:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	page.auto:SetPoint("TOPLEFT", page.rows[MOUNT_ROWS], "BOTTOMLEFT", 0, -8)
+	page.auto:SetScript("OnClick", function() Whisper("mount clear"); AfterChange() end)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.hint:SetPoint("TOPLEFT", page.auto, "TOPRIGHT", 8, 2)
-	page.hint:SetWidth(270)
-	page.hintPets = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.hintPets:SetPoint("TOPLEFT", page.auto, "BOTTOMLEFT", 0, -4)
-	page.hintPets:SetWidth(380)
-	page.hintPets:SetJustifyH("LEFT")
+	page.hint:SetPoint("TOPLEFT", page.auto, "TOPRIGHT", 10, 2)
+	page.hint:SetWidth(300)
 	page.hint:SetJustifyH("LEFT")
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
@@ -1361,37 +1351,20 @@ RenderMounts = function(page)
 	local shown, search = ShownMounts(page)
 	page.count = #shown
 	mountOffset = math.max(0, math.min(mountOffset, #shown - MOUNT_ROWS))
-	page.switch:SetText(T(petMode and "BACK_MOUNTS" or "LOOT_PET"))
-	if petMode then
-		page.searchHint:SetText(search == "" and not page.typing and T("PET_SEARCH") or "")
-		if petsPending == nil and #pets == 0 and petAskedAt and GetTime() - petAskedAt > 6 and not petState then
-			page.note:SetText(T("NO_PET_CMD"))
-		elseif #pets == 0 then
-			page.note:SetText(petState and T("NO_PETS") or "")
-		elseif #shown == 0 then
-			page.note:SetText(string.format(T("PET_NONE"), page.search:GetText()))
-		else
-			page.note:SetText("")
-		end
-		page.auto:SetText(T("PET_AUTO"))
-		page.off:SetText(T("PET_OFF"))
-		page.off:Show()
-		page.hint:SetText("")
-		page.hintPets:SetText((petState and not petState.on) and ("|cffffd100" .. T("PET_IS_OFF") .. "|r")
-			or (petState and petState.app) and T("PET_APP") or T("PET_HINT"))
-		page.hintPets:Show()
+	page.searchHint:SetText(search == "" and not page.typing and T("MOUNT_SEARCH") or "")
+	if #mounts == 0 then
+		page.note:SetText(capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
 	else
-		page.searchHint:SetText(search == "" and not page.typing and T("MOUNT_SEARCH") or "")
-		if #mounts == 0 then
-			page.note:SetText(capture == nil and sheet.status:GetText() == "" and T("NO_MOUNTS") or "")
-		else
-			page.note:SetText(#shown == 0 and string.format(T("MOUNT_NONE"), page.search:GetText()) or "")
-		end
-		page.auto:SetText(T("AUTO_MOUNT"))
-		page.off:Hide()
-		page.hint:SetText(T("MOUNT_HINT"))
-		page.hintPets:Hide()
+		page.note:SetText(#shown == 0 and string.format(T("MOUNT_NONE"), page.search:GetText()) or "")
 	end
+	local labels = { all = "MOUNT_ALL", ground = "MOUNT_F_GROUND", flying = "MOUNT_F_FLYING" }
+	for _, b in ipairs(page.kinds) do
+		b:SetText(T(labels[b.kind]))
+		if b.kind == mountKind then b:LockHighlight() else b:UnlockHighlight() end
+	end
+	page.countText:SetText(#mounts > 0 and string.format(T("MOUNT_COUNT"), #shown) or "")
+	page.auto:SetText(T("AUTO_MOUNT"))
+	page.hint:SetText(T("MOUNT_HINT"))
 	local kinds = { ground = T("GROUND"), flying = T("FLYING"), both = T("BOTH") }
 	-- The server marks a favourite without saying for what. A ground-and-flying favourite next to a ground one
 	-- is the flying favourite (and the other way round): the list says which, so the old one does not look stuck.
@@ -1407,18 +1380,35 @@ RenderMounts = function(page)
 		if flyingFav and not groundFav then return T("FOR_GROUND") end
 		return T("PREFERRED")
 	end
+	-- The line at the top: which mount for the ground, which for the air (automatic: none chosen).
+	local groundName, flyingName
+	for _, m in ipairs(mounts) do
+		if m.preferred then
+			local role = FavouriteFor(m)
+			if role == T("FOR_GROUND") then groundName = m.name
+			elseif role == T("FOR_FLYING") then flyingName = m.name
+			else groundName, flyingName = groundName or m.name, flyingName or m.name end
+		end
+	end
+	local auto = "|cff808080" .. T("MOUNT_AUTO_WORD") .. "|r"
+	page.favs:SetText(#mounts > 0 and string.format(T("MOUNT_FAVS"),
+		groundName and ("|cffffd100" .. groundName .. "|r") or auto, flyingName and ("|cffffd100" .. flyingName .. "|r") or auto) or "")
 	for i, row in ipairs(page.rows) do
 		local m = shown[mountOffset + i]
 		row.mount = m
 		if m then
 			row.icon:SetTexture(select(3, GetSpellInfo(m.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 			row.name:SetText(m.name)
-			if petMode then
-				row.kind:SetText((m.loots and T("PET_LOOTS") or "") .. (m.fav and ("  |cffffd100" .. T("PET_FAV") .. "|r") or ""))
-				if m.fav then row.check:Show() else row.check:Hide() end
+			local color = MOUNT_COLORS[m.kind] or { 0.7, 0.7, 0.7 }
+			row.kind:SetText(kinds[m.kind] or m.kind or "")
+			row.kind:SetTextColor(color[1], color[2], color[3])
+			if m.preferred then
+				row.name:SetTextColor(1, 0.82, 0)
+				row.kind:SetText((kinds[m.kind] or m.kind or "") .. "  |cffffd100" .. FavouriteFor(m) .. "|r")
+				row.check:Show()
 			else
-				row.kind:SetText((kinds[m.kind] or m.kind or "") .. (m.preferred and ("  |cffffd100" .. FavouriteFor(m) .. "|r") or ""))
-				if m.preferred then row.check:Show() else row.check:Hide() end
+				row.name:SetTextColor(1, 1, 1)
+				row.check:Hide()
 			end
 			row:Show()
 		else
@@ -1576,7 +1566,7 @@ local function Load()
 	elseif tab == "quests" then
 		Ask("quests", "quests all")
 	elseif tab == "mounts" then
-		if petMode then SquidBotsLite_AskLootPets() else Ask("mounts", "mount ?") end
+		Ask("mounts", "mount ?")
 	elseif tab == "pets" then
 		SquidBotsLite_Pets.Ask()
 	elseif tab == "talents" then
@@ -1667,65 +1657,6 @@ local function Build()
 	-- The flat buttons of the other panels (SquidBotsLite.lua).
 	if SquidBotsLite_UI then SquidBotsLite_UI.FlattenAll(sheet) end
 	sheet:Hide()
-end
-
--- Opened from a bot's menu, the My alts panel, or /sbl bot <name>.
-local insertLink = ChatEdit_InsertLink
-ChatEdit_InsertLink = function(link, ...)
-	local box = pages.mounts and pages.mounts.search
-	if petMode and link and box and box:IsVisible() and box:HasFocus() then
-		box:SetText(link)
-		return true
-	end
-	return insertLink(link, ...)
-end
-
--- 2.9.5: the loot pet. The alt answers "loot pet list" (and every "loot pet ..." command) on the addon channel:
--- "LP pet <spellId> <entry> <name> <loots 1|0>" per companion, "LP fav <spellId|0> <summons 1|0>", "LP -" (end).
-function SquidBotsLite_AskLootPets()
-	if not current then return end
-	if SquidBotsLite_Alts and SquidBotsLite_Alts.Handle and not SquidBotsLite_Alts.Handle.LP then
-		SquidBotsLite_Alts.Handle.LP = SquidBotsLite_OnLootPet
-	end
-	petAskedAt = GetTime()
-	Whisper("loot pet list")
-	-- No answer: the note says so (an older realm).
-	local name, wait = current, CreateFrame("Frame")
-	local t = 0
-	wait:SetScript("OnUpdate", function(self, delta)
-		t = t + delta
-		if t < 6.5 then return end
-		self:SetScript("OnUpdate", nil)
-		if current == name and sheet and sheet:IsShown() and tab == "mounts" and petMode then RenderMounts(pages.mounts) end
-	end)
-end
-
-function SquidBotsLite_OnLootPet(name, f)
-	if name ~= current then return end
-	if f[2] == "pet" then
-		petsPending = petsPending or {}
-		local id = tonumber(f[3] or "")
-		if id then
-			table.insert(petsPending, { id = id, entry = tonumber(f[4] or ""), name = (f[5] and f[5] ~= "") and f[5]
-				or GetSpellInfo(id) or ("#" .. id), loots = f[6] == "1" })
-		end
-	elseif f[2] == "app" then
-		-- The Loot-Transfigurator appearance (2.9.5): any companion loots, picked by its link or id.
-		petApp = f[3] == "1"
-	elseif f[2] == "fav" then
-		petState = { fav = tonumber(f[3] or "") or 0, on = f[4] ~= "0", app = petApp }
-	elseif f[2] == "-" then
-		pets, petsPending = petsPending or {}, nil
-		petState = petState or { fav = 0, on = true }
-		for _, p in ipairs(pets) do p.fav = p.id == petState.fav end
-		-- The companions that loot by themselves first, then the favourite, then by name.
-		table.sort(pets, function(a, b)
-			if a.fav ~= b.fav then return a.fav end
-			if a.loots ~= b.loots then return a.loots end
-			return a.name < b.name
-		end)
-		if sheet and sheet:IsShown() and tab == "mounts" and petMode then RenderMounts(pages.mounts) end
-	end
 end
 
 -- ---------------------------------------------------------------------------
@@ -1917,7 +1848,6 @@ function SquidBotsLite_OpenSheet(name)
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
 		if pages.mounts and pages.mounts.search then pages.mounts.search:SetText(""); pages.mounts.search:ClearFocus() end
-		pets, petsPending, petState, petAskedAt, petApp = {}, nil, nil, nil, false
 		SquidBotsLite_Pets.Reset()
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
