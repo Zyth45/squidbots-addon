@@ -960,8 +960,8 @@ local SPEC_ROWS = 4
 local knownBot = {}
 -- 3.0: who is a bot, asked to the server instead of read from the name (AiPlayerbot.CoaBotSurname 0 or 2 gives
 -- random bots no "Bot" surname, or a common one). The addon sends "WHO?" on the group's addon channel (SQBA, unseen
--- by players); each bot of the group whispers back "IAM <random|alt> <master|->". Kept per realm. A realm that
--- never answered (older CoA Bots): the " Bot" surname still tells. Nothing is ever whispered to a member that
+-- by players); each bot of the group whispers back "IAM <random|alt> <master|->". Kept per realm. The " Bot"
+-- surname still tells too (a realm answers only with CoaBotIdentify = 1 or CoaBotSurname ~= 1, older ones never). Nothing is ever whispered to a member that
 -- is not known as a bot. Protocol: docs/BOT-DETECTION-3.0.md.
 local who = { asked = 0, ASK_GAP = 10, RETRY = 300, askedName = {} }
 
@@ -981,7 +981,8 @@ function who.Kind(name)
 	if not name then return end
 	local kind = who.Store()[name]
 	if kind then return kind end
-	if not who.Supported() and name:find(" Bot$") then return "random" end
+	-- A player's name has no space: "X Bot" is always a bot (a realm may answer WHO? or not: CoaBotIdentify).
+	if name:find(" Bot$") then return "random" end
 end
 
 function who.Ask()
