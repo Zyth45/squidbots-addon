@@ -28,7 +28,7 @@ local STRINGS = {
 		PROFILES = "Profiles", P_FARM = "Farm (hunt, loot, eat)", P_STRICT = "Strict follow",
 		P_DUNGEON = "Dungeon mode", P_LEAVE_DUNGEON = "Leave dungeon mode",
 		ASK_TANK = "Ask for a tank", ASK_HEAL = "Ask for a healer", ASK_DPS = "Ask for damage", ASK_ALL = "Ask for all three",
-		LFG_CLASS = "LFG specific bot", LFG_CLASS_TITLE = "A bot of a class", LFG_WAIT = "Wait %d s (one ask by class every 5 min)",
+		LFG_CLASS = "LFG specific bot", LFG_CLASS_TITLE = "A bot of a class", LFG_EVERY = "One ask per class every 5 min", LFG_WAIT = "%s: wait %d s",
 		ROLE_TANK_SHORT = "Tank", ROLE_HEAL_SHORT = "Heal", ROLE_DPS_SHORT = "DPS",
 		GM_ON = "GM mode on: bots are called with .playerbots coa.",
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
@@ -144,7 +144,7 @@ local STRINGS = {
 		PROFILES = "Profils", P_FARM = "Farm (chasse, butin, repas)", P_STRICT = "Suivi strict",
 		P_DUNGEON = "Mode donjon", P_LEAVE_DUNGEON = "Quitter le mode donjon",
 		ASK_TANK = "Demander un tank", ASK_HEAL = "Demander un soigneur", ASK_DPS = "Demander des DPS", ASK_ALL = "Demander les trois",
-		LFG_CLASS = "LFG bot précis", LFG_CLASS_TITLE = "Un bot d'une classe", LFG_WAIT = "Attendez %d s (une demande par classe toutes les 5 min)",
+		LFG_CLASS = "LFG bot précis", LFG_CLASS_TITLE = "Un bot d'une classe", LFG_EVERY = "Une demande par classe toutes les 5 min", LFG_WAIT = "%s : attendez %d s",
 		ROLE_TANK_SHORT = "Tank", ROLE_HEAL_SHORT = "Soin", ROLE_DPS_SHORT = "DPS",
 		GM_ON = "Mode GM activé : les bots sont appelés avec .playerbots coa.",
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
@@ -561,9 +561,9 @@ local function Ask(roles)
 end
 
 -- 2.9.5: "lfg bot <class> <role>" (CoA Bots 2.9.5): one bot of a class, in the same channel as the other asks.
--- The server allows one such ask per account every CoaLfgClassCooldown seconds (300 by default) and answers
--- an ask on cooldown by role only ("You can ask for a class again in N s"): the addon keeps the end of the
--- cooldown (account-wide) to grey the menu.
+-- One bot answers. The server allows one ask per class and account every CoaLfgClassCooldown seconds (300 by
+-- default) and answers an ask on cooldown by role only ("You can ask for a Tinker again in N s"): the addon keeps
+-- the end of each class's cooldown (account-wide) and greys only that class, the others stay clickable.
 -- ROLES: the roles the server can match for each class.
 local lfgc = { COOLDOWN = 300, OFFER_WAIT = 20, ROLES = {
 	Barbarian = { "dps" }, ["Witch Doctor"] = { "heal", "dps" }, Felsworn = { "tank", "dps" },
@@ -576,9 +576,17 @@ local lfgc = { COOLDOWN = 300, OFFER_WAIT = 20, ROLES = {
 	Reaper = { "tank", "dps" }, Primalist = { "tank", "dps" }, Runemaster = { "dps" },
 } }
 
-function lfgc.Wait()
-	local left = SquidBotsLiteDB.lfgClassUntil and SquidBotsLiteDB.lfgClassUntil - time()
+-- The seconds left for a class, or nil. (2.9.5 RC1 kept one number for every class: dropped.)
+function lfgc.Wait(class)
+	local untils = SquidBotsLiteDB.lfgClassUntil
+	if type(untils) ~= "table" then return end
+	local left = untils[class] and untils[class] - time()
 	if left and left > 0 and left <= lfgc.COOLDOWN + 5 then return math.ceil(left) end
+end
+
+function lfgc.SetUntil(class, at)
+	if type(SquidBotsLiteDB.lfgClassUntil) ~= "table" then SquidBotsLiteDB.lfgClassUntil = {} end
+	SquidBotsLiteDB.lfgClassUntil[class] = at
 end
 
 function lfgc.Send(class, role)
@@ -590,39 +598,42 @@ function lfgc.Send(class, role)
 	local message = "lfg bot " .. string.lower(class) .. " " .. role
 	SendChatMessage(message, "CHANNEL", nil, id)
 	Print(string.format(L.ASKED, name, message))
-	lfgc.askedAt = GetTime()
+	lfgc.asked = lfgc.asked or {}
+	lfgc.asked[class] = GetTime()
 end
 
--- The cooldown starts only once a class ask got an offer: the first offer soon after it starts the count.
-function lfgc.OnOffer()
-	if lfgc.askedAt and GetTime() - lfgc.askedAt < lfgc.OFFER_WAIT then
-		SquidBotsLiteDB.lfgClassUntil = time() + lfgc.COOLDOWN - math.floor(GetTime() - lfgc.askedAt)
-		lfgc.askedAt = nil
+-- The cooldown starts only once a class ask got an offer: an offer of that class soon after the ask starts it.
+function lfgc.OnOffer(class)
+	local at = class and lfgc.asked and lfgc.asked[class]
+	if at and GetTime() - at < lfgc.OFFER_WAIT then
+		lfgc.SetUntil(class, time() + lfgc.COOLDOWN - math.floor(GetTime() - at))
+		lfgc.asked[class] = nil
 	end
 end
 
--- On cooldown the server says how long is left (and answers by role): the exact count, whatever the realm's option.
+-- On cooldown the server says which class and how long is left (and answers by role): the exact count.
 function lfgc.OnSystem(message)
-	local left = message:match("^You can ask for a class again in (%d+) s")
-	if left then
-		SquidBotsLiteDB.lfgClassUntil = time() + tonumber(left)
-		lfgc.askedAt = nil
+	local class, left = message:match("^You can ask for an? (.+) again in (%d+) s")
+	if not class then return end
+	for _, name in ipairs(CLASSES) do
+		if string.lower(name) == string.lower(class) then
+			lfgc.SetUntil(name, time() + tonumber(left))
+			if lfgc.asked then lfgc.asked[name] = nil end
+		end
 	end
 end
 
 function lfgc.Menu()
-	local wait = lfgc.Wait()
-	local items = { { text = L.LFG_CLASS_TITLE, isTitle = true, notCheckable = true } }
-	if wait then
-		table.insert(items, { text = "|cffffd100" .. string.format(L.LFG_WAIT, wait) .. "|r", isTitle = true, notCheckable = true })
-	end
+	local items = { { text = L.LFG_CLASS_TITLE, isTitle = true, notCheckable = true },
+		{ text = L.LFG_EVERY, isTitle = true, notCheckable = true } }
 	for _, class in ipairs(CLASSES) do
+		local wait = lfgc.Wait(class)
 		local roles = {}
 		for _, role in ipairs(lfgc.ROLES[class] or { "tank", "heal", "dps" }) do
 			table.insert(roles, { text = L["ROLE_" .. string.upper(role) .. "_SHORT"], notCheckable = true,
 				func = function() lfgc.Send(class, role) end })
 		end
-		table.insert(items, { text = class, notCheckable = true, disabled = wait and true or nil,
+		table.insert(items, { text = wait and string.format(L.LFG_WAIT, class, wait) or class, notCheckable = true, disabled = wait and true or nil,
 			hasArrow = not wait, menuList = not wait and roles or nil })
 	end
 	return items
@@ -2943,7 +2954,7 @@ local function OnWhisper(message, sender)
 		if toasts[i].name == sender then table.remove(toasts, i) end
 	end
 	table.insert(toasts, { name = sender, level = level, class = class, role = role, expires = GetTime() + OFFER_SECONDS })
-	lfgc.OnOffer()
+	lfgc.OnOffer(class)
 	-- Too many offers: drop the oldest of the role with the most offers (damage first), so a tank and a healer stay.
 	while #toasts > MAX_TOASTS do
 		local count = { tank = 0, heal = 0, dps = 0 }
