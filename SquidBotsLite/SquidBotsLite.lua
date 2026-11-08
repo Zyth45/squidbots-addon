@@ -28,6 +28,8 @@ local STRINGS = {
 		PROFILES = "Profiles", P_FARM = "Farm (hunt, loot, eat)", P_STRICT = "Strict follow",
 		P_DUNGEON = "Dungeon mode", P_LEAVE_DUNGEON = "Leave dungeon mode",
 		ASK_TANK = "Ask for a tank", ASK_HEAL = "Ask for a healer", ASK_DPS = "Ask for damage", ASK_ALL = "Ask for all three",
+		LFG_CLASS = "LFG specific bot", LFG_CLASS_TITLE = "A bot of a class", LFG_WAIT = "Wait %d s (one ask by class every 5 min)",
+		ROLE_TANK_SHORT = "Tank", ROLE_HEAL_SHORT = "Heal", ROLE_DPS_SHORT = "DPS",
 		GM_ON = "GM mode on: bots are called with .playerbots coa.",
 		GM_OFF = "GM mode off: bots are called with lfg bot, like any player.",
 		GEAR = "Best gear for the group",
@@ -142,6 +144,8 @@ local STRINGS = {
 		PROFILES = "Profils", P_FARM = "Farm (chasse, butin, repas)", P_STRICT = "Suivi strict",
 		P_DUNGEON = "Mode donjon", P_LEAVE_DUNGEON = "Quitter le mode donjon",
 		ASK_TANK = "Demander un tank", ASK_HEAL = "Demander un soigneur", ASK_DPS = "Demander des DPS", ASK_ALL = "Demander les trois",
+		LFG_CLASS = "LFG bot précis", LFG_CLASS_TITLE = "Un bot d'une classe", LFG_WAIT = "Attendez %d s (une demande par classe toutes les 5 min)",
+		ROLE_TANK_SHORT = "Tank", ROLE_HEAL_SHORT = "Soin", ROLE_DPS_SHORT = "DPS",
 		GM_ON = "Mode GM activé : les bots sont appelés avec .playerbots coa.",
 		GM_OFF = "Mode GM désactivé : les bots sont appelés avec lfg bot, comme tout le monde.",
 		GEAR = "Meilleur équipement du groupe",
@@ -556,6 +560,74 @@ local function Ask(roles)
 	end)
 end
 
+-- 2.9.5: "lfg bot <class> <role>" (CoA Bots 2.9.5): one bot of a class, in the same channel as the other asks.
+-- The server allows one such ask per account every CoaLfgClassCooldown seconds (300 by default) and answers
+-- an ask on cooldown by role only ("You can ask for a class again in N s"): the addon keeps the end of the
+-- cooldown (account-wide) to grey the menu.
+-- ROLES: the roles the server can match for each class.
+local lfgc = { COOLDOWN = 300, OFFER_WAIT = 20, ROLES = {
+	Barbarian = { "dps" }, ["Witch Doctor"] = { "heal", "dps" }, Felsworn = { "tank", "dps" },
+	["Witch Hunter"] = { "tank", "dps" }, Stormbringer = { "dps" }, ["Knight of Xoroth"] = { "tank", "dps" },
+	Guardian = { "tank", "dps" }, Templar = { "tank", "dps" },
+	-- Its tank spec (Eternal) is set aside by default (CoaExcludedSpecializations).
+	Bloodmage = { "heal", "dps" }, Ranger = { "dps" }, Chronomancer = { "heal", "dps" }, Necromancer = { "dps" },
+	Pyromancer = { "heal", "dps" }, Cultist = { "tank", "heal", "dps" }, Starcaller = { "tank", "heal", "dps" },
+	["Sun Cleric"] = { "tank", "heal", "dps" }, Tinker = { "heal", "dps" }, Venomancer = { "tank", "heal", "dps" },
+	Reaper = { "tank", "dps" }, Primalist = { "tank", "dps" }, Runemaster = { "dps" },
+} }
+
+function lfgc.Wait()
+	local left = SquidBotsLiteDB.lfgClassUntil and SquidBotsLiteDB.lfgClassUntil - time()
+	if left and left > 0 and left <= lfgc.COOLDOWN + 5 then return math.ceil(left) end
+end
+
+function lfgc.Send(class, role)
+	local id, name = FindChannel()
+	if not id then
+		Print(L.NO_CHANNEL)
+		return
+	end
+	local message = "lfg bot " .. string.lower(class) .. " " .. role
+	SendChatMessage(message, "CHANNEL", nil, id)
+	Print(string.format(L.ASKED, name, message))
+	lfgc.askedAt = GetTime()
+end
+
+-- The cooldown starts only once a class ask got an offer: the first offer soon after it starts the count.
+function lfgc.OnOffer()
+	if lfgc.askedAt and GetTime() - lfgc.askedAt < lfgc.OFFER_WAIT then
+		SquidBotsLiteDB.lfgClassUntil = time() + lfgc.COOLDOWN - math.floor(GetTime() - lfgc.askedAt)
+		lfgc.askedAt = nil
+	end
+end
+
+-- On cooldown the server says how long is left (and answers by role): the exact count, whatever the realm's option.
+function lfgc.OnSystem(message)
+	local left = message:match("^You can ask for a class again in (%d+) s")
+	if left then
+		SquidBotsLiteDB.lfgClassUntil = time() + tonumber(left)
+		lfgc.askedAt = nil
+	end
+end
+
+function lfgc.Menu()
+	local wait = lfgc.Wait()
+	local items = { { text = L.LFG_CLASS_TITLE, isTitle = true, notCheckable = true } }
+	if wait then
+		table.insert(items, { text = "|cffffd100" .. string.format(L.LFG_WAIT, wait) .. "|r", isTitle = true, notCheckable = true })
+	end
+	for _, class in ipairs(CLASSES) do
+		local roles = {}
+		for _, role in ipairs(lfgc.ROLES[class] or { "tank", "heal", "dps" }) do
+			table.insert(roles, { text = L["ROLE_" .. string.upper(role) .. "_SHORT"], notCheckable = true,
+				func = function() lfgc.Send(class, role) end })
+		end
+		table.insert(items, { text = class, notCheckable = true, disabled = wait and true or nil,
+			hasArrow = not wait, menuList = not wait and roles or nil })
+	end
+	return items
+end
+
 -- A menu closes on its own once the mouse has left it this many seconds (the game keeps it open otherwise).
 local MENU_HIDE_DELAY = 1
 local menuFrame = CreateFrame("Frame", "SquidBotsLiteMenu", UIParent, "UIDropDownMenuTemplate")
@@ -692,6 +764,14 @@ local function RecruitMenu()
 		{ text = L.ASK_HEAL, notCheckable = true, func = function() Ask("heal") end },
 		{ text = L.ASK_DPS, notCheckable = true, func = function() Ask("dps") end },
 		{ text = L.ASK_ALL, notCheckable = true, func = function() Ask("tank heal dps") end },
+		{ text = L.LFG_CLASS, notCheckable = true, func = function()
+			-- The game closes its menus right after the click: the class list opens a frame later.
+			lfgc.opener = lfgc.opener or CreateFrame("Frame")
+			lfgc.opener:SetScript("OnUpdate", function(self)
+				self:SetScript("OnUpdate", nil)
+				ShowMenu(lfgc.Menu())
+			end)
+		end },
 		-- The server answers with a system message: raid built, or how long to wait (players: 30 min).
 		{ text = L.RAID_10, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 10", "SAY") end },
 		{ text = L.RAID_15, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 15", "SAY") end },
@@ -2863,6 +2943,7 @@ local function OnWhisper(message, sender)
 		if toasts[i].name == sender then table.remove(toasts, i) end
 	end
 	table.insert(toasts, { name = sender, level = level, class = class, role = role, expires = GetTime() + OFFER_SECONDS })
+	lfgc.OnOffer()
 	-- Too many offers: drop the oldest of the role with the most offers (damage first), so a tank and a healer stay.
 	while #toasts > MAX_TOASTS do
 		local count = { tank = 0, heal = 0, dps = 0 }
@@ -3497,6 +3578,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		end
 	elseif event == "CHAT_MSG_SYSTEM" then
 		dc.OnSystem(arg1)
+		lfgc.OnSystem(arg1)
 		if OnSystem(arg1) then return end
 		-- "Kegarink Bot joins as tank": a bot name can hold a space since CoA Bots 1.5 (CoaBotSurname).
 		local name, role = arg1:match("^(.-) joins as (%a+)")
