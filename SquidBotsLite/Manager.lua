@@ -30,6 +30,7 @@ local STRINGS = {
 		PET_IS_OFF = "This alt summons no companion. Automatic choice turns it back on.",
 		PET_HINT = "Click a companion: this alt summons it out of combat. Lootbot 3000 and the Kleptomanic Demon loot by themselves. The realm needs AiPlayerbot.AltLootCompanion = 1.",
 		TIP_LOOT_PET = "The companion this alt summons out of combat, and that loots for it when it can.",
+		PET_APP = "Loot-Transfigurator on: any companion loots. Shift-click one (your spellbook's companions, a link in the chat) into the box, or type its spell id, then Enter.",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
 		NOT_A_MEMBER = "%s is not in your group.",
 		STRATS = "Strategies", COMBAT = "In combat", NONCOMBAT = "Out of combat", ADD = "Add...",
@@ -78,6 +79,7 @@ local STRINGS = {
 		PET_IS_OFF = "Cet alt n'invoque aucune mascotte. Choix automatique le remet.",
 		PET_HINT = "Cliquez une mascotte : cet alt l'invoque hors combat. Lootbot 3000 et le Démon kleptomane ramassent seuls. Le royaume doit avoir AiPlayerbot.AltLootCompanion = 1.",
 		TIP_LOOT_PET = "La mascotte que cet alt invoque hors combat, et qui ramasse pour lui quand elle sait le faire.",
+		PET_APP = "Loot-Transfigurator actif : toute mascotte ramasse. Maj-clic sur une mascotte (mascottes du grimoire, lien du chat) dans la case, ou tapez son id de sort, puis Entrée.",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
 		STRATS = "Stratégies", COMBAT = "En combat", NONCOMBAT = "Hors combat", ADD = "Ajouter...",
@@ -136,7 +138,7 @@ local queue = {}
 local mountOffset = 0
 -- 2.9.5: the loot pet (the Mounts tab's second list). pets: { id, entry, name, loots, fav }; petState: the alt's
 -- favourite and whether it summons; petAskedAt: no answer after a while, an older realm.
-local pets, petsPending, petState, petAskedAt, petMode = {}, nil, nil, nil, false
+local pets, petsPending, petState, petAskedAt, petMode, petApp = {}, nil, nil, nil, false, false
 
 local function Print(text)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
@@ -1213,7 +1215,7 @@ local RenderMounts
 local function ShownMounts(page)
 	local search = page.search and strlower(strtrim(page.search:GetText() or "")) or ""
 	local source = petMode and pets or mounts
-	if search == "" then return source, search end
+	if search == "" or (petMode and (search:find("|hspell:", 1, true) or search:find("^%d+$"))) then return source, search end
 	local list = {}
 	for _, m in ipairs(source) do
 		if strlower(m.name or ""):find(search, 1, true) then table.insert(list, m) end
@@ -1228,7 +1230,17 @@ local function BuildMounts(page)
 	page.search:SetPoint("TOPLEFT", 18, -2)
 	page.search:SetAutoFocus(false)
 	page.search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
-	page.search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	page.search:SetScript("OnEnterPressed", function(self)
+		-- The loot pet: a companion's link or spell id makes it the favourite (any companion loots with the
+		-- Loot-Transfigurator, the list shows only those that loot by themselves).
+		local text = self:GetText() or ""
+		local id = petMode and (text:match("|Hspell:(%d+)") or text:match("^%s*(%d+)%s*$"))
+		if id then
+			Whisper("loot pet " .. id)
+			self:SetText("")
+		end
+		self:ClearFocus()
+	end)
 	page.search:SetScript("OnTextChanged", function() mountOffset = 0; RenderMounts(page) end)
 	page.search:SetScript("OnEditFocusGained", function() page.typing = true; RenderMounts(page) end)
 	page.search:SetScript("OnEditFocusLost", function() page.typing = nil; RenderMounts(page) end)
@@ -1353,7 +1365,8 @@ RenderMounts = function(page)
 		page.off:SetText(T("PET_OFF"))
 		page.off:Show()
 		page.hint:SetText("")
-		page.hintPets:SetText((petState and not petState.on) and ("|cffffd100" .. T("PET_IS_OFF") .. "|r") or T("PET_HINT"))
+		page.hintPets:SetText((petState and not petState.on) and ("|cffffd100" .. T("PET_IS_OFF") .. "|r")
+			or (petState and petState.app) and T("PET_APP") or T("PET_HINT"))
 		page.hintPets:Show()
 	else
 		page.searchHint:SetText(search == "" and not page.typing and T("MOUNT_SEARCH") or "")
@@ -1640,6 +1653,16 @@ local function Build()
 end
 
 -- Opened from a bot's menu, the My alts panel, or /sbl bot <name>.
+local insertLink = ChatEdit_InsertLink
+ChatEdit_InsertLink = function(link, ...)
+	local box = pages.mounts and pages.mounts.search
+	if petMode and link and box and box:IsVisible() and box:HasFocus() then
+		box:SetText(link)
+		return true
+	end
+	return insertLink(link, ...)
+end
+
 -- 2.9.5: the loot pet. The alt answers "loot pet list" (and every "loot pet ..." command) on the addon channel:
 -- "LP pet <spellId> <entry> <name> <loots 1|0>" per companion, "LP fav <spellId|0> <summons 1|0>", "LP -" (end).
 function SquidBotsLite_AskLootPets()
@@ -1669,8 +1692,11 @@ function SquidBotsLite_OnLootPet(name, f)
 			table.insert(petsPending, { id = id, entry = tonumber(f[4] or ""), name = (f[5] and f[5] ~= "") and f[5]
 				or GetSpellInfo(id) or ("#" .. id), loots = f[6] == "1" })
 		end
+	elseif f[2] == "app" then
+		-- The Loot-Transfigurator appearance (2.9.5): any companion loots, picked by its link or id.
+		petApp = f[3] == "1"
 	elseif f[2] == "fav" then
-		petState = { fav = tonumber(f[3] or "") or 0, on = f[4] ~= "0" }
+		petState = { fav = tonumber(f[3] or "") or 0, on = f[4] ~= "0", app = petApp }
 	elseif f[2] == "-" then
 		pets, petsPending = petsPending or {}, nil
 		petState = petState or { fav = 0, on = true }
@@ -1694,7 +1720,7 @@ function SquidBotsLite_OpenSheet(name)
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
 		if pages.mounts and pages.mounts.search then pages.mounts.search:SetText(""); pages.mounts.search:ClearFocus() end
-		pets, petsPending, petState, petAskedAt = {}, nil, nil, nil
+		pets, petsPending, petState, petAskedAt, petApp = {}, nil, nil, nil, false
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
 		bagMode = "bags"
