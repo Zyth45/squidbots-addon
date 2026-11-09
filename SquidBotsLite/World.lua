@@ -50,7 +50,8 @@ local STRINGS = {
 		GA_raid25 = "Guild raid (25)", GS_ready = "ready", GS_busy = "under way", GS_cooldown = "again in %s", GS_nobots = "not enough bots",
 		GA_BOTS = "%d bots available", GA_START = "Start", ASK_ACT = "Start: %s?", GS_blocked = "wait: %s under way",
 		GA_TIP = "Bots available: your guild's bots online right now and free (not in a group, not busy elsewhere). Players and offline members are not counted.",
-		GS_LEFT = "under way, %s left",
+		GS_LEFT = "under way, %s left", GA_CANCEL = "Cancel", ASK_CANCEL = "Cancel: %s? Its bots go back to their lives.",
+		R_none = "nothing to cancel",
 		R_ingroup = "leave your group first", R_level = "level too low", R_offer = "this offer is gone",
 		ASK_GUILD = "Order %d x %s from your guild? If a bot crafts it or buys it at the auction house, it comes cash on delivery (you pay when you take it from the mail).",
 		YES = "Yes", NO = "No",
@@ -96,7 +97,8 @@ local STRINGS = {
 		GA_raid25 = "Raid de guilde (25)", GS_ready = "prêt", GS_busy = "en cours", GS_cooldown = "à nouveau dans %s", GS_nobots = "pas assez de bots",
 		GA_BOTS = "%d bots disponibles", GA_START = "Lancer", ASK_ACT = "Lancer : %s ?", GS_blocked = "attendre : %s en cours",
 		GA_TIP = "Bots disponibles : les bots de votre guilde en ligne en ce moment et libres (pas en groupe, pas occupés ailleurs). Les joueurs et les membres hors ligne ne comptent pas.",
-		GS_LEFT = "en cours, encore %s",
+		GS_LEFT = "en cours, encore %s", GA_CANCEL = "Annuler", ASK_CANCEL = "Annuler : %s ? Ses bots retournent à leurs occupations.",
+		R_none = "rien à annuler",
 		R_ingroup = "quittez d'abord votre groupe", R_level = "niveau trop bas", R_offer = "ce don n'est plus proposé",
 		ASK_GUILD = "Commander %d x %s à votre guilde ? Si un bot le fabrique ou l'achète à l'hôtel des ventes, il arrive contre remboursement (vous payez en le retirant du courrier).",
 		YES = "Oui", NO = "Non",
@@ -935,7 +937,10 @@ function W.Rows()
 				state = color .. state .. "|r\n|cffaaaaaa" .. string.format(T("GA_BOTS"), a.bots) .. "|r"
 			end
 			table.insert(rows, { left = T("GA_" .. kind), right = state, tip = T("GA_TIP"),
-				b1 = { text = T("GA_START"), enabled = a and a.state == "ready", click = function()
+				-- The running one (a rally): Cancel instead of a greyed Start (Monde 8ebe01b3, "GACT cancel").
+				b1 = kind == running and { text = T("GA_CANCEL"), click = function()
+					W.Confirm(string.format(T("ASK_CANCEL"), T("GA_" .. kind)), function() W.Send("GACT\tcancel", "act") end)
+				end } or { text = T("GA_START"), enabled = a and a.state == "ready", click = function()
 					W.Confirm(string.format(T("ASK_ACT"), T("GA_" .. kind)), function() W.Send("GACT\t" .. kind, "act") end)
 				end } })
 		end
