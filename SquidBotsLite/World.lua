@@ -5,7 +5,8 @@
 -- Every list ends with "-". One request at a time; no answer within 6 s: the feature is off on this realm.
 
 -- GAP: the server answers at most 1 request per second and per brick (more: no answer at all, not even "-").
-local PREFIX, WAIT, ROWS, GAP = "SQBW", 6, 12, 1.1
+-- ROWS: the cards a page shows (3.0: cards in the style of My alts, 36 high).
+local PREFIX, WAIT, ROWS, GAP = "SQBW", 6, 8, 1.1
 local REQUESTS = { GORD = true, GLIST = true, WEV = true, ["WEV?"] = true, ALIST = true, ARCP = true, AQUOTE = true,
 	AORDER = true, AMAIL = true, ["SOUL?"] = true, GOFF = true, GACC = true, GREF = true, GCAT = true, GACT = true,
 	["GACT?"] = true }
@@ -25,6 +26,7 @@ local STRINGS = {
 		A_BACK = "< Artisans list", A_MAILS = "My orders", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
 		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
+		TIP_RECIPES = "Its recipes: pick one, then Quote.", TIP_QUOTE = "Quote: the price of this item, no order yet.",
 		Q_TITLE = "Quote from %s", Q_COD = "cash on delivery, paid when you take it from the mail",
 		M_preparing = "Preparing", M_sent = "Sent", M_awaiting = "Awaiting pickup", M_paid = "Received",
 		M_returned = "Returned", M_cancelled = "Cancelled", M_pending = "Awaiting pickup",
@@ -72,6 +74,7 @@ local STRINGS = {
 		A_BACK = "< Liste des artisans", A_MAILS = "Mes commandes", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
 		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
+		TIP_RECIPES = "Ses recettes : choisissez-en une, puis Devis.", TIP_QUOTE = "Devis : le prix de cet objet, sans commande.",
 		Q_TITLE = "Devis de %s", Q_COD = "contre remboursement, payé en le retirant du courrier",
 		M_preparing = "En préparation", M_sent = "Envoyé", M_awaiting = "En attente de réception", M_paid = "Reçu (payé)",
 		M_returned = "Renvoyé", M_cancelled = "Annulé", M_pending = "En attente de réception",
@@ -561,35 +564,35 @@ function W.Build()
 	f.hint:SetWidth(640)
 	f.hint:SetJustifyH("LEFT")
 	f.rows = {}
+	local UI = SquidBotsLite_UI
 	for i = 1, ROWS do
 		local row = CreateFrame("Button", nil, f)
-		row:SetWidth(630)
-		row:SetHeight(22)
-		row:SetPoint("TOPLEFT", 16, -146 - (i - 1) * 23)
-		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-		row.stripe = row:CreateTexture(nil, "BACKGROUND")
-		row.stripe:SetAllPoints()
-		row.stripe:SetTexture("Interface\\Buttons\\WHITE8X8")
-		row.stripe:SetVertexColor(1, 1, 1, i % 2 == 0 and 0.04 or 0)
+		row:SetWidth(W.CARD_W)
+		row:SetHeight(36)
+		row:SetPoint("TOPLEFT", 16, -146 - (i - 1) * 39)
+		-- The card of My alts: a dark plate, its edge lights up under the mouse (a section title has none).
+		row:SetBackdrop(UI and UI.CARD or { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 		row.icon = row:CreateTexture(nil, "ARTWORK")
-		row.icon:SetWidth(20)
-		row.icon:SetHeight(20)
-		row.icon:SetPoint("LEFT", 2, 0)
+		row.icon:SetWidth(28)
+		row.icon:SetHeight(28)
+		row.icon:SetPoint("LEFT", 5, 0)
 		row.left = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		row.left:SetPoint("LEFT", 28, 0)
-		row.left:SetWidth(290)
+		row.left:SetWidth(280)
 		row.left:SetJustifyH("LEFT")
+		row.sub = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		row.sub:SetPoint("TOPLEFT", row.left, "BOTTOMLEFT", 0, -2)
+		row.sub:SetWidth(280)
+		row.sub:SetJustifyH("LEFT")
 		row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.right:SetPoint("LEFT", 330, 0)
-		row.right:SetWidth(296)
-		row.right:SetHeight(22)
+		row.right:SetWidth(250)
+		row.right:SetHeight(30)
 		row.right:SetJustifyH("LEFT")
-		-- Accept / Decline (gifts), Start (activities).
+		-- Accept / Decline (gifts), Start / Cancel (activities).
 		for j = 1, 2 do
 			local b = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
 			b:SetWidth(80)
 			b:SetHeight(20)
-			if j == 1 then b:SetPoint("RIGHT", -88, 0) else b:SetPoint("RIGHT", -4, 0) end
 			b:SetNormalFontObject(GameFontNormalSmall)
 			b:SetHighlightFontObject(GameFontHighlightSmall)
 			b:SetDisabledFontObject(GameFontDisableSmall)
@@ -597,18 +600,42 @@ function W.Build()
 			b:Hide()
 			row["b" .. j] = b
 		end
-		-- The artisans' columns: name, level, zone, professions.
-		row.cols = {}
-		for c, def in ipairs(W.COLUMNS) do
-			local fs = row:CreateFontString(nil, "OVERLAY", c == 1 and "GameFontHighlight" or "GameFontHighlightSmall")
-			fs:SetPoint("LEFT", def[1], 0)
-			fs:SetWidth(def[2])
-			fs:SetHeight(20)
-			fs:SetJustifyH(c == 2 and "CENTER" or "LEFT")
-			row.cols[c] = fs
+		-- The artisans' professions: an icon and its rank each, the name in the tooltip.
+		row.skills = {}
+		for j = 1, 6 do
+			local sk = CreateFrame("Frame", nil, row)
+			sk:SetWidth(52)
+			sk:SetHeight(20)
+			sk:SetPoint("LEFT", 300 + (j - 1) * 54, 0)
+			sk.icon = sk:CreateTexture(nil, "ARTWORK")
+			sk.icon:SetWidth(18)
+			sk.icon:SetHeight(18)
+			sk.icon:SetPoint("LEFT", 0, 0)
+			sk.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			sk.text = sk:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			sk.text:SetPoint("LEFT", sk.icon, "RIGHT", 3, 0)
+			sk:EnableMouse(true)
+			sk:SetScript("OnEnter", function(self)
+				if not self.skill then return end
+				GameTooltip:SetOwner(self, "ANCHOR_TOP")
+				GameTooltip:SetText(W.SkillName(self.skill.id), 1, 0.82, 0)
+				GameTooltip:AddLine(tostring(self.skill.value), 1, 1, 1)
+				GameTooltip:Show()
+			end)
+			sk:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			sk:Hide()
+			row.skills[j] = sk
+		end
+		-- The card's icon button, at its right (My alts' style): an artisan's recipes, a recipe's quote.
+		if UI and UI.IconButton then
+			row.go = UI.IconButton(row, 24, W.ICONS.order, function(self) return self.tipTitle, self.tipLine end,
+				function(self) if self.run then self.run() end end)
+			row.go:SetPoint("RIGHT", -8, 0)
+			row.go:Hide()
 		end
 		row:SetScript("OnClick", function(self) if self.click then self.click() end end)
 		row:SetScript("OnEnter", function(self)
+			if not self.header then self:SetBackdropBorderColor(1, 0.82, 0, 0.55) end
 			if self.item then
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 				GameTooltip:SetHyperlink("item:" .. self.item)
@@ -619,14 +646,28 @@ function W.Build()
 				GameTooltip:Show()
 			end
 		end)
-		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		row:EnableMouseWheel(true)
-		row:SetScript("OnMouseWheel", function(_, delta)
-			W.offset = math.max(0, math.min(math.max(0, (W.count or 0) - ROWS), W.offset - delta * 3))
-			W.Refresh()
+		row:SetScript("OnLeave", function(self)
+			if not self.header then self:SetBackdropBorderColor(1, 1, 1, 0.08) end
+			GameTooltip:Hide()
 		end)
+		row:EnableMouseWheel(true)
+		row:SetScript("OnMouseWheel", function(_, delta) W.Scroll(-delta) end)
 		f.rows[i] = row
 	end
+	-- The scroll bar of the skin, right of the cards; the wheel works on the cards too.
+	f.bar = CreateFrame("Slider", "SquidBotsLiteWorldScroll", f, "UIPanelScrollBarTemplate")
+	f.bar:SetPoint("TOPLEFT", f.rows[1], "TOPRIGHT", 6, -16)
+	f.bar:SetPoint("BOTTOMLEFT", f.rows[ROWS], "BOTTOMRIGHT", 6, 16)
+	f.bar:SetValueStep(1)
+	f.bar:SetMinMaxValues(0, 0)
+	f.bar:SetValue(0)
+	f.bar:SetScript("OnValueChanged", function(self, value)
+		value = math.floor((value or 0) + 0.5)
+		if value ~= W.offset then W.offset = value; W.Refresh() end
+	end)
+	local up, down = _G["SquidBotsLiteWorldScrollScrollUpButton"], _G["SquidBotsLiteWorldScrollScrollDownButton"]
+	if up then up:SetScript("OnClick", function() W.Scroll(-1) end) end
+	if down then down:SetScript("OnClick", function() W.Scroll(1) end) end
 	f.heads = {}
 	for c, def in ipairs(W.COLUMNS) do
 		local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -748,8 +789,15 @@ ChatEdit_InsertLink = function(link, ...)
 	return insertLink(link, ...)
 end
 
--- Column x and width on a row (630 wide): artisan, level, zone, professions.
-W.COLUMNS = { { 28, 130 }, { 160, 34 }, { 200, 136 }, { 342, 286 } }
+-- The cards' width (the scroll bar right of them), and a few old column headers kept empty.
+W.CARD_W = 612
+W.COLUMNS = { { 28, 130 }, { 160, 34 }, { 200, 136 }, { 342, 240 } }
+
+-- One step of the list (the wheel, the bar's arrows).
+function W.Scroll(delta)
+	W.offset = math.max(0, math.min(math.max(0, (W.count or 0) - (W.shown or ROWS)), W.offset + (delta or 0)))
+	W.Refresh()
+end
 
 -- The professions the artisans have, to filter on.
 function W.FilterMenu()
@@ -946,7 +994,7 @@ function W.Rows()
 		end
 	elseif W.tab == "guild" then
 		-- Two parts, each with its title: my orders (and how each went), the gifts the guild sent me.
-		table.insert(rows, { left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "" })
+		table.insert(rows, { header = true, left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "" })
 		for _, o in ipairs(W.guild.orders) do
 			local state = T("S_" .. (o.state or "open"))
 			if o.reason then state = state .. " : " .. W.Reason(o.reason) end
@@ -957,7 +1005,7 @@ function W.Rows()
 				right = color .. state .. "|r\n|cffaaaaaa" .. by .. "|r" })
 		end
 		if #W.guild.orders == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NONE") .. "|r", right = "" }) end
-		table.insert(rows, { left = "|cffffd100" .. T("G_GIFTS") .. "|r", right = "" })
+		table.insert(rows, { header = true, left = "|cffffd100" .. T("G_GIFTS") .. "|r", right = "" })
 		for _, g in ipairs(W.guild.gifts) do
 			table.insert(rows, { item = g.item, left = W.Colored(g.item),
 				right = "|cffaaaaaa" .. string.format(T("G_GIFT_LINE"), g.bot or "?", W.Ago(g.at)) .. "|r" })
@@ -969,8 +1017,18 @@ function W.Rows()
 				local keep = not W.art.skill
 				for _, sk in ipairs(b.skills) do if sk.id == W.art.skill then keep = true end end
 				if keep then
-				table.insert(rows, { cols = { b.name, b.level and tostring(b.level) or "", b.zone or "",
-					W.SkillsText(b.skills, W.art.skill) }, click = function()
+				local where = {}
+				if b.level then table.insert(where, string.format(T("GC_REQ"), b.level)) end
+				if b.zone and b.zone ~= "" then table.insert(where, b.zone) end
+				local function open()
+					W.art.bot, W.art.mode, W.art.pick, W.art.quote, W.offset = b.name, "recipes", nil, nil, 0
+					W.at["ARCP\t" .. b.name] = nil
+					W.Load()
+				end
+				local mainSkill = b.skills[1] and b.skills[1].id
+				table.insert(rows, { left = b.name, sub = table.concat(where, "  ·  "), skills = b.skills,
+					iconPath = mainSkill and SKILL_ICON[mainSkill] and ("Interface\\Icons\\" .. SKILL_ICON[mainSkill]) or nil,
+					go = { icon = W.ICONS.v_cat, title = T("A_QUOTE"), line = T("TIP_RECIPES"), click = open }, click = function()
 					W.art.bot, W.art.mode, W.art.pick, W.art.quote, W.offset = b.name, "recipes", nil, nil, 0
 					W.at["ARCP\t" .. b.name] = nil
 					W.Load()
@@ -991,11 +1049,17 @@ function W.Rows()
 			for _, r in ipairs(list) do
 				if r.skill ~= lastSkill and CRAFTS[r.skill or 0] then
 					lastSkill = r.skill
-					table.insert(rows, { left = "|cffffd100" .. W.SkillsText({ { id = r.skill or 0, value = 0 } }):gsub(" 0$", "") .. "|r", right = "" })
+					table.insert(rows, { header = true, left = "|cffffd100" .. W.SkillsText({ { id = r.skill or 0, value = 0 } }):gsub(" 0$", "") .. "|r", right = "" })
 				end
 				local picked = W.art.pick == r
+				local function quote()
+					W.art.pick, W.art.quote = r, nil
+					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.Qty(5), "art")
+				end
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
-					right = "|cffaaaaaa" .. (r.rank and r.rank > 0 and (r.rank .. "  ") or "") .. (r.bot or "") .. "|r", click = function()
+					sub = W.SkillName(r.skill or 0) .. (r.rank and r.rank > 0 and (" " .. r.rank) or ""),
+					right = "|cffaaaaaa" .. (r.bot or "") .. "|r",
+					go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
 						-- The quantity box is shared with the guild order: back to 1 for each recipe (a 5 typed there made 5 crafts).
 						W.art.pick, W.art.quote = r, nil
 						if W.frame then W.frame.qty:SetText("1") end
@@ -1025,7 +1089,7 @@ function W.Rows()
 				right = (e.place or "") .. ", " .. (e.zone or "") .. "  |cffffd100" .. when .. "|r" })
 		end
 		if #W.events.firsts > 0 then
-			table.insert(rows, { left = "|cffffd100" .. T("E_FIRSTS") .. "|r", right = "" })
+			table.insert(rows, { header = true, left = "|cffffd100" .. T("E_FIRSTS") .. "|r", right = "" })
 			for _, x in ipairs(W.events.firsts) do
 				local what = x.kind == "level" and string.format(T("F_level"), x.entry) or string.format(T("F_boss"), x.entry)
 				table.insert(rows, { left = (x.who or "?") .. (x.guild and (" <" .. x.guild .. ">") or ""),
@@ -1112,8 +1176,17 @@ function W.Refresh()
 		f.action2:Hide()
 	end
 	local columns = art and W.art.mode == "bots"
-	local heads = { "C_ARTISAN", "C_LEVEL", "C_ZONE", "C_PROFS" }
-	for c, fs in ipairs(f.heads) do fs:SetText(columns and T(heads[c]) or "") end
+	for _, fs in ipairs(f.heads) do fs:SetText("") end
+	-- Recipes: the quantity and Quote / Order at the bottom right, under the list.
+	f.action:ClearAllPoints()
+	f.qty:ClearAllPoints()
+	if recipes then
+		f.action:SetPoint("BOTTOMRIGHT", -22, 14)
+		f.qty:SetPoint("RIGHT", f.action, "LEFT", -14, 0)
+	else
+		f.qty:SetPoint("LEFT", f.item, "RIGHT", 40, 0)
+		f.action:SetPoint("LEFT", f.qty, "RIGHT", 12, 0)
+	end
 	if columns then
 		f.filter:Show()
 		f.filter:SetText(string.format(T("A_FILTER"), W.art.skill and W.SkillName(W.art.skill) or T("A_ALL")))
@@ -1128,7 +1201,7 @@ function W.Refresh()
 	local q = recipes and W.art.quote
 	local shown = ROWS
 	if q and q.ok then
-		shown = ROWS - 3
+		shown = ROWS - 2
 		local card = f.card
 		card.icon:SetTexture(GetItemIcon and GetItemIcon(q.item) or select(10, GetItemInfo(q.item)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 		card.title:SetText(string.format(T("Q_TITLE"), q.bot or "?"))
@@ -1142,23 +1215,67 @@ function W.Refresh()
 		f.card:Hide()
 	end
 	local rows = W.Rows()
-	W.count = #rows
+	W.count, W.shown = #rows, shown
 	W.offset = math.max(0, math.min(W.offset, #rows - shown))
+	local maxOffset = math.max(0, #rows - shown)
+	f.bar:SetMinMaxValues(0, maxOffset)
+	f.bar:SetValue(W.offset)
+	if maxOffset > 0 then f.bar:Show() else f.bar:Hide() end
 	for i, row in ipairs(f.rows) do
 		local r = i <= shown and rows[W.offset + i]
 		if r then
-			row.item, row.click, row.tip = r.item, r.click, r.tip
+			row.item, row.click, row.tip, row.header = r.item, r.click, r.tip, r.header
+			if r.header then
+				row:SetBackdropColor(0, 0, 0, 0)
+				row:SetBackdropBorderColor(0, 0, 0, 0)
+			else
+				row:SetBackdropColor(0.09, 0.09, 0.11, 0.95)
+				row:SetBackdropBorderColor(1, 1, 1, 0.08)
+			end
 			if r.item then
 				row.icon:SetTexture(GetItemIcon and GetItemIcon(r.item) or select(10, GetItemInfo(r.item)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+				row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+				row.icon:Show()
+			elseif r.iconPath then
+				row.icon:SetTexture(r.iconPath)
+				row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 				row.icon:Show()
 			else
 				row.icon:Hide()
 			end
-			row.left:SetText(r.cols and "" or r.left)
-			row.right:SetText(r.cols and "" or r.right)
-			row.right:SetWidth(r.b2 and 130 or r.b1 and 210 or 296)
+			-- The title, its second line under it (or alone, in the middle).
+			local x = (r.item or r.iconPath) and 40 or 10
+			row.left:ClearAllPoints()
+			if r.sub and r.sub ~= "" then row.left:SetPoint("TOPLEFT", x, -4) else row.left:SetPoint("LEFT", x, 0) end
+			row.left:SetText(r.left or "")
+			row.sub:SetText(r.sub or "")
+			row.right:SetText(r.right or "")
+			row.right:SetWidth(r.b2 and 130 or r.b1 and 200 or 240)
+			for j, sk in ipairs(row.skills) do
+				local one = r.skills and r.skills[j]
+				if one then
+					sk.skill = one
+					sk.icon:SetTexture(SKILL_ICON[one.id] and ("Interface\\Icons\\" .. SKILL_ICON[one.id]) or "Interface\\Icons\\INV_Misc_QuestionMark")
+					sk.text:SetText(((W.art.skill == one.id) and "|cffffd100" or "") .. one.value)
+					sk:Show()
+				else
+					sk.skill = nil
+					sk:Hide()
+				end
+			end
+			if row.go then
+				if r.go then
+					row.go.run, row.go.tipTitle, row.go.tipLine = r.go.click, r.go.title, r.go.line
+					row.go.icon:SetTexture(r.go.icon)
+					row.go:Show()
+				else
+					row.go:Hide()
+				end
+			end
 			row.b1:ClearAllPoints()
-			row.b1:SetPoint("RIGHT", r.b2 and -88 or -4, 0)
+			row.b1:SetPoint("RIGHT", r.b2 and -96 or -10, 0)
+			row.b2:ClearAllPoints()
+			row.b2:SetPoint("RIGHT", -10, 0)
 			for j = 1, 2 do
 				local b, def = row["b" .. j], r["b" .. j]
 				if def then
@@ -1170,7 +1287,6 @@ function W.Refresh()
 					b:Hide()
 				end
 			end
-			for c, fs in ipairs(row.cols) do fs:SetText(r.cols and r.cols[c] or "") end
 			row:Show()
 		else
 			row:Hide()
