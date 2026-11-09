@@ -734,7 +734,7 @@ function W.Build()
 		banner.cancel:Hide()
 	end
 	f.views = {}
-	for i, key in ipairs({ "orders", "gifts", "cat", "act" }) do
+	for i, key in ipairs({ "orders", "cat", "act", "gifts" }) do
 		local b = CreateFrame("Button", nil, banner, "UIPanelButtonTemplate")
 		b:SetWidth(104)
 		b:SetHeight(18)
@@ -1085,8 +1085,10 @@ function W.Rows()
 					or string.format(T("GC_CRAFT"), x.bot or "?")
 				local req = x.req > 0 and ("  " .. (x.req > level and "|cffff6060" or "|cffaaaaaa") .. string.format(T("GC_REQ"), x.req) .. "|r") or ""
 				local function order()
-					W.Confirm(string.format(T("ASK_GUILD"), 1, W.Colored(x.item, x.quality)), function()
-						W.Send("GORD\t" .. x.item .. "\t1", "guild")
+					local qty = W.Qty(20)
+					W.Confirm(string.format(T("ASK_GUILD"), qty, W.Colored(x.item, x.quality)), function()
+						W.Send("GORD\t" .. x.item .. "\t" .. qty, "guild")
+						if W.frame then W.frame.qty:SetText("1") end
 					end)
 				end
 				table.insert(rows, { item = x.item, left = W.Colored(x.item, x.quality), sub = W.SlotName(x.slot) .. req,
@@ -1334,6 +1336,7 @@ function W.Refresh()
 		if c.page < pages then f.next:Enable() else f.next:Disable() end
 	end
 	if orders or recipes then f.item:Show(); f.qty:Show(); f.qtyLabel:Show(); f.action:Show() else f.item:Hide(); f.qty:Hide(); f.qtyLabel:Hide(); f.action:Hide() end
+	if cat then f.qty:Show(); f.qtyLabel:Show() end
 	if recipes then f.item:Hide() end
 	f.qtyLabel:SetText(T("G_QTY"))
 	W.PlaceText(f.action)
@@ -1384,7 +1387,10 @@ function W.Refresh()
 	-- Recipes: the quantity and Quote / Order at the bottom right, under the list.
 	f.action:ClearAllPoints()
 	f.qty:ClearAllPoints()
-	if recipes then
+	if cat then
+		f.action:SetPoint("BOTTOMRIGHT", -22, 14)
+		f.qty:SetPoint("BOTTOMRIGHT", -24, 16)
+	elseif recipes then
 		f.action:SetPoint("BOTTOMRIGHT", -22, 14)
 		f.qty:SetPoint("RIGHT", f.action, "LEFT", -14, 0)
 	else
