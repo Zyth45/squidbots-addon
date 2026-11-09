@@ -4,7 +4,8 @@
 --   soul: "SOUL?" whispered to the bot, which answers.
 -- Every list ends with "-". One request at a time; no answer within 6 s: the feature is off on this realm.
 
-local PREFIX, WAIT, ROWS = "SQBW", 6, 12
+-- GAP: the server answers at most 1 request per second and per brick (more: no answer at all, not even "-").
+local PREFIX, WAIT, ROWS, GAP = "SQBW", 6, 12, 1.1
 local REQUESTS = { GORD = true, GLIST = true, WEV = true, ["WEV?"] = true, ALIST = true, ARCP = true, AQUOTE = true,
 	AORDER = true, AMAIL = true, ["SOUL?"] = true }
 
@@ -118,7 +119,9 @@ end
 
 function W.Next()
 	if W.busy or #W.queue == 0 then return end
+	if W.lastSent and GetTime() - W.lastSent < GAP then return end
 	local q = table.remove(W.queue, 1)
+	W.lastSent = GetTime()
 	W.busy = q
 	q.sentAt = GetTime()
 	W.lines = {}
@@ -211,6 +214,7 @@ end
 
 -- The 6 s rule, and the countdowns.
 function W.Tick()
+	W.Next()
 	if W.busy and GetTime() - W.busy.sentAt > WAIT then
 		local q = W.busy
 		W.busy, W.lines = nil, {}
@@ -567,7 +571,7 @@ events:RegisterEvent("CHAT_MSG_ADDON")
 events:SetScript("OnEvent", function(_, _, ...) W.OnAddon(...) end)
 events:SetScript("OnUpdate", function(self, delta)
 	self.t = (self.t or 0) + delta
-	if self.t < 0.5 then return end
+	if self.t < 0.25 then return end
 	self.t = 0
 	W.Tick()
 end)
