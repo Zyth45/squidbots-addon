@@ -32,10 +32,11 @@ local STRINGS = {
 		M_returned = "Returned", M_cancelled = "Cancelled", M_pending = "Awaiting pickup",
 		M_ETA = "arrives in ~%s", M_HERE = "in your mailbox", M_TITLE = "Your artisan orders (last 7 days), newest first.",
 		M_CHAT = "Your order %s (%s): %s.", M_CHAT_ETA = "Your order %s (%s) is on its way, arriving in ~%s.",
-		E_NONE = "No invasion or rush right now.", E_inv = "Invasion", E_rush = "Gold rush", E_IN = "in %s", E_LEFT = "%s left",
+		E_NONE = "No invasion or rush right now.", E_inv = "Invasion", E_rush = "Gold rush", E_craid = "Capital raid", E_IN = "in %s", E_LEFT = "%s left",
 		E_FIRSTS = "Server firsts", GM_TITLE = "GM", GM_INV = "Invasions", GM_RUSH = "Gold rush", GM_LIST = "List",
 		GM_NEXT = "Next", GM_START = "Start", GM_STOP = "Stop", GM_STATUS = "Status", GM_scourge = "Scourge", GM_legion = "Legion",
-		GM_aq = "Ahn'Qiraj", GM_HINT = "The server's answer shows here.", F_level = "level %s", F_boss = "%s",
+		GM_aq = "Ahn'Qiraj", GM_HINT = "The server's answer shows here.", GM_CRAID = "Capital raid", GM_SW = "Stormwind",
+		GM_ORG = "Orgrimmar", F_level = "level %s", F_boss = "%s",
 		R_quality = "quality too high", R_daily = "daily limit reached", R_noguild = "no guild", R_item = "unknown item",
 		R_qty = "quantity not allowed", R_off = "off on this realm", R_nobot = "no guild bot online", R_cannot = "no such recipe",
 		R_busy = "the artisan is busy", R_mats = "no materials", R_expired = "quote too old: ask again",
@@ -90,10 +91,11 @@ local STRINGS = {
 		M_returned = "Renvoyé", M_cancelled = "Annulé", M_pending = "En attente de réception",
 		M_ETA = "arrivée dans ~%s", M_HERE = "dans votre boîte aux lettres", M_TITLE = "Vos commandes aux artisans (7 derniers jours), les plus récentes d'abord.",
 		M_CHAT = "Votre commande %s (%s) : %s.", M_CHAT_ETA = "Votre commande %s (%s) est en route, arrivée dans ~%s.",
-		E_NONE = "Aucune invasion ni ruée en ce moment.", E_inv = "Invasion", E_rush = "Ruée vers l'or", E_IN = "dans %s", E_LEFT = "encore %s",
+		E_NONE = "Aucune invasion ni ruée en ce moment.", E_inv = "Invasion", E_rush = "Ruée vers l'or", E_craid = "Raid sur une capitale", E_IN = "dans %s", E_LEFT = "encore %s",
 		E_FIRSTS = "Server first", GM_TITLE = "MJ", GM_INV = "Invasions", GM_RUSH = "Ruée vers l'or", GM_LIST = "Liste",
 		GM_NEXT = "Suivante", GM_START = "Lancer", GM_STOP = "Arrêter", GM_STATUS = "État", GM_scourge = "Fléau", GM_legion = "Légion",
-		GM_aq = "Ahn'Qiraj", GM_HINT = "La réponse du serveur s'affiche ici.", F_level = "niveau %s", F_boss = "%s",
+		GM_aq = "Ahn'Qiraj", GM_HINT = "La réponse du serveur s'affiche ici.", GM_CRAID = "Raid capitale", GM_SW = "Hurlevent",
+		GM_ORG = "Orgrimmar", F_level = "niveau %s", F_boss = "%s",
 		R_quality = "qualité trop haute", R_daily = "limite du jour atteinte", R_noguild = "pas de guilde", R_item = "objet inconnu",
 		R_qty = "quantité refusée", R_off = "coupé sur ce royaume", R_nobot = "aucun bot de guilde en ligne", R_cannot = "recette inconnue",
 		R_busy = "l'artisan est occupé", R_mats = "pas de composants", R_expired = "devis trop vieux : redemandez",
@@ -929,6 +931,12 @@ function W.Build()
 		Button(x, -42, "GM_START", "invasion start " .. key)
 		Button(x + 60, -42, "GM_STOP", "invasion stop " .. key)
 	end
+	-- Capital raid: List, Start on Stormwind or Orgrimmar, Stop.
+	Label(262, -9, "GM_CRAID")
+	Button(352, -6, "GM_LIST", "capitalraid list")
+	Button(412, -6, "GM_SW", "capitalraid start stormwind")
+	Button(472, -6, "GM_ORG", "capitalraid start orgrimmar")
+	Button(532, -6, "GM_STOP", "capitalraid stop")
 	-- Gold rush: Start (in the open world), Stop, Status.
 	Label(8, -30, "GM_RUSH")
 	Button(8, -42, "GM_START", "rush start")
