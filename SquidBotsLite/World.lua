@@ -43,6 +43,7 @@ local STRINGS = {
 		V_gifts = "Gifts", V_cat = "Catalogue", V_act = "Activities", V_orders = "Ask the guild",
 		G_DROP = "Drop an item here (shift-click or drag it)", G_ID = "or its id", G_ASK_LINE = "A member sends it if they have it, crafts it or buys it at the auction house.",
 		G_BANNER = "%d of %d members online", G_FREE = "%d bots free", G_RUNNING = "Under way: %s", G_NO_GUILD = "You are in no guild.",
+		G_NEXT = "Next activity in %s", G_CLEAR = "Clear", G_CLEAR_TIP = "Hide the requests shown now (new ones still come).",
 		G_RECEIVED = "Received", G_THANKS = "Thank them", G_THANKED = "thanked", THANKS_MSG = "Thanks for the %s!",
 		TIP_V_gifts = "Gear your guild offers you: accept or decline, and the gifts you received.",
 		TIP_V_cat = "What your guild's bots have in stock or can craft: search, then order.",
@@ -98,6 +99,7 @@ local STRINGS = {
 		V_gifts = "Dons", V_cat = "Catalogue", V_act = "Activités", V_orders = "Demander",
 		G_DROP = "Déposez un objet ici (Maj-clic ou glisser)", G_ID = "ou son id", G_ASK_LINE = "Un membre l'envoie s'il l'a, le fabrique ou l'achète à l'hôtel des ventes.",
 		G_BANNER = "%d membres en ligne sur %d", G_FREE = "%d bots libres", G_RUNNING = "En cours : %s", G_NO_GUILD = "Vous n'êtes dans aucune guilde.",
+		G_NEXT = "Prochaine activité dans %s", G_CLEAR = "Effacer", G_CLEAR_TIP = "Masquer les demandes affichées (les nouvelles s'affichent toujours).",
 		G_RECEIVED = "Reçus", G_THANKS = "Remercier", G_THANKED = "remercié", THANKS_MSG = "Merci pour %s !",
 		TIP_V_gifts = "L'équipement que votre guilde vous offre : acceptez ou refusez, et les dons déjà reçus.",
 		TIP_V_cat = "Ce que les bots de votre guilde ont en stock ou savent fabriquer : cherchez, puis commandez.",
@@ -705,15 +707,15 @@ function W.Build()
 	local banner = CreateFrame("Frame", nil, f)
 	f.banner = banner
 	banner:SetWidth(646)
-	banner:SetHeight(58)
-	banner:SetPoint("TOPLEFT", 16, -66)
+	banner:SetHeight(64)
+	banner:SetPoint("TOPLEFT", 16, -68)
 	banner:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 	banner:SetBackdropColor(0.16, 0.12, 0.03, 0.9)
 	banner:SetBackdropBorderColor(1, 0.82, 0, 0.35)
 	banner.icon = banner:CreateTexture(nil, "ARTWORK")
 	banner.icon:SetWidth(20)
 	banner.icon:SetHeight(20)
-	banner.icon:SetPoint("TOPLEFT", 8, -6)
+	banner.icon:SetPoint("TOPLEFT", 10, -8)
 	banner.icon:SetTexture(W.ICONS.guild)
 	banner.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	banner.name = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -721,25 +723,32 @@ function W.Build()
 	banner.info = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	banner.info:SetPoint("LEFT", banner.name, "RIGHT", 12, 0)
 	banner.act = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	banner.act:SetPoint("TOPRIGHT", -36, -10)
+	banner.act:SetPoint("TOPRIGHT", -38, -12)
 	local UIs = SquidBotsLite_UI
 	if UIs and UIs.IconButton then
 		banner.cancel = UIs.IconButton(banner, 20, W.ICONS.cancel, function() return T("GA_CANCEL"), W.guild.runningName end, function()
 			if not W.guild.running then return end
 			W.Confirm(string.format(T("ASK_CANCEL"), T("GA_" .. W.guild.running)), function() W.Send("GACT\tcancel", "act") end)
 		end)
-		banner.cancel:SetPoint("TOPRIGHT", -8, -6)
+		banner.cancel:SetPoint("TOPRIGHT", -10, -8)
 		banner.cancel:Hide()
 	end
 	f.views = {}
 	for i, key in ipairs({ "orders", "gifts", "cat", "act" }) do
 		local b = CreateFrame("Button", nil, banner, "UIPanelButtonTemplate")
-		b:SetWidth(118)
-		b:SetHeight(20)
-		b:SetPoint("BOTTOMLEFT", 8 + (i - 1) * 122, 6)
+		b:SetWidth(104)
+		b:SetHeight(18)
+		b:SetPoint("BOTTOMLEFT", 10 + (i - 1) * 110, 8)
 		W.StyleButton(b, W.ICONS["v_" .. key])
-		b.tabIcon:SetWidth(14)
-		b.tabIcon:SetHeight(14)
+		b.tabIcon:SetWidth(12)
+		b.tabIcon:SetHeight(12)
+		-- The view shown: a gold bar under its button.
+		b.mark = b:CreateTexture(nil, "OVERLAY")
+		b.mark:SetTexture("Interface\\Buttons\\WHITE8X8")
+		b.mark:SetVertexColor(1, 0.82, 0, 0.9)
+		b.mark:SetHeight(2)
+		b.mark:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 4, -1)
+		b.mark:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", -4, -1)
 		b:SetScript("OnClick", function() W.guild.mode = key; W.offset = 0; W.error = nil; W.Load() end)
 		b:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
@@ -756,7 +765,7 @@ function W.Build()
 	f.drop = drop
 	drop:SetWidth(330)
 	drop:SetHeight(44)
-	drop:SetPoint("TOPLEFT", 16, -130)
+	drop:SetPoint("TOPLEFT", 16, -140)
 	drop:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
 	drop:SetBackdropColor(0.09, 0.09, 0.11, 0.95)
 	drop:SetBackdropBorderColor(1, 0.82, 0, 0.5)
@@ -795,7 +804,7 @@ function W.Build()
 	f.search = CreateFrame("EditBox", "SquidBotsLiteWorldSearch", f, "InputBoxTemplate")
 	f.search:SetWidth(200)
 	f.search:SetHeight(20)
-	f.search:SetPoint("TOPLEFT", 24, -132)
+	f.search:SetPoint("TOPLEFT", 24, -142)
 	f.search:SetAutoFocus(false)
 	f.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	f.search:SetScript("OnEnterPressed", function(self)
@@ -822,10 +831,10 @@ function W.Build()
 	f.usableText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.usableText:SetPoint("LEFT", f.usable, "RIGHT", 2, 0)
 	f.prev = CreateFrame("Button", nil, f, "UIPanelScrollUpButtonTemplate")
-	f.prev:SetPoint("TOPRIGHT", -84, -132)
+	f.prev:SetPoint("TOPRIGHT", -84, -142)
 	f.prev:SetScript("OnClick", function() W.CatPage(W.guild.cat.page - 1) end)
 	f.next = CreateFrame("Button", nil, f, "UIPanelScrollDownButtonTemplate")
-	f.next:SetPoint("TOPRIGHT", -20, -132)
+	f.next:SetPoint("TOPRIGHT", -20, -142)
 	f.next:SetScript("OnClick", function() W.CatPage(W.guild.cat.page + 1) end)
 	f.pageText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.pageText:SetPoint("RIGHT", f.next, "LEFT", -6, 0)
@@ -1095,7 +1104,7 @@ function W.Rows()
 			local state = ""
 			if a then
 				if a.state == "cooldown" then
-					state = string.format(T("GS_cooldown"), W.Duration(a.untilAt - now))
+					state = ""
 				elseif a.state == "busy" and kind == running then
 					state = string.format(T("GS_LEFT"), W.Duration(a.untilAt - now))
 				elseif a.state == "busy" and running then
@@ -1105,7 +1114,7 @@ function W.Rows()
 				end
 				local color = a.state == "ready" and "|cff40ff40" or (a.state == "busy" and kind == running) and "|cffffd100"
 					or a.state == "busy" and "|cffaaaaaa" or "|cffff6060"
-				state = color .. state .. "|r\n|cffaaaaaa" .. string.format(T("GA_BOTS"), a.bots) .. "|r"
+				state = state ~= "" and (color .. state .. "|r") or ""
 			end
 			local ready = a and a.state == "ready"
 			table.insert(rows, { left = T("GA_" .. kind), right = state, tip = T("GA_TIP"),
@@ -1113,23 +1122,33 @@ function W.Rows()
 				-- The running one (a rally): Cancel instead of Start (Monde 8ebe01b3, "GACT cancel"); Start only when ready.
 				go = kind == running and { icon = W.ICONS.cancel, title = T("GA_CANCEL"), line = T("GA_" .. kind), click = function()
 					W.Confirm(string.format(T("ASK_CANCEL"), T("GA_" .. kind)), function() W.Send("GACT\tcancel", "act") end)
-				end } or ready and { icon = W.ICONS.start, title = T("GA_START"), line = T("GA_" .. kind), click = function()
+				end } or { icon = W.ICONS.start, title = T("GA_START"), line = T("GA_" .. kind), disabled = not ready, click = function()
 					W.Confirm(string.format(T("ASK_ACT"), T("GA_" .. kind)), function() W.Send("GACT\t" .. kind, "act") end)
-				end } or nil })
+				end } })
 		end
 	elseif W.tab == "guild" then
 		-- Two parts, each with its title: my orders (and how each went), the gifts the guild sent me.
-		table.insert(rows, { header = true, left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "" })
+		local cleared = SquidBotsLiteDB and SquidBotsLiteDB.guildClearedAt or 0
+		local recent = {}
 		for _, o in ipairs(W.guild.orders) do
+			if o.at > now - 86400 and o.at > cleared and #recent < 5 then table.insert(recent, o) end
+		end
+		table.insert(rows, { header = true, left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "",
+			go = #recent > 0 and { icon = W.ICONS.cancel, title = T("G_CLEAR"), line = T("G_CLEAR_TIP"), click = function()
+				SquidBotsLiteDB.guildClearedAt = time()
+				W.Refresh()
+			end } or nil })
+		for _, o in ipairs(recent) do
 			local state = T("S_" .. (o.state or "open"))
 			if o.reason then state = state .. " : " .. W.Reason(o.reason) end
 			if o.cod > 0 then state = state .. "  " .. W.Money(o.cod) end
 			local color = (o.state == "refused" or o.state == "none") and "|cffff6060" or (o.state == "open") and "|cffaaaaaa" or "|cff40ff40"
 			local by = o.bot and string.format(T("G_BY"), o.bot, W.Ago(o.at)) or W.Ago(o.at)
-			table.insert(rows, { item = o.item, left = W.Colored(o.item) .. (o.qty > 1 and (" x" .. o.qty) or ""),
-				right = color .. state .. "|r\n|cffaaaaaa" .. by .. "|r" })
+			-- The item and who / when on the left, the status alone in its column.
+			table.insert(rows, { item = o.item, left = W.Colored(o.item) .. (o.qty > 1 and (" x" .. o.qty) or ""), sub = by,
+				right = color .. state .. "|r" })
 		end
-		if #W.guild.orders == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NONE") .. "|r", right = "" }) end
+		if #recent == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NONE") .. "|r", right = "" }) end
 	elseif W.tab == "art" then
 		if W.art.mode == "bots" then
 			for _, b in ipairs(W.art.bots) do
@@ -1253,7 +1272,13 @@ function W.Refresh()
 		local info = gname and string.format(T("G_BANNER"), online, total) or ""
 		if free then info = info .. "  ·  " .. string.format(T("G_FREE"), free) end
 		f.banner.info:SetText("|cffaaaaaa" .. info .. "|r")
-		f.banner.act:SetText(running and ("|cffffd100" .. string.format(T("G_RUNNING"), T("GA_" .. running)) .. "|r") or "")
+		local wait
+		for _, kind in ipairs(W.ACTS) do
+			local a = W.guild.acts[kind]
+			if a and a.state == "cooldown" and a.untilAt > time() then wait = math.max(wait or 0, a.untilAt - time()) end
+		end
+		f.banner.act:SetText(running and ("|cffffd100" .. string.format(T("G_RUNNING"), T("GA_" .. running)) .. "|r")
+			or wait and ("|cffaaaaaa" .. string.format(T("G_NEXT"), W.Duration(wait)) .. "|r") or "")
 		if f.banner.cancel then if running then f.banner.cancel:Show() else f.banner.cancel:Hide() end end
 	else
 		f.banner:Hide()
@@ -1263,7 +1288,7 @@ function W.Refresh()
 			b:Show()
 			b:SetText(T("V_" .. b.key))
 			W.PlaceText(b)
-			if b.key == W.guild.mode then b:LockHighlight() else b:UnlockHighlight() end
+			if b.key == W.guild.mode then b:LockHighlight(); b.mark:Show() else b:UnlockHighlight(); b.mark:Hide() end
 		else
 			b:Hide()
 		end
@@ -1382,7 +1407,7 @@ function W.Refresh()
 		f.card:Hide()
 	end
 	local top = -146
-	if guild then top = orders and -196 or cat and -160 or -132 end
+	if guild then top = orders and -206 or cat and -172 or -142 end
 	shown = math.min(shown, math.floor((470 + top) / 39))
 	for i, row in ipairs(f.rows) do
 		row:ClearAllPoints()
@@ -1442,8 +1467,10 @@ function W.Refresh()
 			end
 			if row.go then
 				if r.go then
-					row.go.run, row.go.tipTitle, row.go.tipLine = r.go.click, r.go.title, r.go.line
+					row.go.run, row.go.tipTitle, row.go.tipLine = (not r.go.disabled) and r.go.click or nil, r.go.title, r.go.line
 					row.go.icon:SetTexture(r.go.icon)
+					row.go.icon:SetDesaturated(r.go.disabled and true or false)
+					row.go.icon:SetAlpha(r.go.disabled and 0.5 or 1)
 					row.go:Show()
 				else
 					row.go:Hide()
