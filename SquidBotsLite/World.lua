@@ -673,13 +673,15 @@ function W.Build()
 	f.bar = CreateFrame("Slider", "SquidBotsLiteWorldScroll", f, "UIPanelScrollBarTemplate")
 	f.bar:SetPoint("TOPLEFT", f.rows[1], "TOPRIGHT", 6, -16)
 	f.bar:SetPoint("BOTTOMLEFT", f.rows[ROWS], "BOTTOMRIGHT", 6, 16)
-	f.bar:SetValueStep(1)
-	f.bar:SetMinMaxValues(0, 0)
-	f.bar:SetValue(0)
+	-- Our handler first: the template's own one scrolls its parent (a ScrollFrame), which this panel is not, and
+	-- SetMinMaxValues / SetValue already call it (the user's /reload, 09/11: "SetVerticalScroll a nil value").
 	f.bar:SetScript("OnValueChanged", function(self, value)
 		value = math.floor((value or 0) + 0.5)
 		if value ~= W.offset then W.offset = value; W.Refresh() end
 	end)
+	f.bar:SetValueStep(1)
+	f.bar:SetMinMaxValues(0, 0)
+	f.bar:SetValue(0)
 	local up, down = _G["SquidBotsLiteWorldScrollScrollUpButton"], _G["SquidBotsLiteWorldScrollScrollDownButton"]
 	if up then up:SetScript("OnClick", function() W.Scroll(-1) end) end
 	if down then down:SetScript("OnClick", function() W.Scroll(1) end) end
