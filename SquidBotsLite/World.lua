@@ -13,7 +13,7 @@ local REQUESTS = { GORD = true, GLIST = true, WEV = true, ["WEV?"] = true, ALIST
 
 local STRINGS = {
 	en = {
-		TITLE = "SquidBots Lite - World", GUILD = "Guild", ARTISANS = "Artisans", EVENTS = "Events",
+		TITLE = "SquidBots Manager - World", GUILD = "Guild", ARTISANS = "Artisans", EVENTS = "Events",
 		TIP_WORLD = "Guild orders, bot artisans and the world's events (invasions, rushes, server firsts).",
 		OFF = "Not on this realm (CoA Bots 3.0 with this feature and its .Addon option on).", WAITING = "Asking the server...",
 		G_ITEM = "Item: shift-click it here, or its id", G_QTY = "Qty", G_ORDER = "Order",
@@ -61,7 +61,7 @@ local STRINGS = {
 		ARCH_pvp = "PvP", TRAITS = "pace %d, sociability %d, curiosity %d, greed %d, aggression %d",
 	},
 	fr = {
-		TITLE = "SquidBots Lite - Monde", GUILD = "Guilde", ARTISANS = "Artisans", EVENTS = "Événements",
+		TITLE = "SquidBots Manager - Monde", GUILD = "Guilde", ARTISANS = "Artisans", EVENTS = "Événements",
 		TIP_WORLD = "Commandes de guilde, bots artisans et événements du monde (invasions, ruées, server first).",
 		OFF = "Pas sur ce royaume (CoA Bots 3.0 avec cette brique et son option .Addon activées).", WAITING = "Question au serveur...",
 		G_ITEM = "Objet : Maj-clic ici, ou son id", G_QTY = "Qté", G_ORDER = "Commander",
@@ -373,7 +373,7 @@ function W.Line(f)
 			for i = #W.guild.offers, 1, -1 do if W.guild.offers[i].id == o.id then table.remove(W.guild.offers, i) end end
 			table.insert(W.guild.offers, 1, o)
 			if DEFAULT_CHAT_FRAME then
-				DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. string.format(T("GF_CHAT"), o.bot or "?",
+				DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. string.format(T("GF_CHAT"), o.bot or "?",
 					W.Colored(o.item), W.GiftReason(o.reason)))
 			end
 		end
@@ -415,7 +415,7 @@ function W.UpdateOrder(m)
 	else
 		text = string.format(T("M_CHAT"), what, m.bot or "?", T("M_" .. (m.state or "")))
 	end
-	if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text) end
+	if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text) end
 end
 
 -- The 6 s rule, and the countdowns.

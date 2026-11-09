@@ -41,7 +41,7 @@ local STRINGS = {
 		LAST = "Last order: %s", FAIL = "%s, %s: %s.",
 		R_no_target = "no target", R_out_of_range = "out of range", R_cooldown = "on cooldown", R_dead = "target dead",
 		R_not_tank = "cannot tank", R_not_in_group = "not in your group", R_busy = "busy (in a fight, dead, controlled or in a vehicle)",
-		B_HEADER = "SquidBots Lite: Main Tank", B_MAIN = "Main tank on / off", B_BAR = "Main Tank bar (Main tank on / off)",
+		B_HEADER = "SquidBots Manager: Main Tank", B_MAIN = "Main tank on / off", B_BAR = "Main Tank bar (Main tank on / off)",
 		B_TARGET = "Off-tank %d: on my target", B_TAUNT = "Off-tank %d: taunt", B_SWAP = "Off-tank %d: swap",
 		B_HOLD = "Off-tank %d: placement",
 	},
@@ -71,7 +71,7 @@ local STRINGS = {
 		LAST = "Dernier ordre : %s", FAIL = "%s, %s : %s.",
 		R_no_target = "pas de cible", R_out_of_range = "hors de portée", R_cooldown = "en recharge", R_dead = "cible morte",
 		R_not_tank = "ne peut pas tanker", R_not_in_group = "pas dans votre groupe", R_busy = "occupé (en combat, mort, contrôlé ou en véhicule)",
-		B_HEADER = "SquidBots Lite : Main Tank", B_MAIN = "Main tank actif / inactif", B_BAR = "Barre Main Tank (Main tank actif / inactif)",
+		B_HEADER = "SquidBots Manager : Main Tank", B_MAIN = "Main tank actif / inactif", B_BAR = "Barre Main Tank (Main tank actif / inactif)",
 		B_TARGET = "Off-tank %d : sur ma cible", B_TAUNT = "Off-tank %d : taunt", B_SWAP = "Off-tank %d : swap",
 		B_HOLD = "Off-tank %d : placement",
 	},
@@ -83,7 +83,7 @@ local function T(key)
 end
 
 local function Print(text)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text)
 end
 
 local ICONS = {

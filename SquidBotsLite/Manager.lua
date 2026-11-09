@@ -162,7 +162,7 @@ local mountOffset = 0
 local mountKind = "all"
 
 local function Print(text)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text)
 end
 
 local function UnitOf(name)
@@ -1532,7 +1532,7 @@ end
 
 Render = function()
 	if not sheet or not sheet:IsShown() then return end
-	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?")
+	sheet.title:SetText("SquidBots Manager - " .. T("TITLE") .. " : " .. (current or "?")
 		.. (readOnly.on and ("  |cffaaaaaa(" .. T("READ_ONLY") .. ")|r") or ""))
 	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
 	local gold = sheet.gold or info.gold

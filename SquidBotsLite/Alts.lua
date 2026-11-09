@@ -207,7 +207,7 @@ SquidBotsLite_Alts = A
 A.SKILLS = SKILLS
 
 local function Print(text)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text)
 end
 
 local function IsAlt(name)
@@ -456,7 +456,7 @@ end
 function A.RefreshLog()
 	local f = A.logFrame
 	if not f or not f:IsShown() then return end
-	f.title:SetText("SquidBots Lite - " .. T("LOG"))
+	f.title:SetText("SquidBots Manager - " .. T("LOG"))
 	f.modeLabel:SetText(T("MODE"))
 	f.clear:SetText(T("CLEAR"))
 	for mode, button in pairs(f.modes) do
@@ -675,7 +675,7 @@ end
 function A.RefreshQuests()
 	local f = A.questPanel
 	if not f or not f:IsShown() then return end
-	f.title:SetText("SquidBots Lite - " .. T("QUESTS"))
+	f.title:SetText("SquidBots Manager - " .. T("QUESTS"))
 	f.me:SetText(T("JUST_ME"))
 	f.team:SetText(A.detail and T("TAKE_TEAM") or T("TAKE_ALL"))
 	local alts, id = A.Online(), A.current
@@ -977,7 +977,7 @@ end
 function A.RefreshTrainer()
 	local f = A.trainPanel
 	if not f or not f:IsShown() then return end
-	f.title:SetText("SquidBots Lite - " .. T("TRAINER"))
+	f.title:SetText("SquidBots Manager - " .. T("TRAINER"))
 	f.npc:SetText(A.trainerName or (UnitName("npc")) or "")
 	local y, shown = TTOP, 0
 	local alts = A.Online()

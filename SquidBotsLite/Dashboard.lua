@@ -12,7 +12,7 @@ local A, M, UI = SquidBotsLite_Alts, SquidBotsLite_Missions, SquidBotsLite_UI
 
 local STRINGS = {
 	en = {
-		TITLE = "Alts Dashboard", SUB = "SquidBots Lite  ·  %s", REFRESH = "Refresh",
+		TITLE = "Alts Dashboard", SUB = "SquidBots Manager  ·  %s", REFRESH = "Refresh",
 		TIP_REFRESH = "Ask each alt logged in for its level, gold, bags and professions again.",
 		ONLINE = "Logged in", OUT = "On a mission", GOLD = "Team gold", ALERTS = "To do",
 		TIP_GOLD = "Your alts' gold: the last amount each one sent for those logged out.", NONE = "Nothing",
@@ -34,7 +34,7 @@ local STRINGS = {
 		PROFS = "Professions",
 	},
 	fr = {
-		TITLE = "Dashboard Alts", SUB = "SquidBots Lite  ·  %s", REFRESH = "Actualiser",
+		TITLE = "Dashboard Alts", SUB = "SquidBots Manager  ·  %s", REFRESH = "Actualiser",
 		TIP_REFRESH = "Redemander à chaque alt connecté son niveau, son or, ses sacs et ses métiers.",
 		ONLINE = "Connectés", OUT = "En mission", GOLD = "Or de l'équipe", ALERTS = "À faire",
 		TIP_GOLD = "L'or de vos alts : le dernier montant connu pour ceux qui sont déconnectés.", NONE = "Rien",

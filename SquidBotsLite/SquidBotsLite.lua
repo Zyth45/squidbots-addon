@@ -11,7 +11,7 @@ local STRINGS = {
 		TIP_ACTIVE = "Active: bots fight normally. Click to make them passive: no fights, and the tank stops pulling on its own.",
 		TIP_PASSIVE = "Bots are passive: no fights, no auto pull. Click, or give any order, to wake them.",
 		TOGGLE_PASSIVE = "Passive / Active", BIND_TANKPULL = "Tank pulls my target", BIND_RECALL = "Recall all alts from missions",
-		KEY = "Shortcut: %s", NO_KEY = "Shortcut: none yet (Esc > Key Bindings > SquidBots Lite).",
+		KEY = "Shortcut: %s", NO_KEY = "Shortcut: none yet (Esc > Key Bindings > SquidBots Manager).",
 		PULL_ON = "Auto pull", PULL_OFF = "No pull", TOGGLE_PULL = "Tank auto pull on / off",
 		RAIDFRAMES_ON = "Role icons and bot menus on the raid-style frames: on.",
 		WORLD_BAR = "World", TIP_WORLD = "Guild orders, bot artisans and the world's events (invasions, rushes, server firsts).",
@@ -108,7 +108,7 @@ local STRINGS = {
 		FORMATION = "Formation", F_NEAR = "Close (default)", F_LINE = "Line", F_CIRCLE = "Circle", F_SHIELD = "Shield around me",
 		F_ARROW = "Arrow", F_QUEUE = "Single file",
 		ROLES_ON = "Automatic roles on: a bot of unknown role is asked \"co ?\" once, answer hidden.",
-		OUTDATED = "SquidBots Lite %s is older than CoA Bots %s on this server. New version: https://github.com/Zyth45/squidbots-addon/releases/latest",
+		OUTDATED = "SquidBots Manager %s is older than CoA Bots %s on this server. New version: https://github.com/Zyth45/squidbots-addon/releases/latest",
 		ROLES_OFF = "Automatic roles off.",
 		SPECS = "Specializations", SPEC_MENU = "Specialization", SPEC_OPEN = "All the group's specializations...",
 		MY_ROLE = "My role:", ROLE_TANK = "Tank", ROLE_HEAL = "Healer", ROLE_DPS = "Damage", SUPPORT = "support",
@@ -121,9 +121,9 @@ local STRINGS = {
 		BALANCE_DONE = "Group: %s.", BALANCE_MISSING = "No bot in the group can play %s.",
 		BALANCE_WAIT = "Asking the bots for their specializations...", BALANCE_RAID = "In a raid, the raid command already sets the roles: pick specializations bot by bot.",
 		SPECS_NOT_BOT = "not a bot", SPEC_ASK = "Ask the bot", TIP_ROLE = "Switch to %s.", TIP_NO_ROLE = "No specialization of this role.",
-		HELP = "SquidBots Lite: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl dashboard, /sbl spec, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Lite.",
-		SCALE_SET = "SquidBots Lite bar size: %s (this character).", SCALE_BAD = "Bar size: a number from 0.5 to 2, for example /sbl scale 1.2",
-		LANG_SET = "SquidBots Lite language: English.", CHANNEL_SET = "SquidBots Lite asks in: %s",
+		HELP = "SquidBots Manager: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl dashboard, /sbl spec, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Manager.",
+		SCALE_SET = "SquidBots Manager bar size: %s (this character).", SCALE_BAD = "Bar size: a number from 0.5 to 2, for example /sbl scale 1.2",
+		LANG_SET = "SquidBots Manager language: English.", CHANNEL_SET = "SquidBots Manager asks in: %s",
 	},
 	fr = {
 		FOLLOW = "Suivre", STAY = "Rester", ATTACK = "Cible", PASSIVE = "Passif", ACTIVE = "Actif", DUNGEON = "Donjon", ALTS_BAR = "Alts", RECRUIT = "Bots",
@@ -131,7 +131,7 @@ local STRINGS = {
 		TIP_ACTIVE = "Actif : les bots combattent normalement. Cliquez pour les rendre passifs : plus de combat, et le tank arrête de tirer seul.",
 		TIP_PASSIVE = "Les bots sont passifs : pas de combat, pas de pull auto. Cliquez, ou donnez n'importe quel ordre, pour les réveiller.",
 		TOGGLE_PASSIVE = "Passif / Actif", BIND_TANKPULL = "Le tank pull ma cible", BIND_RECALL = "Rappeler tous les alts en mission",
-		KEY = "Raccourci : %s", NO_KEY = "Raccourci : aucun pour l'instant (Échap > Raccourcis > SquidBots Lite).",
+		KEY = "Raccourci : %s", NO_KEY = "Raccourci : aucun pour l'instant (Échap > Raccourcis > SquidBots Manager).",
 		PULL_ON = "Pull auto", PULL_OFF = "Pas de pull", TOGGLE_PULL = "Pull auto du tank oui / non",
 		RAIDFRAMES_ON = "Icônes de rôle et menus des bots sur les cadres de style raid : activés.",
 		WORLD_BAR = "Monde", TIP_WORLD = "Commandes de guilde, bots artisans et événements du monde (invasions, ruées, server first).",
@@ -212,7 +212,7 @@ local STRINGS = {
 		ALTS_LOOK = "Garde son apparence (garde-robe, montures) si le serveur a CoA.CollectionsForBots = 1.",
 		ALTS_TIP_CLICK = "Clic : ouvrir sa fiche.", ALTS_GOLD = "Or : %s", ALTS_XP = "XP : %d%% (reposé %d%%)",
 		INVITE = "Inviter", ASKED = "Demandé dans %s : %s",
-		ASK_NONE = "Aucun %s n'a répondu : seuls les bots à 2 niveaux de vous peuvent le faire. Redemandez dans une minute, ou prenez un de vos alts (Mes alts).", NO_CHANNEL = "Impossible de rejoindre le canal %s : tapez /join %s, puis redemandez (ou /sbl channel <nom>).", JOINING = "Pas dans le canal Zone ou Newcomers : SquidBots Lite rejoint %s, la demande suit.",
+		ASK_NONE = "Aucun %s n'a répondu : seuls les bots à 2 niveaux de vous peuvent le faire. Redemandez dans une minute, ou prenez un de vos alts (Mes alts).", NO_CHANNEL = "Impossible de rejoindre le canal %s : tapez /join %s, puis redemandez (ou /sbl channel <nom>).", JOINING = "Pas dans le canal Zone ou Newcomers : SquidBots Manager rejoint %s, la demande suit.",
 		NOT_IN_GROUP = "Vous n'êtes pas en groupe avec des bots.",
 		LOW_MANA = "Mana bas", PULLING = "Pull", REZ = "Rez",
 		M_FOLLOW = "Me suivre", M_STAY = "Rester ici", M_ATTACK = "Attaquer ma cible", M_SUMMON = "Venir à moi",
@@ -228,7 +228,7 @@ local STRINGS = {
 		FORMATION = "Formation", F_NEAR = "Proche (par défaut)", F_LINE = "Ligne", F_CIRCLE = "Cercle", F_SHIELD = "Bouclier autour de moi",
 		F_ARROW = "Flèche", F_QUEUE = "File indienne",
 		ROLES_ON = "Rôles automatiques activés : un bot au rôle inconnu reçoit « co ? » une fois, réponse masquée.",
-		OUTDATED = "SquidBots Lite %s est plus ancien que CoA Bots %s sur ce serveur. Nouvelle version : https://github.com/Zyth45/squidbots-addon/releases/latest",
+		OUTDATED = "SquidBots Manager %s est plus ancien que CoA Bots %s sur ce serveur. Nouvelle version : https://github.com/Zyth45/squidbots-addon/releases/latest",
 		ROLES_OFF = "Rôles automatiques désactivés.",
 		SPECS = "Spécialisations", SPEC_MENU = "Spécialisation", SPEC_OPEN = "Toutes les spécialisations du groupe...",
 		MY_ROLE = "Mon rôle :", ROLE_TANK = "Tank", ROLE_HEAL = "Soigneur", ROLE_DPS = "DPS", SUPPORT = "soutien",
@@ -241,9 +241,9 @@ local STRINGS = {
 		BALANCE_DONE = "Groupe : %s.", BALANCE_MISSING = "Aucun bot du groupe ne peut jouer %s.",
 		BALANCE_WAIT = "Demande de leurs spécialisations aux bots...", BALANCE_RAID = "En raid, la commande de raid répartit déjà les rôles : choisissez les spécialisations bot par bot.",
 		SPECS_NOT_BOT = "pas un bot", SPEC_ASK = "Demander au bot", TIP_ROLE = "Passer en %s.", TIP_NO_ROLE = "Aucune spécialisation de ce rôle.",
-		HELP = "SquidBots Lite : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl dashboard, /sbl spec, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Lite.",
-		SCALE_SET = "Taille de la barre SquidBots Lite : %s (ce personnage).", SCALE_BAD = "Taille de la barre : un nombre de 0,5 à 2, par exemple /sbl scale 1.2",
-		LANG_SET = "Langue de SquidBots Lite : français.", CHANNEL_SET = "SquidBots Lite demande dans : %s",
+		HELP = "SquidBots Manager : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl dashboard, /sbl spec, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Manager.",
+		SCALE_SET = "Taille de la barre SquidBots Manager : %s (ce personnage).", SCALE_BAD = "Taille de la barre : un nombre de 0,5 à 2, par exemple /sbl scale 1.2",
+		LANG_SET = "Langue de SquidBots Manager : français.", CHANNEL_SET = "SquidBots Manager demande dans : %s",
 	},
 }
 
@@ -429,7 +429,7 @@ local state = { order = "follow", passive = false, autoPull = true }
 local bar, buttons, overlays, toastFrames = nil, {}, {}, {}
 
 local function Print(text)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text)
 end
 
 local function SetLanguage(lang)
@@ -439,7 +439,7 @@ local function SetLanguage(lang)
 	SquidBotsLiteDB.lang = lang
 	L = STRINGS[lang]
 	-- Names shown in the game's Key Bindings window (the bindings themselves are in Bindings.xml).
-	BINDING_HEADER_SQUIDBOTSLITE = "SquidBots Lite"
+	BINDING_HEADER_SQUIDBOTSLITE = "SquidBots Manager"
 	for _, binding in ipairs(BINDINGS) do
 		_G["BINDING_NAME_SQUIDBOTSLITE_" .. string.upper(binding[1])] = L[binding[2]]
 	end
@@ -1487,7 +1487,7 @@ end
 
 local function SpecsTexts()
 	if not specsFrame then return end
-	specsFrame.title:SetText("SquidBots Lite - " .. L.SPECS)
+	specsFrame.title:SetText("SquidBots Manager - " .. L.SPECS)
 	specsFrame.myRoleLabel:SetText(L.MY_ROLE)
 	specsFrame.balance:SetText(L.BALANCE)
 	specsFrame.refresh:SetText(L.SPECS_REFRESH)
@@ -2613,7 +2613,7 @@ end
 
 local function AltsTexts()
 	if not altsFrame then return end
-	altsFrame.title:SetText("SquidBots Lite - " .. L.ALTS)
+	altsFrame.title:SetText("SquidBots Manager - " .. L.ALTS)
 	altsFrame.teams:SetText(L.TEAMS)
 	altsFrame.dashboard:SetText(L.DASHBOARD)
 	altsFrame.missions:SetText(L.MISSIONS)

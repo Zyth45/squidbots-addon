@@ -157,7 +157,7 @@ M.MAX_OUT = MAX_OUT
 local HIGH_RISK_AURA = 1004019
 
 local function Print(text)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text)
 end
 
 local function Whisper(name, text)
@@ -1124,7 +1124,7 @@ function M.RefreshPanel()
 	M.RefreshBadge()
 	local f = M.panel
 	if not f or not f:IsShown() then return end
-	f.title:SetText("SquidBots Lite - " .. T("TITLE"))
+	f.title:SetText("SquidBots Manager - " .. T("TITLE"))
 	f.help:SetText(T("HELP"))
 	local out = M.Count()
 	f.count:SetText(T("OUT"))
