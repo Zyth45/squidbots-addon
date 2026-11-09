@@ -40,6 +40,7 @@ local STRINGS = {
 		TIP_LOOT_PET = "The companion this alt summons out of combat, and that loots for it when it can.",
 		PET_APP = "Loot-Transfigurator on: any companion loots. Shift-click one (your spellbook's companions, a link in the chat) into the box, or type its spell id, then Enter.",
 		USAGE = "/sbl bot <name>, or target a bot of your group and type /sbl bot.",
+		READ_ONLY = "read only", READ_ONLY_NO = "Read-only sheet: this bot is not one of your characters.",
 		NOT_A_MEMBER = "%s is not in your group.",
 		STRATS = "Strategies", COMBAT = "In combat", NONCOMBAT = "Out of combat", ADD = "Add...",
 		STRAT_HINT = "Click a strategy to remove it; Add... to give one. The server resets them on a specialization switch.",
@@ -97,6 +98,7 @@ local STRINGS = {
 		TIP_LOOT_PET = "La mascotte que cet alt invoque hors combat, et qui ramasse pour lui quand elle sait le faire.",
 		PET_APP = "Loot-Transfigurator actif : toute mascotte ramasse. Maj-clic sur une mascotte (mascottes du grimoire, lien du chat) dans la case, ou tapez son id de sort, puis Entrée.",
 		USAGE = "/sbl bot <nom>, ou ciblez un bot de votre groupe et tapez /sbl bot.",
+		READ_ONLY = "lecture seule", READ_ONLY_NO = "Fiche en lecture seule : ce bot n'est pas un de vos personnages.",
 		NOT_A_MEMBER = "%s n'est pas dans votre groupe.",
 		STRATS = "Stratégies", COMBAT = "En combat", NONCOMBAT = "Hors combat", ADD = "Ajouter...",
 		STRAT_HINT = "Cliquez une stratégie pour la retirer ; Ajouter... pour en donner une. Le serveur les remet à zéro à un changement de spé.",
@@ -141,6 +143,10 @@ local NONCOMBAT_STRATS = { "follow", "stay", "grind", "loot", "gather", "food", 
 	"travel", "mount", "buff", "maintenance", "ready check", "emote", "chat", "duel", "sit" }
 
 local sheet, current, tab
+-- 3.0: a sheet opened read only (a random bot of the group, from its sheet icon): its own tabs only, and only the
+-- questions below are whispered; any order is refused with a line in the chat.
+local readOnly = { on = false, HIDDEN = { bags = true, mounts = true, pets = true },
+	ASK = { ["stats"] = true, ["quests all"] = true, ["talents ?"] = true, ["co ?"] = true, ["nc ?"] = true } }
 local capture, hideFrom, lastAsked = nil, {}, {}
 local bags, quests, stats, mounts, bank = {}, {}, {}, {}, {}
 local talents, talentSpent, talentOffset = {}, nil, 0
@@ -171,6 +177,10 @@ end
 
 local function Whisper(text)
 	if not current then return end
+	if readOnly.on and not readOnly.ASK[text] then
+		Print(T("READ_ONLY_NO"))
+		return
+	end
 	hideFrom[current] = GetTime() + QUIET + 1
 	SquidBotsLite_QuietWhisper(text, current)
 end
@@ -1506,13 +1516,24 @@ local function RenderQuests(page)
 end
 
 local function RenderInfo(page)
-	page.text:SetText(table.concat(stats, "\n"))
+	local text = table.concat(stats, "\n")
+	local W = SquidBotsLite_World
+	if W and current then
+		local arch, traits = W.SoulText(current)
+		if arch then
+			text = text .. (text ~= "" and "\n\n" or "") .. "|cffffd100" .. W.T("SOUL") .. " : " .. arch .. "|r\n|cffaaaaaa" .. traits .. "|r"
+		else
+			W.Soul(current)
+		end
+	end
+	page.text:SetText(text)
 	for _, b in ipairs(page.buttons) do b:SetText(T(b.label)) end
 end
 
 Render = function()
 	if not sheet or not sheet:IsShown() then return end
-	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?"))
+	sheet.title:SetText("SquidBots Lite - " .. T("TITLE") .. " : " .. (current or "?")
+		.. (readOnly.on and ("  |cffaaaaaa(" .. T("READ_ONLY") .. ")|r") or ""))
 	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
 	local gold = sheet.gold or info.gold
 	-- A wrong value saved before the fix ("Strategies: ...") is not shown.
@@ -1544,6 +1565,7 @@ Render = function()
 			text:SetPoint("LEFT", sheet.tabs[key].tabIcon, "RIGHT", 4, 0)
 		end
 		if key == tab then sheet.tabs[key]:LockHighlight() else sheet.tabs[key]:UnlockHighlight() end
+		if readOnly.on and readOnly.HIDDEN[key] then sheet.tabs[key]:Hide() else sheet.tabs[key]:Show() end
 		if key == tab then pages[key]:Show() else pages[key]:Hide() end
 	end
 	if tab == "gear" then RenderGear(pages.gear)
@@ -1839,7 +1861,11 @@ function PT.Render(page)
 	page.note:SetText(silent and T("PETS_NO_CMD") or PT.err and ("|cffff6060" .. string.format(T("PETS_ERR"), T("PETS_ERR_" .. PT.err) or PT.err) .. "|r") or "")
 end
 
-function SquidBotsLite_OpenSheet(name)
+-- tabKey: the tab to open on (else the last one); ro: read only (a bot that is not the player's).
+function SquidBotsLite_OpenSheet(name, tabKey, ro)
+	readOnly.on = ro and true or false
+	if tabKey then tab = tabKey end
+	if readOnly.on and readOnly.HIDDEN[tab or ""] then tab = "gear" end
 	if not name or name == "" then
 		name = UnitName("target")
 		if not name or not UnitOf(name) then Print(T("USAGE")) return end
@@ -1867,7 +1893,7 @@ function SquidBotsLite_OpenSheet(name)
 	end
 	sheet:Show()
 	sheet:Raise()
-	if not UnitOf(name) and tab == "gear" then tab = "bags" end
+	if not UnitOf(name) and tab == "gear" and not readOnly.on then tab = "bags" end
 	Load()
 	if not sheet.gold then Ask("stats", "stats") end
 	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]

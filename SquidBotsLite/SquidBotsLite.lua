@@ -14,6 +14,10 @@ local STRINGS = {
 		KEY = "Shortcut: %s", NO_KEY = "Shortcut: none yet (Esc > Key Bindings > SquidBots Lite).",
 		PULL_ON = "Auto pull", PULL_OFF = "No pull", TOGGLE_PULL = "Tank auto pull on / off",
 		RAIDFRAMES_ON = "Role icons and bot menus on the raid-style frames: on.",
+		WORLD_BAR = "World", TIP_WORLD = "Guild orders, bot artisans and the world's events (invasions, rushes, server firsts).",
+		TIP_BAG_ICON = "Click: its bags.", TIP_SHEET_ICON = "Click: its sheet (gear, spec, soul).",
+		TIP_SHEET_ICON_RO = "Click: its sheet, read only (not one of your characters).",
+		ICONS_ON = "Bag and sheet icons on the group frames: on.", ICONS_OFF = "Bag and sheet icons on the group frames: off.",
 		RAIDFRAMES_OFF = "Role icons and bot menus on the raid-style frames: off.",
 		TIP_PULL_ON = "Auto pull: the tank engages nearby monsters on its own. Click so it waits: it only fights what you or the group attack.",
 		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
@@ -130,6 +134,10 @@ local STRINGS = {
 		KEY = "Raccourci : %s", NO_KEY = "Raccourci : aucun pour l'instant (Échap > Raccourcis > SquidBots Lite).",
 		PULL_ON = "Pull auto", PULL_OFF = "Pas de pull", TOGGLE_PULL = "Pull auto du tank oui / non",
 		RAIDFRAMES_ON = "Icônes de rôle et menus des bots sur les cadres de style raid : activés.",
+		WORLD_BAR = "Monde", TIP_WORLD = "Commandes de guilde, bots artisans et événements du monde (invasions, ruées, server first).",
+		TIP_BAG_ICON = "Clic : ses sacs.", TIP_SHEET_ICON = "Clic : sa fiche (équipement, spé, âme).",
+		TIP_SHEET_ICON_RO = "Clic : sa fiche, en lecture seule (ce n'est pas un de vos personnages).",
+		ICONS_ON = "Icônes sac et fiche sur les cadres de groupe : activées.", ICONS_OFF = "Icônes sac et fiche sur les cadres de groupe : désactivées.",
 		RAIDFRAMES_OFF = "Icônes de rôle et menus des bots sur les cadres de style raid : désactivés.",
 		TIP_PULL_ON = "Pull auto : le tank engage tout seul les monstres proches. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
 		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
@@ -264,7 +272,7 @@ K.MAX_TOASTS = 8
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
 K.CAPTION_SIZE, K.CAPTION_GAP, K.MIN_STEP, K.FALLBACK_STEP = 8, 3, 37, 52
-local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "recruit", "maintank", "release" }
+local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "world", "recruit", "maintank", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for K.PROBE_WINDOW seconds.
 K.PROBE_DELAY, K.PROBE_WINDOW, K.PROBE_RETRY = 3, 10, 30
@@ -1944,6 +1952,10 @@ local function BuildBar()
 		{ "alts", "Interface\\Icons\\INV_Misc_Head_Human_01", "ALTS_BAR", "TIP_ALTS", function()
 			ShowAlts()
 		end },
+		-- 3.0: the World panel (World.lua): guild orders, artisans, events.
+		{ "world", "Interface\\Icons\\INV_Misc_Map_01", "WORLD_BAR", "TIP_WORLD", function()
+			if SquidBotsLite_World then SquidBotsLite_World.Toggle() end
+		end },
 		{ "recruit", "Interface\\Icons\\Spell_Frost_SummonWaterElemental", "RECRUIT", "TIP_RECRUIT", function()
 			ShowMenu(RecruitMenu())
 		end },
@@ -1995,8 +2007,71 @@ local function OverlayTooltip(self)
 	elseif role then
 		GameTooltip:AddLine(L[ROLE_KEYS[role]], 1, 1, 1)
 	end
+	local W = SquidBotsLite_World
+	if W and IsCoaBot(name) then
+		local arch, traits = W.SoulText(name)
+		if arch then
+			GameTooltip:AddLine(W.T("SOUL") .. ": " .. arch, 1, 0.82, 0)
+			GameTooltip:AddLine(traits, 0.8, 0.8, 0.8, true)
+		else
+			W.Soul(name)
+		end
+	end
 	GameTooltip:AddLine(L.TIP_BOT_ICON, 0.6, 0.6, 0.6)
 	GameTooltip:Show()
+end
+
+-- 3.0: two small icons by a group member's frame: its bags (an alt of yours) and its sheet (any bot; read only for
+-- one that is not yours). /sbl icons off hides them.
+function ui.MiniIcons(overlay, size)
+	local function Mini(texture, tip, onClick)
+		local b = CreateFrame("Button", nil, overlay:GetParent() == UIParent and UIParent or overlay)
+		b:SetWidth(size)
+		b:SetHeight(size)
+		b.icon = b:CreateTexture(nil, "OVERLAY")
+		b.icon:SetAllPoints()
+		b.icon:SetTexture(texture)
+		b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		b:SetScript("OnClick", function()
+			local name = overlay.unit and UnitName(overlay.unit)
+			if name then onClick(name) end
+		end)
+		b:SetScript("OnEnter", function(self)
+			local name = overlay.unit and UnitName(overlay.unit)
+			if not name then return end
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(name)
+			GameTooltip:AddLine(L[tip(name)], 0.6, 0.6, 0.6)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		b:Hide()
+		return b
+	end
+	local function IsAlt(name) return SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name] end
+	overlay.bagIcon = Mini("Interface\\Icons\\INV_Misc_Bag_08", function() return "TIP_BAG_ICON" end, function(name)
+		if SquidBotsLite_OpenSheet and IsAlt(name) then SquidBotsLite_OpenSheet(name, "bags") end
+	end)
+	overlay.sheetIcon = Mini("Interface\\Icons\\INV_Misc_Note_01", function(name)
+		return IsAlt(name) and "TIP_SHEET_ICON" or "TIP_SHEET_ICON_RO"
+	end, function(name)
+		if SquidBotsLite_OpenSheet then SquidBotsLite_OpenSheet(name, "gear", not IsAlt(name)) end
+	end)
+end
+
+function ui.RefreshMiniIcons(overlay, name)
+	if not overlay.bagIcon then return end
+	local show = name and SquidBotsLiteDB.frameIcons ~= false and IsCoaBot(name)
+	local alt = show and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]
+	if alt then overlay.bagIcon:Show() else overlay.bagIcon:Hide() end
+	if show then overlay.sheetIcon:Show() else overlay.sheetIcon:Hide() end
+	if overlay.bagIcon:GetParent() == UIParent then
+		local strata, level = overlay:GetFrameStrata(), overlay:GetFrameLevel()
+		for _, b in ipairs({ overlay.bagIcon, overlay.sheetIcon }) do
+			if strata and strata ~= "UNKNOWN" then b:SetFrameStrata(strata) end
+			b:SetFrameLevel(level)
+		end
+	end
 end
 
 local function BuildOverlays()
@@ -2022,7 +2097,11 @@ local function BuildOverlays()
 			-- Who plays what at a glance: the specialization name, small, right of the health bar.
 			overlay.spec = overlay:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 			local healthBar = _G["PartyMemberFrame" .. i .. "HealthBar"]
-			overlay.spec:SetPoint("LEFT", healthBar or frame, "RIGHT", 12, 0)
+			-- 3.0: the bag and sheet icons right of the health bar, then the specialization.
+			ui.MiniIcons(overlay, 13)
+			overlay.sheetIcon:SetPoint("LEFT", healthBar or frame, "RIGHT", 10, 0)
+			overlay.bagIcon:SetPoint("LEFT", overlay.sheetIcon, "RIGHT", 2, 0)
+			overlay.spec:SetPoint("LEFT", healthBar or frame, "RIGHT", 42, 0)
 			overlays[i] = overlay
 		end
 	end
@@ -2043,6 +2122,7 @@ local function RefreshOverlays()
 			end
 			local info = specsByName[name]
 			overlay.spec:SetText(info and info.current or "")
+			ui.RefreshMiniIcons(overlay, name)
 			local badge = badges[name]
 			if badge and badge.untilTime > now then
 				overlay.badge:SetText(badge.text)
@@ -2096,6 +2176,10 @@ function compact.Overlay(frame)
 	overlay:SetScript("OnEnter", OverlayTooltip)
 	overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	overlay.frame = frame
+	-- 3.0: the sheet and bag icons, left of the role icon.
+	ui.MiniIcons(overlay, 12)
+	overlay.sheetIcon:SetPoint("RIGHT", overlay, "LEFT", -2, 0)
+	overlay.bagIcon:SetPoint("RIGHT", overlay.sheetIcon, "LEFT", -2, 0)
 	compact.overlays[frame] = overlay
 	return overlay
 end
@@ -2110,7 +2194,7 @@ end
 
 function compact.Refresh()
 	if SquidBotsLiteDB.raidFrames == false then
-		for _, overlay in pairs(compact.overlays) do overlay:Hide() end
+		for _, overlay in pairs(compact.overlays) do overlay:Hide(); ui.RefreshMiniIcons(overlay, nil) end
 		return
 	end
 	local now = GetTime()
@@ -2151,9 +2235,11 @@ function compact.Refresh()
 				overlay.badge:SetText("")
 			end
 			overlay:Show()
+			ui.RefreshMiniIcons(overlay, name)
 		else
 			overlay.unit = nil
 			overlay:Hide()
+			ui.RefreshMiniIcons(overlay, nil)
 		end
 	end
 end
@@ -3791,6 +3877,11 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 	elseif command == "raidframes" then
 		SquidBotsLiteDB.raidFrames = string.lower(rest) ~= "off"
 		Print(SquidBotsLiteDB.raidFrames and L.RAIDFRAMES_ON or L.RAIDFRAMES_OFF)
+	elseif command == "icons" then
+		SquidBotsLiteDB.frameIcons = string.lower(rest) ~= "off"
+		Print(SquidBotsLiteDB.frameIcons and L.ICONS_ON or L.ICONS_OFF)
+	elseif command == "world" then
+		if SquidBotsLite_World then SquidBotsLite_World.Toggle() end
 	elseif command == "sheettrade" and SquidBotsLite_SheetOnTrade then
 		SquidBotsLite_SheetOnTrade(string.lower(rest) ~= "off")
 	elseif command == "sheetdebug" and SquidBotsLite_SheetDebug then
