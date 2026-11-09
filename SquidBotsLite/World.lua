@@ -21,10 +21,14 @@ local STRINGS = {
 		G_GIFT_LINE = "given by %s, %s", G_BY = "%s, %s", AGO = "%s ago",
 		S_open = "waiting", S_shared = "sent from its bags (free)", S_crafted = "crafted (cash on delivery)",
 		S_bought = "bought at the AH (cash on delivery)", S_none = "nobody could", S_refused = "refused",
-		A_BACK = "< Artisans list", A_MAILS = "My CoD mails", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
+		A_BACK = "< Artisans list", A_MAILS = "My orders", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
 		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
-		M_pending = "in your mailbox", M_paid = "paid", M_returned = "returned",
+		Q_TITLE = "Quote from %s", Q_COD = "cash on delivery, paid when you take it from the mail",
+		M_preparing = "Preparing", M_sent = "Sent", M_awaiting = "Awaiting pickup", M_paid = "Received",
+		M_returned = "Returned", M_cancelled = "Cancelled", M_pending = "Awaiting pickup",
+		M_ETA = "arrives in ~%s", M_HERE = "in your mailbox", M_TITLE = "Your artisan orders (last 7 days), newest first.",
+		M_CHAT = "Your order %s (%s): %s.", M_CHAT_ETA = "Your order %s (%s) is on its way, arriving in ~%s.",
 		E_NONE = "No invasion or rush right now.", E_inv = "Invasion", E_rush = "Gold rush", E_IN = "in %s", E_LEFT = "%s left",
 		E_FIRSTS = "Server firsts", F_level = "level %s", F_boss = "%s",
 		R_quality = "quality too high", R_daily = "daily limit reached", R_noguild = "no guild", R_item = "unknown item",
@@ -49,10 +53,14 @@ local STRINGS = {
 		G_GIFT_LINE = "offert par %s, %s", G_BY = "%s, %s", AGO = "il y a %s",
 		S_open = "en attente", S_shared = "envoyé de ses sacs (gratuit)", S_crafted = "fabriqué (contre remboursement)",
 		S_bought = "acheté à l'HV (contre remboursement)", S_none = "personne n'a pu", S_refused = "refusé",
-		A_BACK = "< Liste des artisans", A_MAILS = "Mes courriers CR", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
+		A_BACK = "< Liste des artisans", A_MAILS = "Mes commandes", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
 		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
-		M_pending = "dans votre boîte", M_paid = "payé", M_returned = "renvoyé",
+		Q_TITLE = "Devis de %s", Q_COD = "contre remboursement, payé en le retirant du courrier",
+		M_preparing = "En préparation", M_sent = "Envoyé", M_awaiting = "En attente de réception", M_paid = "Reçu (payé)",
+		M_returned = "Renvoyé", M_cancelled = "Annulé", M_pending = "En attente de réception",
+		M_ETA = "arrivée dans ~%s", M_HERE = "dans votre boîte aux lettres", M_TITLE = "Vos commandes aux artisans (7 derniers jours), les plus récentes d'abord.",
+		M_CHAT = "Votre commande %s (%s) : %s.", M_CHAT_ETA = "Votre commande %s (%s) est en route, arrivée dans ~%s.",
 		E_NONE = "Aucune invasion ni ruée en ce moment.", E_inv = "Invasion", E_rush = "Ruée vers l'or", E_IN = "dans %s", E_LEFT = "encore %s",
 		E_FIRSTS = "Server first", F_level = "niveau %s", F_boss = "%s",
 		R_quality = "qualité trop haute", R_daily = "limite du jour atteinte", R_noguild = "pas de guilde", R_item = "objet inconnu",
@@ -140,6 +148,18 @@ function W.Money(copper)
 	if s > 0 then table.insert(parts, s .. "|cffc7c7cfs|r") end
 	if c > 0 or #parts == 0 then table.insert(parts, c .. "|cffeda55fc|r") end
 	return table.concat(parts, " ")
+end
+
+-- The price in big: gold, silver and copper with their coins.
+function W.MoneyBig(copper)
+	copper = tonumber(copper) or 0
+	local g, sv, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+	local coin = "|TInterface\\MoneyFrame\\UI-%sIcon:16:16:2:0|t"
+	local parts = {}
+	if g > 0 then table.insert(parts, g .. string.format(coin, "Gold")) end
+	if sv > 0 then table.insert(parts, sv .. string.format(coin, "Silver")) end
+	if c > 0 or #parts == 0 then table.insert(parts, c .. string.format(coin, "Copper")) end
+	return table.concat(parts, "  ")
 end
 
 function W.Duration(seconds)
@@ -239,8 +259,9 @@ function W.Finish()
 	if q and q.request == "WEV?" then W.events.list = {} end
 	if kinds.AB or (q and q.request == "ALIST") then W.art.bots = {} end
 	if kinds.AR then W.art.recipes = {} end
-	if kinds.AM or (q and q.request == "AMAIL") then W.art.mails = {} end
+	if q and q.request == "AMAIL" then W.art.mails, W.art.bulk = {}, true end
 	for _, f in ipairs(lines) do W.Line(f) end
+	W.art.bulk = nil
 	if q and q.request:find("^GORD") and not W.error then W.Send("GLIST", "guild") end
 	W.busy = nil
 	W.Refresh()
@@ -270,16 +291,23 @@ function W.Line(f)
 			ok = f[6] == "ok", reason = f[6], id = f[7] }
 		if not W.art.quote.ok then W.error = W.Reason(f[6]) end
 	elseif k == "AO" then
-		if f[3] == "mailed" then
+		-- 3.0 (fb83b3fd): "preparing", then the order's AM line; "mailed" from an older server.
+		if f[3] == "preparing" or f[3] == "mailed" then
 			W.art.quote = nil
-			W.Send("AMAIL", "art")
+			if f[3] == "mailed" then W.Send("AMAIL", "art") end
 		else
 			W.error = W.Reason(f[3])
 			if f[3] == "price" or f[3] == "expired" then W.art.quote = nil end
 		end
 	elseif k == "AM" then
-		table.insert(W.art.mails, { id = f[2], bot = f[3], item = tonumber(f[4]), qty = tonumber(f[5]) or 1,
-			copper = tonumber(f[6]) or 0, at = tonumber(f[7]) or 0, state = f[8] })
+		local m = { id = f[2], bot = f[3], item = tonumber(f[4]), qty = tonumber(f[5]) or 1,
+			copper = tonumber(f[6]) or 0, at = tonumber(f[7]) or 0, state = f[8] == "pending" and "awaiting" or f[8],
+			eta = tonumber(f[9] or "") or 0 }
+		if W.art.bulk then
+			table.insert(W.art.mails, m)
+		else
+			W.UpdateOrder(m)
+		end
 	elseif k == "WE" then
 		local id = f[3]
 		for i = #W.events.list, 1, -1 do if W.events.list[i].id == id then table.remove(W.events.list, i) end end
@@ -291,6 +319,24 @@ function W.Line(f)
 		table.insert(W.events.firsts, { kind = f[2], entry = f[3], team = f[4], who = f[5], guild = f[6] ~= "-" and f[6] or nil,
 			at = tonumber(f[7]) or 0 })
 	end
+end
+
+-- A pushed order line: replaces its order (newest first), and a line in the chat when its state changed.
+function W.UpdateOrder(m)
+	local old
+	for i, x in ipairs(W.art.mails) do
+		if x.id == m.id then old = x; table.remove(W.art.mails, i) break end
+	end
+	table.insert(W.art.mails, 1, m)
+	if old and old.state == m.state then return end
+	local what = W.Colored(m.item) .. (m.qty > 1 and (" x" .. m.qty) or "")
+	local text
+	if m.state == "sent" and m.eta > time() then
+		text = string.format(T("M_CHAT_ETA"), what, m.bot or "?", W.Duration(m.eta - time()))
+	else
+		text = string.format(T("M_CHAT"), what, m.bot or "?", T("M_" .. (m.state or "")))
+	end
+	if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. text) end
 end
 
 -- The 6 s rule, and the countdowns.
@@ -460,6 +506,36 @@ function W.Build()
 	f.filter:SetPoint("TOPLEFT", 20, -66)
 	f.filter:SetScript("OnClick", function() W.FilterMenu() end)
 	f.menu = CreateFrame("Frame", "SquidBotsLiteWorldMenu", UIParent, "UIDropDownMenuTemplate")
+	-- The quote, in big (3.0, the user's test): item, quantity, price, artisan, and Order.
+	local card = CreateFrame("Frame", nil, f)
+	f.card = card
+	card:SetWidth(474)
+	card:SetHeight(74)
+	card:SetPoint("BOTTOMLEFT", 14, 40)
+	card:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = false, edgeSize = 14, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+	card:SetBackdropColor(0.12, 0.1, 0.02, 0.95)
+	card:SetBackdropBorderColor(1, 0.82, 0, 0.9)
+	card.icon = card:CreateTexture(nil, "ARTWORK")
+	card.icon:SetWidth(44)
+	card.icon:SetHeight(44)
+	card.icon:SetPoint("LEFT", 12, 0)
+	card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	card.title:SetPoint("TOPLEFT", card.icon, "TOPRIGHT", 10, 2)
+	card.item = card:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	card.item:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -3)
+	card.item:SetWidth(250)
+	card.item:SetJustifyH("LEFT")
+	card.price = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+	card.price:SetPoint("TOPLEFT", card.item, "BOTTOMLEFT", 0, -4)
+	card.cod = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	card.cod:SetPoint("BOTTOMRIGHT", -12, 8)
+	card.order = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
+	card.order:SetWidth(120)
+	card.order:SetHeight(26)
+	card.order:SetPoint("TOPRIGHT", -12, -12)
+	card.order:SetScript("OnClick", function() W.Action() end)
+	card:Hide()
 	f.status = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.status:SetPoint("BOTTOMLEFT", 22, 20)
 	f.status:SetWidth(470)
@@ -468,7 +544,9 @@ function W.Build()
 		self.t = (self.t or 0) + delta
 		if self.t < 1 then return end
 		self.t = 0
-		if W.tab == "events" or next(W.waiting) then W.Refresh() end
+		local moving = false
+		for _, m in ipairs(W.art.mails) do if m.state == "preparing" or m.state == "sent" then moving = true end end
+		if W.tab == "events" or next(W.waiting) or (W.tab == "art" and moving) then W.Refresh() end
 	end)
 end
 
@@ -643,9 +721,18 @@ function W.Rows()
 					end })
 			end
 		else
+			local colors = { preparing = "|cffffd100", sent = "|cff66ccff", awaiting = "|cff40ff40", paid = "|cffaaaaaa",
+				returned = "|cffff6060", cancelled = "|cffff6060" }
 			for _, m in ipairs(W.art.mails) do
-				table.insert(rows, { item = m.item, left = W.Colored(m.item) .. (m.qty > 1 and (" x" .. m.qty) or ""),
-					right = W.Money(m.copper) .. "  |cffaaaaaa" .. T("M_" .. (m.state or "pending")) .. "|r" })
+				local when = ""
+				if (m.state == "sent" or m.state == "preparing") and m.eta > now then
+					when = "  " .. string.format(T("M_ETA"), W.Duration(m.eta - now))
+				elseif m.state == "awaiting" then
+					when = "  " .. T("M_HERE")
+				end
+				table.insert(rows, { item = m.item, left = W.Colored(m.item) .. (m.qty > 1 and (" x" .. m.qty) or "")
+					.. "  |cffaaaaaa" .. (m.bot or "") .. "|r",
+					right = (colors[m.state] or "|cffffffff") .. T("M_" .. (m.state or "")) .. "|r" .. when .. "\n" .. W.Money(m.copper) })
 			end
 		end
 	else
@@ -690,9 +777,11 @@ function W.Refresh()
 		local q = W.art.quote
 		f.action:SetText(T((q and q.ok) and "A_ORDER" or "A_QUOTE"))
 		if W.art.pick then f.action:Enable() else f.action:Disable() end
-		f.hint:SetText(q and q.ok and string.format(T("A_PRICE"), W.Colored(q.item), q.qty, W.Money(q.copper)) or T("A_PICK"))
+		f.hint:SetText(T("A_PICK"))
 	elseif art and W.art.mode == "bots" then
 		f.hint:SetText(T("A_TITLE"))
+	elseif art and W.art.mode == "mails" then
+		f.hint:SetText(T("M_TITLE"))
 	elseif art then
 		f.hint:SetText(T("A_PICK"))
 	else
@@ -717,11 +806,26 @@ function W.Refresh()
 		f.hint:ClearAllPoints()
 		f.hint:SetPoint("TOPLEFT", 20, -96)
 	end
+	local q = recipes and W.art.quote
+	local shown = ROWS
+	if q and q.ok then
+		shown = ROWS - 3
+		local card = f.card
+		card.icon:SetTexture(GetItemIcon and GetItemIcon(q.item) or select(10, GetItemInfo(q.item)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+		card.title:SetText(string.format(T("Q_TITLE"), q.bot or "?"))
+		card.item:SetText(W.Colored(q.item) .. "  |cffffffffx" .. q.qty .. "|r")
+		card.price:SetText(W.MoneyBig(q.copper))
+		card.cod:SetText(T("Q_COD"))
+		card.order:SetText(T("A_ORDER"))
+		card:Show()
+	elseif f.card then
+		f.card:Hide()
+	end
 	local rows = W.Rows()
 	W.count = #rows
-	W.offset = math.max(0, math.min(W.offset, #rows - ROWS))
+	W.offset = math.max(0, math.min(W.offset, #rows - shown))
 	for i, row in ipairs(f.rows) do
-		local r = rows[W.offset + i]
+		local r = i <= shown and rows[W.offset + i]
 		if r then
 			row.item, row.click = r.item, r.click
 			if r.item then
