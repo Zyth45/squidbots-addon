@@ -33,7 +33,9 @@ local STRINGS = {
 		M_ETA = "arrives in ~%s", M_HERE = "in your mailbox", M_TITLE = "Your artisan orders (last 7 days), newest first.",
 		M_CHAT = "Your order %s (%s): %s.", M_CHAT_ETA = "Your order %s (%s) is on its way, arriving in ~%s.",
 		E_NONE = "No invasion or rush right now.", E_inv = "Invasion", E_rush = "Gold rush", E_IN = "in %s", E_LEFT = "%s left",
-		E_FIRSTS = "Server firsts", F_level = "level %s", F_boss = "%s",
+		E_FIRSTS = "Server firsts", GM_TITLE = "GM", GM_INV = "Invasions", GM_RUSH = "Gold rush", GM_LIST = "List",
+		GM_NEXT = "Next", GM_START = "Start", GM_STOP = "Stop", GM_STATUS = "Status", GM_scourge = "Scourge", GM_legion = "Legion",
+		GM_aq = "Ahn'Qiraj", GM_HINT = "The server's answer shows here.", F_level = "level %s", F_boss = "%s",
 		R_quality = "quality too high", R_daily = "daily limit reached", R_noguild = "no guild", R_item = "unknown item",
 		R_qty = "quantity not allowed", R_off = "off on this realm", R_nobot = "no guild bot online", R_cannot = "no such recipe",
 		R_busy = "the artisan is busy", R_mats = "no materials", R_expired = "quote too old: ask again",
@@ -89,7 +91,9 @@ local STRINGS = {
 		M_ETA = "arrivée dans ~%s", M_HERE = "dans votre boîte aux lettres", M_TITLE = "Vos commandes aux artisans (7 derniers jours), les plus récentes d'abord.",
 		M_CHAT = "Votre commande %s (%s) : %s.", M_CHAT_ETA = "Votre commande %s (%s) est en route, arrivée dans ~%s.",
 		E_NONE = "Aucune invasion ni ruée en ce moment.", E_inv = "Invasion", E_rush = "Ruée vers l'or", E_IN = "dans %s", E_LEFT = "encore %s",
-		E_FIRSTS = "Server first", F_level = "niveau %s", F_boss = "%s",
+		E_FIRSTS = "Server first", GM_TITLE = "MJ", GM_INV = "Invasions", GM_RUSH = "Ruée vers l'or", GM_LIST = "Liste",
+		GM_NEXT = "Suivante", GM_START = "Lancer", GM_STOP = "Arrêter", GM_STATUS = "État", GM_scourge = "Fléau", GM_legion = "Légion",
+		GM_aq = "Ahn'Qiraj", GM_HINT = "La réponse du serveur s'affiche ici.", F_level = "niveau %s", F_boss = "%s",
 		R_quality = "qualité trop haute", R_daily = "limite du jour atteinte", R_noguild = "pas de guilde", R_item = "objet inconnu",
 		R_qty = "quantité refusée", R_off = "coupé sur ce royaume", R_nobot = "aucun bot de guilde en ligne", R_cannot = "recette inconnue",
 		R_busy = "l'artisan est occupé", R_mats = "pas de composants", R_expired = "devis trop vieux : redemandez",
@@ -325,7 +329,7 @@ function W.Finish()
 	if q then W.off[q.feature] = nil end
 	if kinds.GO or kinds.GG or (q and q.request == "GLIST") then W.guild.orders, W.guild.gifts = {}, {} end
 	if kinds.WF or (q and q.request == "WEV?") then W.events.firsts = {} end
-	if q and q.request == "WEV?" then W.events.list = {} end
+	if q and q.request == "WEV?" then W.events.list, W.events.gm = {}, false end
 	if kinds.AB or (q and q.request == "ALIST") then W.art.bots = {} end
 	if kinds.AR then W.art.recipes = {} end
 	if q and q.request == "AMAIL" then W.art.mails, W.art.bulk = {}, true end
@@ -410,6 +414,8 @@ function W.Line(f)
 			table.insert(W.events.list, { kind = f[2], id = id, state = f[4], zone = f[5], place = f[6],
 				at = tonumber(f[7]) or 0, name = f[8] })
 		end
+	elseif k == "WGM" then
+		W.events.gm = f[2] == "1"
 	elseif k == "WF" then
 		table.insert(W.events.firsts, { kind = f[2], entry = f[3], team = f[4], who = f[5], guild = f[6] ~= "-" and f[6] or nil,
 			at = tonumber(f[7]) or 0 })
@@ -432,6 +438,20 @@ function W.UpdateOrder(m)
 		text = string.format(T("M_CHAT"), what, m.bot or "?", T("M_" .. (m.state or "")))
 	end
 	if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Manager|r: " .. text) end
+end
+
+function W.GM(command)
+	W.gmOut, W.gmUntil = {}, GetTime() + 3
+	SendChatMessage(".coaworld " .. command, "SAY")
+	W.Refresh()
+end
+
+function W.OnSystem(message)
+	if not W.gmUntil or GetTime() > W.gmUntil or not message then return end
+	W.gmOut = W.gmOut or {}
+	table.insert(W.gmOut, message)
+	while #W.gmOut > 4 do table.remove(W.gmOut, 1) end
+	W.Refresh()
 end
 
 -- The 6 s rule, and the countdowns.
@@ -871,6 +891,56 @@ function W.Build()
 	card.order:SetPoint("TOPRIGHT", -12, -12)
 	card.order:SetScript("OnClick", function() W.Action() end)
 	card:Hide()
+	local gm = CreateFrame("Frame", nil, f)
+	f.gm = gm
+	gm:SetWidth(646)
+	gm:SetHeight(100)
+	gm:SetPoint("BOTTOMLEFT", 16, 40)
+	gm:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+	gm:SetBackdropColor(0.15, 0.04, 0.04, 0.9)
+	gm:SetBackdropBorderColor(1, 0.3, 0.3, 0.5)
+	gm.title = gm:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	gm.title:SetPoint("TOPLEFT", 8, -6)
+	gm.labels, gm.buttons = {}, {}
+	local function Button(x, y, key, command)
+		local b = CreateFrame("Button", nil, gm, "UIPanelButtonTemplate")
+		b:SetWidth(58)
+		b:SetHeight(18)
+		b:SetPoint("TOPLEFT", x, y)
+		b:SetNormalFontObject(GameFontNormalSmall)
+		b:SetHighlightFontObject(GameFontHighlightSmall)
+		b:SetScript("OnClick", function() W.GM(command) end)
+		b.key = key
+		table.insert(gm.buttons, b)
+	end
+	local function Label(x, y, key)
+		local l = gm:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		l:SetPoint("TOPLEFT", x, y)
+		l.key = key
+		table.insert(gm.labels, l)
+	end
+	-- Invasions: List, Next; then Start / Stop for each of the three.
+	Label(50, -9, "GM_INV")
+	Button(130, -6, "GM_LIST", "invasion list")
+	Button(190, -6, "GM_NEXT", "invasion next")
+	for i, key in ipairs({ "scourge", "legion", "aq" }) do
+		local x = 260 + (i - 1) * 128
+		Label(x, -30, "GM_" .. key)
+		Button(x, -42, "GM_START", "invasion start " .. key)
+		Button(x + 60, -42, "GM_STOP", "invasion stop " .. key)
+	end
+	-- Gold rush: Start (in the open world), Stop, Status.
+	Label(8, -30, "GM_RUSH")
+	Button(8, -42, "GM_START", "rush start")
+	Button(68, -42, "GM_STOP", "rush stop")
+	Button(128, -42, "GM_STATUS", "rush status")
+	gm.out = gm:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	gm.out:SetPoint("TOPLEFT", 8, -66)
+	gm.out:SetWidth(630)
+	gm.out:SetHeight(30)
+	gm.out:SetJustifyH("LEFT")
+	gm.out:SetJustifyV("TOP")
+	gm:Hide()
 	f.status = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.status:SetPoint("BOTTOMLEFT", 22, 20)
 	f.status:SetWidth(630)
@@ -1425,6 +1495,18 @@ function W.Refresh()
 		f.card:Hide()
 	end
 	local top = recipes and -108 or -146
+	-- Events, for a GM: the GM section at the bottom, fewer cards above it.
+	local gmShown = W.tab == "events" and W.events.gm
+	if gmShown then
+		f.gm:Show()
+		f.gm.title:SetText(T("GM_TITLE"))
+		for _, l in ipairs(f.gm.labels) do l:SetText(T(l.key)) end
+		for _, b in ipairs(f.gm.buttons) do b:SetText(T(b.key)) end
+		f.gm.out:SetText(W.gmOut and #W.gmOut > 0 and table.concat(W.gmOut, "  |  ") or ("|cffaaaaaa" .. T("GM_HINT") .. "|r"))
+		shown = math.min(shown, ROWS - 3)
+	else
+		f.gm:Hide()
+	end
 	if guild then top = orders and -206 or cat and -172 or -142 end
 	shown = math.min(shown, math.floor((470 + top) / 39))
 	for i, row in ipairs(f.rows) do
@@ -1527,7 +1609,10 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("CHAT_MSG_ADDON")
-events:SetScript("OnEvent", function(_, _, ...) W.OnAddon(...) end)
+events:RegisterEvent("CHAT_MSG_SYSTEM")
+events:SetScript("OnEvent", function(_, event, ...)
+	if event == "CHAT_MSG_SYSTEM" then W.OnSystem(...) else W.OnAddon(...) end
+end)
 events:SetScript("OnUpdate", function(self, delta)
 	self.t = (self.t or 0) + delta
 	if self.t < 0.25 then return end
