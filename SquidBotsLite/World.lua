@@ -79,7 +79,7 @@ local STRINGS = {
 local W = {
 	queue = {}, busy = nil, lines = {}, off = {}, at = {},
 	guild = { orders = {}, gifts = {} }, art = { bots = {}, recipes = {}, mails = {}, bot = nil, quote = nil, mode = "bots" },
-	events = { list = {}, firsts = {} }, soul = {}, soulAsked = {}, error = nil, tab = "guild", offset = 0,
+	events = { list = {}, firsts = {} }, soul = {}, soulAsked = {}, error = nil, tab = "art", offset = 0,
 }
 SquidBotsLite_World = W
 
@@ -374,6 +374,42 @@ end
 -- ---------------------------------------------------------------------------
 -- The panel
 -- ---------------------------------------------------------------------------
+-- The bot sheet's button style: a small icon left of the name, the name a size smaller (Manager.lua's tabs).
+W.ICONS = { art = "Interface\\Icons\\Trade_BlackSmithing", guild = "Interface\\Icons\\INV_Shirt_GuildTabard_01",
+	events = "Interface\\Icons\\Ability_DualWield", mails = "Interface\\Icons\\INV_Letter_15",
+	back = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up", order = "Interface\\Icons\\INV_Misc_Coin_02",
+	filter = "Interface\\Icons\\INV_Misc_Spyglass_02" }
+-- Three tabs (18 + 3 x 116) and the right button (124) fit the 520 px panel with room between.
+W.BUTTON_W, W.BUTTON_H = 110, 24
+
+function W.StyleButton(b, icon)
+	b:SetNormalFontObject(GameFontNormalSmall)
+	b:SetHighlightFontObject(GameFontHighlightSmall)
+	b:SetDisabledFontObject(GameFontDisableSmall)
+	b:SetPushedTextOffset(0, 0)
+	b.tabIcon = b:CreateTexture(nil, "OVERLAY")
+	b.tabIcon:SetWidth(16)
+	b.tabIcon:SetHeight(16)
+	b.tabIcon:SetPoint("LEFT", 7, 0)
+	W.SetIcon(b, icon)
+end
+
+function W.SetIcon(b, icon)
+	b.tabIcon:SetTexture(icon)
+	if icon and icon:find("Icons") then b.tabIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) else b.tabIcon:SetTexCoord(0, 1, 0, 1) end
+end
+
+-- After SetText: the name right of the icon.
+function W.PlaceText(b)
+	local text = b:GetFontString()
+	if text then
+		text:ClearAllPoints()
+		text:SetPoint("LEFT", b.tabIcon, "RIGHT", 5, 0)
+		text:SetPoint("RIGHT", -6, 0)
+		text:SetJustifyH("LEFT")
+	end
+end
+
 local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
 	tile = false, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }
 
@@ -398,11 +434,12 @@ function W.Build()
 	local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", -4, -4)
 	f.tabs = {}
-	for i, key in ipairs({ "guild", "art", "events" }) do
+	for i, key in ipairs({ "art", "guild", "events" }) do
 		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-		b:SetWidth(110)
-		b:SetHeight(22)
-		b:SetPoint("TOPLEFT", 16 + (i - 1) * 114, -36)
+		b:SetWidth(W.BUTTON_W)
+		b:SetHeight(W.BUTTON_H)
+		b:SetPoint("TOPLEFT", 18 + (i - 1) * (W.BUTTON_W + 6), -38)
+		W.StyleButton(b, W.ICONS[key])
 		b:SetScript("OnClick", function() W.tab = key; W.offset = 0; W.Load() end)
 		b.key = key
 		f.tabs[i] = b
@@ -429,14 +466,16 @@ function W.Build()
 	f.qtyLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	f.qtyLabel:SetPoint("RIGHT", f.qty, "LEFT", -8, 0)
 	f.action = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-	f.action:SetWidth(110)
-	f.action:SetHeight(22)
+	f.action:SetWidth(W.BUTTON_W)
+	f.action:SetHeight(W.BUTTON_H)
+	W.StyleButton(f.action, W.ICONS.order)
 	f.action:SetPoint("LEFT", f.qty, "RIGHT", 12, 0)
 	f.action:SetScript("OnClick", function() W.Action() end)
 	f.action2 = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-	f.action2:SetWidth(110)
-	f.action2:SetHeight(22)
-	f.action2:SetPoint("TOPRIGHT", -20, -36)
+	f.action2:SetWidth(W.BUTTON_W + 14)
+	f.action2:SetHeight(W.BUTTON_H)
+	f.action2:SetPoint("TOPRIGHT", -18, -38)
+	W.StyleButton(f.action2, W.ICONS.mails)
 	f.action2:SetScript("OnClick", function() W.Action2() end)
 	f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.hint:SetPoint("TOPLEFT", 20, -96)
@@ -501,9 +540,10 @@ function W.Build()
 		f.heads[c] = fs
 	end
 	f.filter = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-	f.filter:SetWidth(170)
-	f.filter:SetHeight(20)
-	f.filter:SetPoint("TOPLEFT", 20, -66)
+	f.filter:SetWidth(190)
+	f.filter:SetHeight(W.BUTTON_H)
+	f.filter:SetPoint("TOPLEFT", 18, -68)
+	W.StyleButton(f.filter, W.ICONS.filter)
 	f.filter:SetScript("OnClick", function() W.FilterMenu() end)
 	f.menu = CreateFrame("Frame", "SquidBotsLiteWorldMenu", UIParent, "UIDropDownMenuTemplate")
 	-- The quote, in big (3.0, the user's test): item, quantity, price, artisan, and Order.
@@ -531,8 +571,9 @@ function W.Build()
 	card.cod = card:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	card.cod:SetPoint("BOTTOMRIGHT", -12, 8)
 	card.order = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
-	card.order:SetWidth(120)
+	card.order:SetWidth(W.BUTTON_W)
 	card.order:SetHeight(26)
+	W.StyleButton(card.order, W.ICONS.order)
 	card.order:SetPoint("TOPRIGHT", -12, -12)
 	card.order:SetScript("OnClick", function() W.Action() end)
 	card:Hide()
@@ -761,6 +802,7 @@ function W.Refresh()
 	local labels = { guild = "GUILD", art = "ARTISANS", events = "EVENTS" }
 	for _, b in ipairs(f.tabs) do
 		b:SetText(T(labels[b.key]))
+		W.PlaceText(b)
 		if b.key == W.tab then b:LockHighlight() else b:UnlockHighlight() end
 	end
 	local guild, art = W.tab == "guild", W.tab == "art"
@@ -768,14 +810,17 @@ function W.Refresh()
 	if guild or recipes then f.item:Show(); f.qty:Show(); f.qtyLabel:Show(); f.action:Show() else f.item:Hide(); f.qty:Hide(); f.qtyLabel:Hide(); f.action:Hide() end
 	if recipes then f.item:Hide() end
 	f.qtyLabel:SetText(T("G_QTY"))
+	W.PlaceText(f.action)
 	f.itemHint:SetText((f.item:GetText() == "" and not f.item:HasFocus()) and T("G_ITEM") or "")
 	if guild then
 		f.action:SetText(T("G_ORDER"))
+		W.PlaceText(f.action)
 		if W.BoxItem() then f.action:Enable() else f.action:Disable() end
 		f.hint:SetText(T("G_HINT"))
 	elseif recipes then
 		local q = W.art.quote
 		f.action:SetText(T((q and q.ok) and "A_ORDER" or "A_QUOTE"))
+		W.PlaceText(f.action)
 		if W.art.pick then f.action:Enable() else f.action:Disable() end
 		f.hint:SetText(T("A_PICK"))
 	elseif art and W.art.mode == "bots" then
@@ -790,6 +835,8 @@ function W.Refresh()
 	if art then
 		f.action2:Show()
 		f.action2:SetText(T(W.art.mode == "bots" and "A_MAILS" or "A_BACK"))
+		W.SetIcon(f.action2, W.ICONS[W.art.mode == "bots" and "mails" or "back"])
+		W.PlaceText(f.action2)
 	else
 		f.action2:Hide()
 	end
@@ -799,6 +846,7 @@ function W.Refresh()
 	if columns then
 		f.filter:Show()
 		f.filter:SetText(string.format(T("A_FILTER"), W.art.skill and W.SkillName(W.art.skill) or T("A_ALL")))
+		W.PlaceText(f.filter)
 		f.hint:ClearAllPoints()
 		f.hint:SetPoint("TOPLEFT", 20, -92)
 	else
@@ -817,6 +865,7 @@ function W.Refresh()
 		card.price:SetText(W.MoneyBig(q.copper))
 		card.cod:SetText(T("Q_COD"))
 		card.order:SetText(T("A_ORDER"))
+		W.PlaceText(card.order)
 		card:Show()
 	elseif f.card then
 		f.card:Hide()
