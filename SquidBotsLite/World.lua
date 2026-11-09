@@ -15,12 +15,15 @@ local STRINGS = {
 		TIP_WORLD = "Guild orders, bot artisans and the world's events (invasions, rushes, server firsts).",
 		OFF = "Not on this realm (CoA Bots 3.0 with this feature and its .Addon option on).", WAITING = "Asking the server...",
 		G_ITEM = "Item: shift-click it here, or its id", G_QTY = "Qty", G_ORDER = "Order",
-		G_HINT = "Your guild's bots answer: one sends it from its bags, crafts it (cash on delivery) or buys it at the auction house.",
-		G_GIFT = "gift", G_NONE = "No order in the last 7 days.",
-		S_open = "waiting", S_shared = "sent free", S_crafted = "crafted (CoD)", S_bought = "bought at the AH (CoD)",
-		S_none = "nobody could", S_refused = "refused",
-		A_BACK = "Artisans", A_MAILS = "My CoD mails", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
-		A_PICK = "Click an artisan, then a recipe.", A_PRICE = "%s x%d: %s, cash on delivery.",
+		G_HINT = "Your guild's members sometimes send you gear that improves you. You can also order an item from them: they send it if they have it, craft it or buy it at the auction house.",
+		G_GIFT = "gift", G_NONE = "No order in the last 7 days.", G_NO_GIFT = "No gift in the last 30 days.",
+		G_ORDERS = "My orders to the guild", G_GIFTS = "Gifts from my guild",
+		G_GIFT_LINE = "given by %s, %s", G_BY = "%s, %s", AGO = "%s ago",
+		S_open = "waiting", S_shared = "sent from its bags (free)", S_crafted = "crafted (cash on delivery)",
+		S_bought = "bought at the AH (cash on delivery)", S_none = "nobody could", S_refused = "refused",
+		A_BACK = "< Artisans list", A_MAILS = "My CoD mails", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
+		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
+		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
 		M_pending = "in your mailbox", M_paid = "paid", M_returned = "returned",
 		E_NONE = "No invasion or rush right now.", E_inv = "Invasion", E_rush = "Gold rush", E_IN = "in %s", E_LEFT = "%s left",
 		E_FIRSTS = "Server firsts", F_level = "level %s", F_boss = "%s",
@@ -40,12 +43,15 @@ local STRINGS = {
 		TIP_WORLD = "Commandes de guilde, bots artisans et événements du monde (invasions, ruées, server first).",
 		OFF = "Pas sur ce royaume (CoA Bots 3.0 avec cette brique et son option .Addon activées).", WAITING = "Question au serveur...",
 		G_ITEM = "Objet : Maj-clic ici, ou son id", G_QTY = "Qté", G_ORDER = "Commander",
-		G_HINT = "Les bots de votre guilde répondent : l'un l'envoie de ses sacs, le fabrique (contre remboursement) ou l'achète à l'hôtel des ventes.",
-		G_GIFT = "don", G_NONE = "Aucune commande ces 7 derniers jours.",
-		S_open = "en attente", S_shared = "envoyé gratuit", S_crafted = "fabriqué (CR)", S_bought = "acheté à l'HV (CR)",
-		S_none = "personne n'a pu", S_refused = "refusé",
-		A_BACK = "Artisans", A_MAILS = "Mes colis CR", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
-		A_PICK = "Cliquez un artisan, puis une recette.", A_PRICE = "%s x%d : %s, contre remboursement.",
+		G_HINT = "Les membres de votre guilde vous envoient parfois de l'équipement qui vous améliore. Vous pouvez aussi leur commander un objet : ils vous l'envoient s'ils l'ont, le fabriquent ou l'achètent à l'hôtel des ventes.",
+		G_GIFT = "don", G_NONE = "Aucune commande ces 7 derniers jours.", G_NO_GIFT = "Aucun cadeau ces 30 derniers jours.",
+		G_ORDERS = "Mes commandes à la guilde", G_GIFTS = "Cadeaux reçus de ma guilde",
+		G_GIFT_LINE = "offert par %s, %s", G_BY = "%s, %s", AGO = "il y a %s",
+		S_open = "en attente", S_shared = "envoyé de ses sacs (gratuit)", S_crafted = "fabriqué (contre remboursement)",
+		S_bought = "acheté à l'HV (contre remboursement)", S_none = "personne n'a pu", S_refused = "refusé",
+		A_BACK = "< Liste des artisans", A_MAILS = "Mes courriers CR", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
+		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
+		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
 		M_pending = "dans votre boîte", M_paid = "payé", M_returned = "renvoyé",
 		E_NONE = "Aucune invasion ni ruée en ce moment.", E_inv = "Invasion", E_rush = "Ruée vers l'or", E_IN = "dans %s", E_LEFT = "encore %s",
 		E_FIRSTS = "Server first", F_level = "niveau %s", F_boss = "%s",
@@ -75,6 +81,37 @@ local function T(key)
 end
 W.T = T
 
+local SKILL_ICON = { [171] = "Trade_Alchemy", [164] = "Trade_BlackSmithing", [333] = "Trade_Engraving",
+	[202] = "Trade_Engineering", [773] = "INV_Inscription_Tradeskill01", [755] = "INV_Misc_Gem_01",
+	[165] = "Trade_LeatherWorking", [197] = "Trade_Tailoring", [185] = "INV_Misc_Food_15", [129] = "Spell_Holy_SealOfSacrifice",
+	[186] = "Trade_Mining", [182] = "Trade_Herbalism", [393] = "INV_Misc_Pelt_Wolf_01", [356] = "Trade_Fishing" }
+
+function W.SkillName(id)
+	local names = SquidBotsLite_Alts and SquidBotsLite_Alts.SKILLS
+	local lang = SquidBotsLiteDB and SquidBotsLiteDB.lang
+	return names and ((names[lang] or names.en)[id] or names.en[id]) or ("#" .. tostring(id))
+end
+
+-- "164:300,197:275" -> { { id = 164, value = 300 }, ... }, best first.
+function W.Skills(text)
+	local list = {}
+	for id, value in (text or ""):gmatch("(%d+):(%d+)") do table.insert(list, { id = tonumber(id), value = tonumber(value) }) end
+	table.sort(list, function(a, b) return a.value > b.value end)
+	return list
+end
+
+-- "|T..:12|t Forge 300, |T..:12|t Couture 275"
+function W.SkillsText(list, onlyId)
+	local parts = {}
+	for _, sk in ipairs(list) do
+		local icon = SKILL_ICON[sk.id] and ("|TInterface\\Icons\\" .. SKILL_ICON[sk.id] .. ":12:12:0:0|t ") or ""
+		local text = icon .. W.SkillName(sk.id) .. " " .. sk.value
+		if sk.id == onlyId then text = "|cffffd100" .. text .. "|r" end
+		table.insert(parts, text)
+	end
+	return table.concat(parts, "  ")
+end
+
 local function Split(text)
 	local f = {}
 	for part in (text .. "\t"):gmatch("([^\t]*)\t") do table.insert(f, part) end
@@ -99,12 +136,33 @@ function W.Duration(seconds)
 	return seconds .. " s"
 end
 
+-- "2 h", "15 min" ago, from a server time.
+function W.Ago(at)
+	local d = math.max(0, time() - (at or 0))
+	local text = d >= 86400 and (math.floor(d / 86400) .. " j") or d >= 3600 and (math.floor(d / 3600) .. " h")
+		or (math.max(1, math.floor(d / 60)) .. " min")
+	if d >= 86400 and not (SquidBotsLiteDB and SquidBotsLiteDB.lang == "fr") then text = math.floor(d / 86400) .. " d" end
+	return string.format(T("AGO"), text)
+end
+
 function W.Reason(word) return T("R_" .. (word or "")) ~= "R_" .. (word or "") and T("R_" .. word) or (word or "?") end
 
+-- The client knows only the items in its cache: an unknown one is asked to the server through a hidden tooltip, and
+-- the panel draws again once a second while some are on their way. The server's English name (ARCP) meanwhile.
+W.names, W.waiting = {}, {}
 function W.ItemName(id)
 	local name, _, quality = GetItemInfo(id or 0)
-	if not name then return "item:" .. tostring(id), 1 end
-	return name, quality or 1
+	if name then W.waiting[id] = nil return name, quality or 1 end
+	if id and not W.waiting[id] then
+		W.waiting[id] = true
+		if not W.scan then
+			W.scan = CreateFrame("GameTooltip", "SquidBotsLiteWorldScan", UIParent, "GameTooltipTemplate")
+		end
+		W.scan:SetOwner(UIParent, "ANCHOR_NONE")
+		W.scan:SetHyperlink("item:" .. id)
+		W.scan:Hide()
+	end
+	return W.names[id] or ("item:" .. tostring(id)), 1
 end
 
 function W.Colored(id, qualityHint)
@@ -186,10 +244,16 @@ function W.Line(f)
 	elseif k == "GG" then
 		table.insert(W.guild.gifts, { item = tonumber(f[2]), bot = f[3], at = tonumber(f[4]) or 0 })
 	elseif k == "AB" then
-		table.insert(W.art.bots, { name = f[2], skills = f[3] or "" })
+		if f[5] then
+			table.insert(W.art.bots, { name = f[2], level = tonumber(f[3]), zone = f[4], skills = W.Skills(f[5]) })
+		else
+			table.insert(W.art.bots, { name = f[2], skills = W.Skills(f[3]) })
+		end
 	elseif k == "AR" then
-		table.insert(W.art.recipes, { bot = f[2], item = tonumber(f[3]), spell = tonumber(f[4]), skill = tonumber(f[5]),
-			quality = tonumber(f[6]) })
+		local item = tonumber(f[3])
+		if item and f[8] and f[8] ~= "" then W.names[item] = f[8] end
+		table.insert(W.art.recipes, { bot = f[2], item = item, spell = tonumber(f[4]), skill = tonumber(f[5]),
+			quality = tonumber(f[6]), rank = tonumber(f[7] or "") })
 	elseif k == "AQ" then
 		W.art.quote = { bot = f[2], item = tonumber(f[3]), qty = tonumber(f[4]) or 1, copper = tonumber(f[5]) or 0,
 			ok = f[6] == "ok", reason = f[6], id = f[7] }
@@ -343,7 +407,18 @@ function W.Build()
 		row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		row.right:SetPoint("LEFT", 264, 0)
 		row.right:SetWidth(200)
+		row.right:SetHeight(22)
 		row.right:SetJustifyH("LEFT")
+		-- The artisans' columns: name, level, zone, professions.
+		row.cols = {}
+		for c, def in ipairs(W.COLUMNS) do
+			local fs = row:CreateFontString(nil, "OVERLAY", c == 1 and "GameFontHighlight" or "GameFontHighlightSmall")
+			fs:SetPoint("LEFT", def[1], 0)
+			fs:SetWidth(def[2])
+			fs:SetHeight(20)
+			fs:SetJustifyH(c == 2 and "CENTER" or "LEFT")
+			row.cols[c] = fs
+		end
 		row:SetScript("OnClick", function(self) if self.click then self.click() end end)
 		row:SetScript("OnEnter", function(self)
 			if self.item then
@@ -360,6 +435,20 @@ function W.Build()
 		end)
 		f.rows[i] = row
 	end
+	f.heads = {}
+	for c, def in ipairs(W.COLUMNS) do
+		local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		fs:SetPoint("BOTTOMLEFT", f.rows[1], "TOPLEFT", def[1], 2)
+		fs:SetWidth(def[2])
+		fs:SetJustifyH(c == 2 and "CENTER" or "LEFT")
+		f.heads[c] = fs
+	end
+	f.filter = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	f.filter:SetWidth(170)
+	f.filter:SetHeight(20)
+	f.filter:SetPoint("TOPLEFT", 20, -66)
+	f.filter:SetScript("OnClick", function() W.FilterMenu() end)
+	f.menu = CreateFrame("Frame", "SquidBotsLiteWorldMenu", UIParent, "UIDropDownMenuTemplate")
 	f.status = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.status:SetPoint("BOTTOMLEFT", 22, 20)
 	f.status:SetWidth(470)
@@ -368,7 +457,7 @@ function W.Build()
 		self.t = (self.t or 0) + delta
 		if self.t < 1 then return end
 		self.t = 0
-		if W.tab == "events" then W.Refresh() end
+		if W.tab == "events" or next(W.waiting) then W.Refresh() end
 	end)
 end
 
@@ -381,6 +470,24 @@ ChatEdit_InsertLink = function(link, ...)
 		return true
 	end
 	return insertLink(link, ...)
+end
+
+-- Column x and width on a row (470 wide): artisan, level, zone, professions.
+W.COLUMNS = { { 28, 118 }, { 148, 30 }, { 182, 104 }, { 290, 178 } }
+
+-- The professions the artisans have, to filter on.
+function W.FilterMenu()
+	local seen, ids = {}, {}
+	for _, b in ipairs(W.art.bots) do
+		for _, sk in ipairs(b.skills) do if not seen[sk.id] then seen[sk.id] = true; table.insert(ids, sk.id) end end
+	end
+	table.sort(ids, function(a, b) return W.SkillName(a) < W.SkillName(b) end)
+	local items = { { text = T("A_ALL"), checked = W.art.skill == nil, func = function() W.art.skill = nil; W.offset = 0; W.Refresh() end } }
+	for _, id in ipairs(ids) do
+		table.insert(items, { text = W.SkillName(id), icon = SKILL_ICON[id] and ("Interface\\Icons\\" .. SKILL_ICON[id]) or nil,
+			checked = W.art.skill == id, func = function() W.art.skill = id; W.offset = 0; W.Refresh() end })
+	end
+	EasyMenu(items, W.frame.menu, "cursor", 0, 0, "MENU")
 end
 
 function W.Toggle()
@@ -469,31 +576,57 @@ end
 function W.Rows()
 	local rows, now = {}, time()
 	if W.tab == "guild" then
+		-- Two parts, each with its title: my orders (and how each went), the gifts the guild sent me.
+		table.insert(rows, { left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "" })
 		for _, o in ipairs(W.guild.orders) do
 			local state = T("S_" .. (o.state or "open"))
-			if o.reason then state = state .. " (" .. W.Reason(o.reason) .. ")" end
+			if o.reason then state = state .. " : " .. W.Reason(o.reason) end
 			if o.cod > 0 then state = state .. "  " .. W.Money(o.cod) end
 			local color = (o.state == "refused" or o.state == "none") and "|cffff6060" or (o.state == "open") and "|cffaaaaaa" or "|cff40ff40"
+			local by = o.bot and string.format(T("G_BY"), o.bot, W.Ago(o.at)) or W.Ago(o.at)
 			table.insert(rows, { item = o.item, left = W.Colored(o.item) .. (o.qty > 1 and (" x" .. o.qty) or ""),
-				right = color .. state .. "|r" .. (o.bot and ("  |cffaaaaaa" .. o.bot .. "|r") or "") })
+				right = color .. state .. "|r\n|cffaaaaaa" .. by .. "|r" })
 		end
+		if #W.guild.orders == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NONE") .. "|r", right = "" }) end
+		table.insert(rows, { left = "|cffffd100" .. T("G_GIFTS") .. "|r", right = "" })
 		for _, g in ipairs(W.guild.gifts) do
-			table.insert(rows, { item = g.item, left = W.Colored(g.item), right = "|cffffd100" .. T("G_GIFT") .. "|r  |cffaaaaaa" .. (g.bot or "") .. "|r" })
+			table.insert(rows, { item = g.item, left = W.Colored(g.item),
+				right = "|cffaaaaaa" .. string.format(T("G_GIFT_LINE"), g.bot or "?", W.Ago(g.at)) .. "|r" })
 		end
+		if #W.guild.gifts == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NO_GIFT") .. "|r", right = "" }) end
 	elseif W.tab == "art" then
 		if W.art.mode == "bots" then
 			for _, b in ipairs(W.art.bots) do
-				table.insert(rows, { left = b.name, right = "|cffaaaaaa" .. b.skills:gsub(",", ", ") .. "|r", click = function()
+				local keep = not W.art.skill
+				for _, sk in ipairs(b.skills) do if sk.id == W.art.skill then keep = true end end
+				if keep then
+				table.insert(rows, { cols = { b.name, b.level and tostring(b.level) or "", b.zone or "",
+					W.SkillsText(b.skills, W.art.skill) }, click = function()
 					W.art.bot, W.art.mode, W.art.pick, W.art.quote, W.offset = b.name, "recipes", nil, nil, 0
 					W.at["ARCP\t" .. b.name] = nil
 					W.Load()
 				end })
+				end
 			end
 		elseif W.art.mode == "recipes" then
-			for _, r in ipairs(W.art.recipes) do
+			local list = {}
+			for _, r in ipairs(W.art.recipes) do table.insert(list, r) end
+			table.sort(list, function(a, b)
+				if a.skill ~= b.skill then return W.SkillName(a.skill or 0) < W.SkillName(b.skill or 0) end
+				local ra, rb = a.rank or 0, b.rank or 0
+				if ra ~= rb then return ra < rb end
+				if (a.quality or 0) ~= (b.quality or 0) then return (a.quality or 0) < (b.quality or 0) end
+				return (W.ItemName(a.item)) < (W.ItemName(b.item))
+			end)
+			local lastSkill
+			for _, r in ipairs(list) do
+				if r.skill ~= lastSkill then
+					lastSkill = r.skill
+					table.insert(rows, { left = "|cffffd100" .. W.SkillsText({ { id = r.skill or 0, value = 0 } }):gsub(" 0$", "") .. "|r", right = "" })
+				end
 				local picked = W.art.pick == r
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
-					right = "|cffaaaaaa" .. (r.bot or "") .. "|r", click = function()
+					right = "|cffaaaaaa" .. (r.rank and r.rank > 0 and (r.rank .. "  ") or "") .. (r.bot or "") .. "|r", click = function()
 						W.art.pick, W.art.quote = r, nil
 						W.Refresh()
 					end })
@@ -547,6 +680,8 @@ function W.Refresh()
 		f.action:SetText(T((q and q.ok) and "A_ORDER" or "A_QUOTE"))
 		if W.art.pick then f.action:Enable() else f.action:Disable() end
 		f.hint:SetText(q and q.ok and string.format(T("A_PRICE"), W.Colored(q.item), q.qty, W.Money(q.copper)) or T("A_PICK"))
+	elseif art and W.art.mode == "bots" then
+		f.hint:SetText(T("A_TITLE"))
 	elseif art then
 		f.hint:SetText(T("A_PICK"))
 	else
@@ -557,6 +692,19 @@ function W.Refresh()
 		f.action2:SetText(T(W.art.mode == "bots" and "A_MAILS" or "A_BACK"))
 	else
 		f.action2:Hide()
+	end
+	local columns = art and W.art.mode == "bots"
+	local heads = { "C_ARTISAN", "C_LEVEL", "C_ZONE", "C_PROFS" }
+	for c, fs in ipairs(f.heads) do fs:SetText(columns and T(heads[c]) or "") end
+	if columns then
+		f.filter:Show()
+		f.filter:SetText(string.format(T("A_FILTER"), W.art.skill and W.SkillName(W.art.skill) or T("A_ALL")))
+		f.hint:ClearAllPoints()
+		f.hint:SetPoint("TOPLEFT", 20, -92)
+	else
+		f.filter:Hide()
+		f.hint:ClearAllPoints()
+		f.hint:SetPoint("TOPLEFT", 20, -96)
 	end
 	local rows = W.Rows()
 	W.count = #rows
@@ -571,8 +719,9 @@ function W.Refresh()
 			else
 				row.icon:Hide()
 			end
-			row.left:SetText(r.left)
-			row.right:SetText(r.right)
+			row.left:SetText(r.cols and "" or r.left)
+			row.right:SetText(r.cols and "" or r.right)
+			for c, fs in ipairs(row.cols) do fs:SetText(r.cols and r.cols[c] or "") end
 			row:Show()
 		else
 			row:Hide()
@@ -584,7 +733,7 @@ function W.Refresh()
 	elseif W.error then status = "|cffff6060" .. W.error .. "|r"
 	elseif W.busy and W.busy.feature == feature then status = "|cffaaaaaa" .. T("WAITING") .. "|r"
 	elseif #rows == 0 then
-		status = "|cffaaaaaa" .. T(guild and "G_NONE" or art and (W.art.mode == "bots" and "A_NONE" or "") or "E_NONE") .. "|r"
+		status = guild and "" or ("|cffaaaaaa" .. T(art and (W.art.mode == "bots" and "A_NONE" or "") or "E_NONE") .. "|r")
 	end
 	f.status:SetText(status)
 end
