@@ -814,7 +814,7 @@ function W.Order()
 	W.frame.item:ClearFocus()
 	W.Confirm(string.format(T("ASK_GUILD"), qty, W.Colored(item)), function()
 		W.Send("GORD\t" .. item .. "\t" .. qty, "guild")
-		if W.frame then W.frame.item:SetText("") end
+		if W.frame then W.frame.item:SetText(""); W.frame.qty:SetText("1") end
 	end)
 end
 
@@ -827,6 +827,7 @@ function W.Action()
 			-- The price of the last quote; the server checks it again (more than 10 % up: "price", a new quote).
 			W.Confirm(string.format(T("ASK_ART"), q.qty, W.Colored(q.item), q.bot or "?", W.Money(q.copper)), function()
 				W.Send("AORDER\t" .. q.id, "art")
+				if W.frame then W.frame.qty:SetText("1") end
 			end)
 		elseif W.art.pick then
 			W.Send("AQUOTE\t" .. W.art.pick.bot .. "\t" .. W.art.pick.item .. "\t" .. W.Qty(5), "art")
@@ -968,7 +969,9 @@ function W.Rows()
 				local picked = W.art.pick == r
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
 					right = "|cffaaaaaa" .. (r.rank and r.rank > 0 and (r.rank .. "  ") or "") .. (r.bot or "") .. "|r", click = function()
+						-- The quantity box is shared with the guild order: back to 1 for each recipe (a 5 typed there made 5 crafts).
 						W.art.pick, W.art.quote = r, nil
+						if W.frame then W.frame.qty:SetText("1") end
 						W.Refresh()
 					end })
 			end
