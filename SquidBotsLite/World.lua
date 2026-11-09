@@ -26,7 +26,7 @@ local STRINGS = {
 		A_BACK = "< Artisans list", A_MAILS = "My orders", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
 		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
-		TIP_RECIPES = "Its recipes: pick one, then Quote.", TIP_QUOTE = "Quote: the price of this item, no order yet.",
+		TIP_RECIPES = "Its recipes: pick one, then Quote.", A_RANK = "%s %d needed", TIP_QUOTE = "Quote: the price of this item, no order yet.",
 		Q_TITLE = "Quote from %s", Q_COD = "cash on delivery, paid when you take it from the mail",
 		M_preparing = "Preparing", M_sent = "Sent", M_awaiting = "Awaiting pickup", M_paid = "Received",
 		M_returned = "Returned", M_cancelled = "Cancelled", M_pending = "Awaiting pickup",
@@ -82,7 +82,7 @@ local STRINGS = {
 		A_BACK = "< Liste des artisans", A_MAILS = "Mes commandes", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
 		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
-		TIP_RECIPES = "Ses recettes : choisissez-en une, puis Devis.", TIP_QUOTE = "Devis : le prix de cet objet, sans commande.",
+		TIP_RECIPES = "Ses recettes : choisissez-en une, puis Devis.", A_RANK = "%s %d requis", TIP_QUOTE = "Devis : le prix de cet objet, sans commande.",
 		Q_TITLE = "Devis de %s", Q_COD = "contre remboursement, payé en le retirant du courrier",
 		M_preparing = "En préparation", M_sent = "Envoyé", M_awaiting = "En attente de réception", M_paid = "Reçu (payé)",
 		M_returned = "Renvoyé", M_cancelled = "Annulé", M_pending = "En attente de réception",
@@ -831,13 +831,15 @@ function W.Build()
 	f.usableText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.usableText:SetPoint("LEFT", f.usable, "RIGHT", 2, 0)
 	f.prev = CreateFrame("Button", nil, f, "UIPanelScrollUpButtonTemplate")
-	f.prev:SetPoint("TOPRIGHT", -84, -142)
+	f.prev:SetPoint("TOPRIGHT", -150, -142)
 	f.prev:SetScript("OnClick", function() W.CatPage(W.guild.cat.page - 1) end)
 	f.next = CreateFrame("Button", nil, f, "UIPanelScrollDownButtonTemplate")
 	f.next:SetPoint("TOPRIGHT", -20, -142)
 	f.next:SetScript("OnClick", function() W.CatPage(W.guild.cat.page + 1) end)
 	f.pageText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.pageText:SetPoint("LEFT", f.prev, "RIGHT", 6, 0)
 	f.pageText:SetPoint("RIGHT", f.next, "LEFT", -6, 0)
+	f.pageText:SetJustifyH("CENTER")
 	-- The quote, in big (3.0, the user's test): item, quantity, price, artisan, and Order.
 	local card = CreateFrame("Frame", nil, f)
 	f.card = card
@@ -1185,7 +1187,7 @@ function W.Rows()
 			end)
 			local lastSkill
 			for _, r in ipairs(list) do
-				if r.skill ~= lastSkill and CRAFTS[r.skill or 0] then
+				if r.skill ~= lastSkill and not W.SkillName(r.skill or 0):find("^#") then
 					lastSkill = r.skill
 					table.insert(rows, { header = true, left = "|cffffd100" .. W.SkillsText({ { id = r.skill or 0, value = 0 } }):gsub(" 0$", "") .. "|r", right = "" })
 				end
@@ -1195,7 +1197,7 @@ function W.Rows()
 					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.Qty(5), "art")
 				end
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
-					sub = W.SkillName(r.skill or 0) .. (r.rank and r.rank > 0 and (" " .. r.rank) or ""),
+					sub = (r.rank and r.rank > 1) and string.format(T("A_RANK"), W.SkillName(r.skill or 0), r.rank) or W.SkillName(r.skill or 0),
 					right = "|cffaaaaaa" .. (r.bot or "") .. "|r",
 					go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
 						-- The quantity box is shared with the guild order: back to 1 for each recipe (a 5 typed there made 5 crafts).
@@ -1349,7 +1351,17 @@ function W.Refresh()
 		f.action:SetText(T((q and q.ok) and "A_ORDER" or "A_QUOTE"))
 		W.PlaceText(f.action)
 		if W.art.pick then f.action:Enable() else f.action:Disable() end
-		f.hint:SetText(T("A_PICK"))
+		local who = W.art.bot or "?"
+		for _, b in ipairs(W.art.bots) do
+			if b.name == W.art.bot then
+				local parts = { "|cffffd100" .. b.name .. "|r" }
+				if b.level then table.insert(parts, string.format(T("GC_REQ"), b.level)) end
+				if b.zone and b.zone ~= "" then table.insert(parts, b.zone) end
+				table.insert(parts, W.SkillsText(b.skills))
+				who = table.concat(parts, "  ·  ")
+			end
+		end
+		f.hint:SetText(who)
 	elseif art and W.art.mode == "bots" then
 		f.hint:SetText(T("A_TITLE"))
 	elseif art and W.art.mode == "mails" then
@@ -1406,7 +1418,7 @@ function W.Refresh()
 	elseif f.card then
 		f.card:Hide()
 	end
-	local top = -146
+	local top = recipes and -108 or -146
 	if guild then top = orders and -206 or cat and -172 or -142 end
 	shown = math.min(shown, math.floor((470 + top) / 39))
 	for i, row in ipairs(f.rows) do
