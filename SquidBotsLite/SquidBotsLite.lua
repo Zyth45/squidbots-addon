@@ -17,7 +17,7 @@ local STRINGS = {
 		WORLD_BAR = "World", TIP_WORLD = "Guild orders, bot artisans and the world's events (invasions, rushes, server firsts).",
 		TIP_BAG_ICON = "Click: its bags.", TIP_SHEET_ICON = "Click: its sheet (gear, spec, soul).",
 		TIP_SHEET_ICON_RO = "Click: its sheet, read only (not one of your characters).",
-		ICONS_ON = "Bag and sheet icons on the group frames: on.", ICONS_OFF = "Bag and sheet icons on the group frames: off.",
+		ICONS_ON = "Bag icons on the group frames: on.", ICONS_OFF = "Bag icons on the group frames: off.",
 		RAIDFRAMES_OFF = "Role icons and bot menus on the raid-style frames: off.",
 		TIP_PULL_ON = "Auto pull: the tank engages nearby monsters on its own. Click so it waits: it only fights what you or the group attack.",
 		TIP_PULL_OFF = "The tank does not pull on its own: you choose the fights. Click to let it pull again.",
@@ -137,7 +137,7 @@ local STRINGS = {
 		WORLD_BAR = "Monde", TIP_WORLD = "Commandes de guilde, bots artisans et événements du monde (invasions, ruées, server first).",
 		TIP_BAG_ICON = "Clic : ses sacs.", TIP_SHEET_ICON = "Clic : sa fiche (équipement, spé, âme).",
 		TIP_SHEET_ICON_RO = "Clic : sa fiche, en lecture seule (ce n'est pas un de vos personnages).",
-		ICONS_ON = "Icônes sac et fiche sur les cadres de groupe : activées.", ICONS_OFF = "Icônes sac et fiche sur les cadres de groupe : désactivées.",
+		ICONS_ON = "Icônes sac sur les cadres de groupe : activées.", ICONS_OFF = "Icônes sac sur les cadres de groupe : désactivées.",
 		RAIDFRAMES_OFF = "Icônes de rôle et menus des bots sur les cadres de style raid : désactivés.",
 		TIP_PULL_ON = "Pull auto : le tank engage tout seul les monstres proches. Cliquez pour qu'il attende : il ne se bat que contre ce que vous ou le groupe attaquez.",
 		TIP_PULL_OFF = "Le tank ne tire pas tout seul : vous choisissez les combats. Cliquez pour qu'il tire de nouveau.",
@@ -2021,8 +2021,8 @@ local function OverlayTooltip(self)
 	GameTooltip:Show()
 end
 
--- 3.0: two small icons by a group member's frame: its bags (an alt of yours) and its sheet (any bot; read only for
--- one that is not yours). /sbl icons off hides them.
+-- 3.0: a small bag icon by an alt's frame: its bags. (A sheet icon was tried and left out after the user's test: the
+-- sheet stays on the usual click and menu; its button is made but never shown.) /sbl icons off hides it.
 function ui.MiniIcons(overlay, size)
 	local function Mini(texture, tip, onClick)
 		local b = CreateFrame("Button", nil, overlay:GetParent() == UIParent and UIParent or overlay)
@@ -2064,7 +2064,7 @@ function ui.RefreshMiniIcons(overlay, name)
 	local show = name and SquidBotsLiteDB.frameIcons ~= false and IsCoaBot(name)
 	local alt = show and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]
 	if alt then overlay.bagIcon:Show() else overlay.bagIcon:Hide() end
-	if show then overlay.sheetIcon:Show() else overlay.sheetIcon:Hide() end
+	overlay.sheetIcon:Hide()
 	if overlay.bagIcon:GetParent() == UIParent then
 		local strata, level = overlay:GetFrameStrata(), overlay:GetFrameLevel()
 		for _, b in ipairs({ overlay.bagIcon, overlay.sheetIcon }) do
@@ -2099,9 +2099,9 @@ local function BuildOverlays()
 			local healthBar = _G["PartyMemberFrame" .. i .. "HealthBar"]
 			-- 3.0: the bag and sheet icons right of the health bar, then the specialization.
 			ui.MiniIcons(overlay, 13)
-			overlay.sheetIcon:SetPoint("LEFT", healthBar or frame, "RIGHT", 10, 0)
-			overlay.bagIcon:SetPoint("LEFT", overlay.sheetIcon, "RIGHT", 2, 0)
-			overlay.spec:SetPoint("LEFT", healthBar or frame, "RIGHT", 42, 0)
+			overlay.bagIcon:SetPoint("LEFT", healthBar or frame, "RIGHT", 10, 0)
+			overlay.sheetIcon:SetPoint("LEFT", overlay.bagIcon, "RIGHT", 2, 0)
+			overlay.spec:SetPoint("LEFT", healthBar or frame, "RIGHT", 28, 0)
 			overlays[i] = overlay
 		end
 	end
@@ -2178,8 +2178,8 @@ function compact.Overlay(frame)
 	overlay.frame = frame
 	-- 3.0: the sheet and bag icons, left of the role icon.
 	ui.MiniIcons(overlay, 12)
-	overlay.sheetIcon:SetPoint("RIGHT", overlay, "LEFT", -2, 0)
-	overlay.bagIcon:SetPoint("RIGHT", overlay.sheetIcon, "LEFT", -2, 0)
+	overlay.bagIcon:SetPoint("RIGHT", overlay, "LEFT", -2, 0)
+	overlay.sheetIcon:SetPoint("RIGHT", overlay.bagIcon, "LEFT", -2, 0)
 	compact.overlays[frame] = overlay
 	return overlay
 end

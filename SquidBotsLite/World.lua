@@ -416,7 +416,8 @@ local BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interfac
 function W.Build()
 	local f = CreateFrame("Frame", "SquidBotsLiteWorld", UIParent)
 	W.frame = f
-	f:SetWidth(520)
+	-- 680 wide (3.0, the user's test): the artisans' professions fit in full.
+	f:SetWidth(680)
 	f:SetHeight(460)
 	f:SetPoint("CENTER", 0, 40)
 	f:SetBackdrop(BACKDROP)
@@ -479,12 +480,12 @@ function W.Build()
 	f.action2:SetScript("OnClick", function() W.Action2() end)
 	f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.hint:SetPoint("TOPLEFT", 20, -96)
-	f.hint:SetWidth(480)
+	f.hint:SetWidth(640)
 	f.hint:SetJustifyH("LEFT")
 	f.rows = {}
 	for i = 1, ROWS do
 		local row = CreateFrame("Button", nil, f)
-		row:SetWidth(470)
+		row:SetWidth(630)
 		row:SetHeight(22)
 		row:SetPoint("TOPLEFT", 16, -122 - (i - 1) * 23)
 		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
@@ -498,11 +499,11 @@ function W.Build()
 		row.icon:SetPoint("LEFT", 2, 0)
 		row.left = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		row.left:SetPoint("LEFT", 28, 0)
-		row.left:SetWidth(230)
+		row.left:SetWidth(290)
 		row.left:SetJustifyH("LEFT")
 		row.right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		row.right:SetPoint("LEFT", 264, 0)
-		row.right:SetWidth(200)
+		row.right:SetPoint("LEFT", 330, 0)
+		row.right:SetWidth(296)
 		row.right:SetHeight(22)
 		row.right:SetJustifyH("LEFT")
 		-- The artisans' columns: name, level, zone, professions.
@@ -549,7 +550,7 @@ function W.Build()
 	-- The quote, in big (3.0, the user's test): item, quantity, price, artisan, and Order.
 	local card = CreateFrame("Frame", nil, f)
 	f.card = card
-	card:SetWidth(474)
+	card:SetWidth(634)
 	card:SetHeight(74)
 	card:SetPoint("BOTTOMLEFT", 14, 40)
 	card:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -579,7 +580,7 @@ function W.Build()
 	card:Hide()
 	f.status = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	f.status:SetPoint("BOTTOMLEFT", 22, 20)
-	f.status:SetWidth(470)
+	f.status:SetWidth(630)
 	f.status:SetJustifyH("LEFT")
 	f:SetScript("OnUpdate", function(self, delta)
 		self.t = (self.t or 0) + delta
@@ -602,8 +603,8 @@ ChatEdit_InsertLink = function(link, ...)
 	return insertLink(link, ...)
 end
 
--- Column x and width on a row (470 wide): artisan, level, zone, professions.
-W.COLUMNS = { { 28, 118 }, { 148, 30 }, { 182, 104 }, { 290, 178 } }
+-- Column x and width on a row (630 wide): artisan, level, zone, professions.
+W.COLUMNS = { { 28, 130 }, { 160, 34 }, { 200, 136 }, { 342, 286 } }
 
 -- The professions the artisans have, to filter on.
 function W.FilterMenu()
