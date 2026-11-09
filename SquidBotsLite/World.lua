@@ -40,7 +40,14 @@ local STRINGS = {
 		R_faction = "other faction", R_price = "the price went up: ask a new quote", R_offline = "the bot is offline",
 		R_notyours = "not your bot",
 		ASK_ART = "Order %d x %s from %s for %s (cash on delivery)?",
-		V_gifts = "Gifts", V_cat = "Catalogue", V_act = "Activities", V_orders = "My orders",
+		V_gifts = "Gifts", V_cat = "Catalogue", V_act = "Activities", V_orders = "Ask the guild",
+		G_DROP = "Drop an item here (shift-click or drag it)", G_ID = "or its id", G_ASK_LINE = "A member sends it if they have it, crafts it or buys it at the auction house.",
+		G_BANNER = "%d of %d members online", G_FREE = "%d bots free", G_RUNNING = "Under way: %s", G_NO_GUILD = "You are in no guild.",
+		G_RECEIVED = "Received", G_THANKS = "Thank them", G_THANKED = "thanked", THANKS_MSG = "Thanks for the %s!",
+		TIP_V_gifts = "Gear your guild offers you: accept or decline, and the gifts you received.",
+		TIP_V_cat = "What your guild's bots have in stock or can craft: search, then order.",
+		TIP_V_act = "Your guild's bots with you: rally, dungeon party, guild raid.",
+		TIP_V_orders = "Ask your guild for one item, and how your requests went.",
 		GF_HINT = "Gear your guild's members offer you. Accept: it comes by mail. Decline: that item is not offered again for 30 days.",
 		GF_NONE = "No gift offered right now.", GF_LINE = "%s offers it (%s), %s", GF_EXPIRES = "ends in %s",
 		GF_ACCEPT = "Accept", GF_DECLINE = "Decline", GF_EMPTY = "empty slot", GF_CHAT = "%s offers you %s (%s): open World > Guild > Gifts to accept.",
@@ -88,7 +95,14 @@ local STRINGS = {
 		R_faction = "autre faction", R_price = "le prix a monté : redemandez un devis", R_offline = "le bot est hors ligne",
 		R_notyours = "pas votre bot",
 		ASK_ART = "Commander %d x %s à %s pour %s (contre remboursement) ?",
-		V_gifts = "Dons", V_cat = "Catalogue", V_act = "Activités", V_orders = "Mes commandes",
+		V_gifts = "Dons", V_cat = "Catalogue", V_act = "Activités", V_orders = "Demander",
+		G_DROP = "Déposez un objet ici (Maj-clic ou glisser)", G_ID = "ou son id", G_ASK_LINE = "Un membre l'envoie s'il l'a, le fabrique ou l'achète à l'hôtel des ventes.",
+		G_BANNER = "%d membres en ligne sur %d", G_FREE = "%d bots libres", G_RUNNING = "En cours : %s", G_NO_GUILD = "Vous n'êtes dans aucune guilde.",
+		G_RECEIVED = "Reçus", G_THANKS = "Remercier", G_THANKED = "remercié", THANKS_MSG = "Merci pour %s !",
+		TIP_V_gifts = "L'équipement que votre guilde vous offre : acceptez ou refusez, et les dons déjà reçus.",
+		TIP_V_cat = "Ce que les bots de votre guilde ont en stock ou savent fabriquer : cherchez, puis commandez.",
+		TIP_V_act = "Les bots de votre guilde avec vous : rassemblement, groupe de donjon, raid de guilde.",
+		TIP_V_orders = "Demandez un objet à votre guilde, et suivez vos demandes.",
 		GF_HINT = "L'équipement que les membres de votre guilde vous offrent. Accepter : il arrive par courrier. Refuser : cet objet ne vous est plus proposé pendant 30 jours.",
 		GF_NONE = "Aucun don proposé en ce moment.", GF_LINE = "offert par %s (%s), %s", GF_EXPIRES = "fin dans %s",
 		GF_ACCEPT = "Accepter", GF_DECLINE = "Refuser", GF_EMPTY = "emplacement vide", GF_CHAT = "%s vous offre %s (%s) : Monde > Guilde > Dons pour l'accepter.",
@@ -112,7 +126,7 @@ local STRINGS = {
 
 local W = {
 	queue = {}, busy = nil, lines = {}, off = {}, at = {},
-	guild = { orders = {}, gifts = {}, mode = "gifts", offers = {}, acts = {},
+	guild = { orders = {}, gifts = {}, mode = "orders", thanked = {}, offers = {}, acts = {},
 		cat = { list = {}, total = 0, page = 1, search = "", slot = nil, usable = false } }, art = { bots = {}, recipes = {}, mails = {}, bot = nil, quote = nil, mode = "bots" },
 	events = { list = {}, firsts = {} }, soul = {}, soulAsked = {}, error = nil, tab = "art", offset = 0,
 }
@@ -459,7 +473,8 @@ W.ICONS = { art = "Interface\\Icons\\Trade_BlackSmithing", guild = "Interface\\I
 	back = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up", order = "Interface\\Icons\\INV_Misc_Coin_02",
 	filter = "Interface\\Icons\\INV_Misc_Spyglass_02", v_gifts = "Interface\\Icons\\INV_Holiday_Christmas_Present_01",
 	v_cat = "Interface\\Icons\\INV_Misc_Book_09", v_act = "Interface\\Icons\\Ability_Warrior_BattleShout",
-	v_orders = "Interface\\Icons\\INV_Letter_15" }
+	v_orders = "Interface\\Icons\\INV_Letter_15", start = "Interface\\Icons\\Ability_Warrior_BattleShout",
+	cancel = "Interface\\Icons\\Spell_ChargeNegative", thanks = "Interface\\Icons\\INV_ValentinesCard02" }
 -- Three tabs (18 + 3 x 116) and the right button (124) fit the 520 px panel with room between.
 W.BUTTON_W, W.BUTTON_H = 110, 24
 
@@ -534,7 +549,7 @@ function W.Build()
 	f.item:SetAutoFocus(false)
 	f.item:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	f.item:SetScript("OnEnterPressed", function() W.Order() end)
-	f.item:SetScript("OnTextChanged", function() W.Refresh() end)
+	f.item:SetScript("OnTextChanged", function(self) if self:GetText() ~= "" then W.askItem = nil end; W.Refresh() end)
 	f.itemHint = f.item:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.itemHint:SetPoint("LEFT", 4, 0)
 	f.qty = CreateFrame("EditBox", "SquidBotsLiteWorldQty", f, "InputBoxTemplate")
@@ -683,23 +698,102 @@ function W.Build()
 	W.StyleButton(f.filter, W.ICONS.filter)
 	f.filter:SetScript("OnClick", function() W.FilterMenu() end)
 	f.menu = CreateFrame("Frame", "SquidBotsLiteWorldMenu", UIParent, "UIDropDownMenuTemplate")
-	-- The Guild tab's views: Gifts, Catalogue, Activities, My orders.
+	-- The Guild tab: a banner (the guild, its members online, free bots, the activity under way with Cancel) holding the
+	-- four views as smaller buttons, apart from the main tabs.
+	local banner = CreateFrame("Frame", nil, f)
+	f.banner = banner
+	banner:SetWidth(646)
+	banner:SetHeight(58)
+	banner:SetPoint("TOPLEFT", 16, -66)
+	banner:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+	banner:SetBackdropColor(0.16, 0.12, 0.03, 0.9)
+	banner:SetBackdropBorderColor(1, 0.82, 0, 0.35)
+	banner.icon = banner:CreateTexture(nil, "ARTWORK")
+	banner.icon:SetWidth(20)
+	banner.icon:SetHeight(20)
+	banner.icon:SetPoint("TOPLEFT", 8, -6)
+	banner.icon:SetTexture(W.ICONS.guild)
+	banner.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	banner.name = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	banner.name:SetPoint("LEFT", banner.icon, "RIGHT", 6, 0)
+	banner.info = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	banner.info:SetPoint("LEFT", banner.name, "RIGHT", 12, 0)
+	banner.act = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	banner.act:SetPoint("TOPRIGHT", -36, -10)
+	local UIs = SquidBotsLite_UI
+	if UIs and UIs.IconButton then
+		banner.cancel = UIs.IconButton(banner, 20, W.ICONS.cancel, function() return T("GA_CANCEL"), W.guild.runningName end, function()
+			if not W.guild.running then return end
+			W.Confirm(string.format(T("ASK_CANCEL"), T("GA_" .. W.guild.running)), function() W.Send("GACT\tcancel", "act") end)
+		end)
+		banner.cancel:SetPoint("TOPRIGHT", -8, -6)
+		banner.cancel:Hide()
+	end
 	f.views = {}
-	for i, key in ipairs({ "gifts", "cat", "act", "orders" }) do
-		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-		b:SetWidth(W.BUTTON_W)
-		b:SetHeight(W.BUTTON_H)
-		b:SetPoint("TOPLEFT", 18 + (i - 1) * (W.BUTTON_W + 6), -68)
+	for i, key in ipairs({ "orders", "gifts", "cat", "act" }) do
+		local b = CreateFrame("Button", nil, banner, "UIPanelButtonTemplate")
+		b:SetWidth(118)
+		b:SetHeight(20)
+		b:SetPoint("BOTTOMLEFT", 8 + (i - 1) * 122, 6)
 		W.StyleButton(b, W.ICONS["v_" .. key])
+		b.tabIcon:SetWidth(14)
+		b.tabIcon:SetHeight(14)
 		b:SetScript("OnClick", function() W.guild.mode = key; W.offset = 0; W.error = nil; W.Load() end)
+		b:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+			GameTooltip:SetText(T("V_" .. key), 1, 0.82, 0)
+			GameTooltip:AddLine(T("TIP_V_" .. key), 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		b.key = key
 		f.views[i] = b
 	end
+	-- Ask the guild: a box to drop the item on (shift-click or drag), its icon and name once known.
+	local drop = CreateFrame("Button", nil, f)
+	f.drop = drop
+	drop:SetWidth(330)
+	drop:SetHeight(44)
+	drop:SetPoint("TOPLEFT", 16, -130)
+	drop:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+	drop:SetBackdropColor(0.09, 0.09, 0.11, 0.95)
+	drop:SetBackdropBorderColor(1, 0.82, 0, 0.5)
+	drop.icon = drop:CreateTexture(nil, "ARTWORK")
+	drop.icon:SetWidth(36)
+	drop.icon:SetHeight(36)
+	drop.icon:SetPoint("LEFT", 4, 0)
+	drop.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	drop.text = drop:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	drop.text:SetPoint("LEFT", drop.icon, "RIGHT", 8, 0)
+	drop.text:SetWidth(270)
+	drop.text:SetJustifyH("LEFT")
+	local function take()
+		local kind, id = GetCursorInfo()
+		if kind == "item" and id then
+			W.askItem = id
+			ClearCursor()
+			if W.frame then W.frame.item:SetText("") end
+			W.Refresh()
+		end
+	end
+	drop:SetScript("OnReceiveDrag", take)
+	drop:SetScript("OnClick", take)
+	drop:SetScript("OnEnter", function(self)
+		self:SetBackdropBorderColor(1, 0.82, 0, 1)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+		if W.askItem then GameTooltip:SetHyperlink("item:" .. W.askItem) else GameTooltip:SetText(T("G_HINT"), 1, 1, 1, 1, true) end
+		GameTooltip:Show()
+	end)
+	drop:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(1, 0.82, 0, 0.5); GameTooltip:Hide() end)
+	f.askLine = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.askLine:SetPoint("TOPLEFT", drop, "BOTTOMLEFT", 2, -4)
+	f.askLine:SetWidth(640)
+	f.askLine:SetJustifyH("LEFT")
 	-- The catalogue's line: search, slot, usable now, pages.
 	f.search = CreateFrame("EditBox", "SquidBotsLiteWorldSearch", f, "InputBoxTemplate")
 	f.search:SetWidth(200)
 	f.search:SetHeight(20)
-	f.search:SetPoint("TOPLEFT", 24, -98)
+	f.search:SetPoint("TOPLEFT", 24, -132)
 	f.search:SetAutoFocus(false)
 	f.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	f.search:SetScript("OnEnterPressed", function(self)
@@ -726,10 +820,10 @@ function W.Build()
 	f.usableText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.usableText:SetPoint("LEFT", f.usable, "RIGHT", 2, 0)
 	f.prev = CreateFrame("Button", nil, f, "UIPanelScrollUpButtonTemplate")
-	f.prev:SetPoint("TOPRIGHT", -84, -98)
+	f.prev:SetPoint("TOPRIGHT", -84, -132)
 	f.prev:SetScript("OnClick", function() W.CatPage(W.guild.cat.page - 1) end)
 	f.next = CreateFrame("Button", nil, f, "UIPanelScrollDownButtonTemplate")
-	f.next:SetPoint("TOPRIGHT", -20, -98)
+	f.next:SetPoint("TOPRIGHT", -20, -132)
 	f.next:SetScript("OnClick", function() W.CatPage(W.guild.cat.page + 1) end)
 	f.pageText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	f.pageText:SetPoint("RIGHT", f.next, "LEFT", -6, 0)
@@ -782,6 +876,14 @@ end
 local insertLink = ChatEdit_InsertLink
 ChatEdit_InsertLink = function(link, ...)
 	local box = W.frame and W.frame.item
+	local id = link and tonumber(link:match("|Hitem:(%d+)"))
+	if id and W.frame and W.frame:IsShown() and W.tab == "guild" and W.guild.mode == "orders" then
+		W.askItem = id
+		box:SetText("")
+		box:ClearFocus()
+		W.Refresh()
+		return true
+	end
 	if link and box and box:IsVisible() and box:HasFocus() then
 		box:SetText(link)
 		return true
@@ -831,7 +933,9 @@ function W.Load()
 	W.error = nil
 	if W.tab == "guild" then
 		local mode = W.guild.mode
-		if mode == "gifts" then W.Ask("GOFF", "gifts")
+		if GuildRoster then GuildRoster() end
+		if mode ~= "act" then W.Ask("GACT?", "act") end
+		if mode == "gifts" then W.Ask("GOFF", "gifts"); W.Ask("GLIST", "guild")
 		elseif mode == "cat" then W.Ask("GCAT\t" .. W.guild.cat.search .. "\t" .. W.guild.cat.page, "cat")
 		elseif mode == "act" then W.Ask("GACT?", "act")
 		else W.Ask("GLIST", "guild") end
@@ -845,6 +949,7 @@ end
 
 -- The item of the box: a link's id, or a number.
 function W.BoxItem()
+	if W.askItem and W.tab == "guild" then return W.askItem end
 	local text = W.frame and W.frame.item:GetText() or ""
 	return tonumber(text:match("|Hitem:(%d+)") or text:match("^%s*(%d+)%s*$"))
 end
@@ -872,6 +977,7 @@ function W.Order()
 	W.frame.item:ClearFocus()
 	W.Confirm(string.format(T("ASK_GUILD"), qty, W.Colored(item)), function()
 		W.Send("GORD\t" .. item .. "\t" .. qty, "guild")
+		W.askItem = nil
 		if W.frame then W.frame.item:SetText(""); W.frame.qty:SetText("1") end
 	end)
 end
@@ -944,6 +1050,20 @@ function W.Rows()
 				b2 = { text = T("GF_DECLINE"), click = function() W.Send("GREF\t" .. o.id, "gifts") end } })
 		end
 		if #W.guild.offers == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GF_NONE") .. "|r", right = "" }) end
+		if #W.guild.gifts > 0 then table.insert(rows, { header = true, left = "|cffffd100" .. T("G_RECEIVED") .. "|r", right = "" }) end
+		for _, g in ipairs(W.guild.gifts) do
+			local key = (g.bot or "?") .. ":" .. tostring(g.item) .. ":" .. tostring(g.at)
+			local thanked = W.guild.thanked[key]
+			table.insert(rows, { item = g.item, left = W.Colored(g.item),
+				sub = string.format(T("G_GIFT_LINE"), g.bot or "?", W.Ago(g.at)),
+				right = thanked and ("|cff40ff40" .. T("G_THANKED") .. "|r") or "",
+				go = not thanked and g.bot and { icon = W.ICONS.thanks, title = T("G_THANKS"), line = g.bot, click = function()
+					-- A thank-you whispered to the bot that gave it (a bot of the guild, named by the server).
+					SendChatMessage(string.format(T("THANKS_MSG"), W.ItemName(g.item)), "WHISPER", nil, g.bot)
+					W.guild.thanked[key] = true
+					W.Refresh()
+				end } or nil })
+		end
 	elseif W.tab == "guild" and W.guild.mode == "cat" then
 		local c, level = W.guild.cat, UnitLevel and UnitLevel("player") or 80
 		for _, x in ipairs(c.list) do
@@ -951,13 +1071,14 @@ function W.Rows()
 				local source = x.source == "stock" and string.format(T("GC_STOCK"), x.bot or "?", x.qty)
 					or string.format(T("GC_CRAFT"), x.bot or "?")
 				local req = x.req > 0 and ("  " .. (x.req > level and "|cffff6060" or "|cffaaaaaa") .. string.format(T("GC_REQ"), x.req) .. "|r") or ""
-				table.insert(rows, { item = x.item, left = W.Colored(x.item, x.quality) .. "  |cffaaaaaa" .. W.SlotName(x.slot) .. "|r",
-					right = "|cffaaaaaa" .. source .. "|r" .. req .. (x.price > 0 and ("\n" .. W.Money(x.price)) or ""),
-					click = function()
-						W.Confirm(string.format(T("ASK_GUILD"), 1, W.Colored(x.item, x.quality)), function()
-							W.Send("GORD\t" .. x.item .. "\t1", "guild")
-						end)
-					end })
+				local function order()
+					W.Confirm(string.format(T("ASK_GUILD"), 1, W.Colored(x.item, x.quality)), function()
+						W.Send("GORD\t" .. x.item .. "\t1", "guild")
+					end)
+				end
+				table.insert(rows, { item = x.item, left = W.Colored(x.item, x.quality), sub = W.SlotName(x.slot) .. req,
+					right = "|cffaaaaaa" .. source .. "|r" .. (x.price > 0 and ("\n" .. W.Money(x.price)) or ""),
+					go = { icon = W.ICONS.order, title = T("G_ORDER"), line = W.ItemName(x.item), click = order }, click = order })
 			end
 		end
 		if #rows == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GC_NONE") .. "|r", right = "" }) end
@@ -984,13 +1105,15 @@ function W.Rows()
 					or a.state == "busy" and "|cffaaaaaa" or "|cffff6060"
 				state = color .. state .. "|r\n|cffaaaaaa" .. string.format(T("GA_BOTS"), a.bots) .. "|r"
 			end
+			local ready = a and a.state == "ready"
 			table.insert(rows, { left = T("GA_" .. kind), right = state, tip = T("GA_TIP"),
-				-- The running one (a rally): Cancel instead of a greyed Start (Monde 8ebe01b3, "GACT cancel").
-				b1 = kind == running and { text = T("GA_CANCEL"), click = function()
+				iconPath = W.ICONS[kind == "gather" and "start" or kind == "party5" and "v_act" or "guild"],
+				-- The running one (a rally): Cancel instead of Start (Monde 8ebe01b3, "GACT cancel"); Start only when ready.
+				go = kind == running and { icon = W.ICONS.cancel, title = T("GA_CANCEL"), line = T("GA_" .. kind), click = function()
 					W.Confirm(string.format(T("ASK_CANCEL"), T("GA_" .. kind)), function() W.Send("GACT\tcancel", "act") end)
-				end } or { text = T("GA_START"), enabled = a and a.state == "ready", click = function()
+				end } or ready and { icon = W.ICONS.start, title = T("GA_START"), line = T("GA_" .. kind), click = function()
 					W.Confirm(string.format(T("ASK_ACT"), T("GA_" .. kind)), function() W.Send("GACT\t" .. kind, "act") end)
-				end } })
+				end } or nil })
 		end
 	elseif W.tab == "guild" then
 		-- Two parts, each with its title: my orders (and how each went), the gifts the guild sent me.
@@ -1005,12 +1128,6 @@ function W.Rows()
 				right = color .. state .. "|r\n|cffaaaaaa" .. by .. "|r" })
 		end
 		if #W.guild.orders == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NONE") .. "|r", right = "" }) end
-		table.insert(rows, { header = true, left = "|cffffd100" .. T("G_GIFTS") .. "|r", right = "" })
-		for _, g in ipairs(W.guild.gifts) do
-			table.insert(rows, { item = g.item, left = W.Colored(g.item),
-				right = "|cffaaaaaa" .. string.format(T("G_GIFT_LINE"), g.bot or "?", W.Ago(g.at)) .. "|r" })
-		end
-		if #W.guild.gifts == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NO_GIFT") .. "|r", right = "" }) end
 	elseif W.tab == "art" then
 		if W.art.mode == "bots" then
 			for _, b in ipairs(W.art.bots) do
@@ -1113,6 +1230,32 @@ function W.Refresh()
 	local guild, art = W.tab == "guild", W.tab == "art"
 	local recipes = art and W.art.mode == "recipes"
 	local orders, cat = guild and W.guild.mode == "orders", guild and W.guild.mode == "cat"
+	-- The banner: the guild, who is online, the free bots, the activity under way.
+	if guild then
+		f.banner:Show()
+		local gname = GetGuildInfo and GetGuildInfo("player")
+		f.banner.name:SetText(gname or T("G_NO_GUILD"))
+		local total, online = GetNumGuildMembers and GetNumGuildMembers(true) or 0, 0
+		for i = 1, total do
+			local _, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
+			if isOnline then online = online + 1 end
+		end
+		local free, running
+		for _, kind in ipairs(W.ACTS) do
+			local a = W.guild.acts[kind]
+			if a then free = a.bots end
+			if a and a.state == "busy" and a.untilAt > 0 then running = kind end
+		end
+		W.guild.running = running
+		W.guild.runningName = running and T("GA_" .. running) or nil
+		local info = gname and string.format(T("G_BANNER"), online, total) or ""
+		if free then info = info .. "  ·  " .. string.format(T("G_FREE"), free) end
+		f.banner.info:SetText("|cffaaaaaa" .. info .. "|r")
+		f.banner.act:SetText(running and ("|cffffd100" .. string.format(T("G_RUNNING"), T("GA_" .. running)) .. "|r") or "")
+		if f.banner.cancel then if running then f.banner.cancel:Show() else f.banner.cancel:Hide() end end
+	else
+		f.banner:Hide()
+	end
 	for _, b in ipairs(f.views) do
 		if guild then
 			b:Show()
@@ -1125,7 +1268,28 @@ function W.Refresh()
 	end
 	-- The order line: under the views on the Guild tab, under the tabs on the Artisans tab.
 	f.item:ClearAllPoints()
-	f.item:SetPoint("TOPLEFT", 24, guild and -98 or -70)
+	if guild then
+		f.item:SetWidth(70)
+		f.item:SetPoint("LEFT", f.drop, "RIGHT", 18, 0)
+	else
+		f.item:SetWidth(230)
+		f.item:SetPoint("TOPLEFT", 24, -70)
+	end
+	if orders then
+		f.drop:Show()
+		local id = W.askItem
+		if id then
+			f.drop.icon:SetTexture(GetItemIcon and GetItemIcon(id) or select(10, GetItemInfo(id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			f.drop.text:SetText(W.Colored(id))
+		else
+			f.drop.icon:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+			f.drop.text:SetText("|cffaaaaaa" .. T("G_DROP") .. "|r")
+		end
+		f.askLine:SetText(T("G_ASK_LINE"))
+	else
+		f.drop:Hide()
+		f.askLine:SetText("")
+	end
 	local catControls = { f.search, f.slotBtn, f.usable, f.usableText, f.prev, f.next, f.pageText }
 	for _, c in ipairs(catControls) do if cat then c:Show() else c:Hide() end end
 	if cat then
@@ -1144,14 +1308,15 @@ function W.Refresh()
 	if recipes then f.item:Hide() end
 	f.qtyLabel:SetText(T("G_QTY"))
 	W.PlaceText(f.action)
-	f.itemHint:SetText((f.item:GetText() == "" and not f.item:HasFocus()) and T("G_ITEM") or "")
+	f.itemHint:SetText((f.item:GetText() == "" and not f.item:HasFocus()) and T(guild and "G_ID" or "G_ITEM") or "")
 	if guild and not orders then
-		f.hint:SetText(T(W.guild.mode == "gifts" and "GF_HINT" or cat and "GC_HINT" or "GA_HINT"))
+		-- The views' help is in their buttons' tooltips: the list starts right under the banner.
+		f.hint:SetText("")
 	elseif guild then
 		f.action:SetText(T("G_ORDER"))
 		W.PlaceText(f.action)
 		if W.BoxItem() then f.action:Enable() else f.action:Disable() end
-		f.hint:SetText(T("G_HINT"))
+		f.hint:SetText("")
 	elseif recipes then
 		local q = W.art.quote
 		f.action:SetText(T((q and q.ok) and "A_ORDER" or "A_QUOTE"))
@@ -1214,6 +1379,16 @@ function W.Refresh()
 	elseif f.card then
 		f.card:Hide()
 	end
+	local top = -146
+	if guild then top = orders and -196 or cat and -160 or -132 end
+	shown = math.min(shown, math.floor((470 + top) / 39))
+	for i, row in ipairs(f.rows) do
+		row:ClearAllPoints()
+		row:SetPoint("TOPLEFT", 16, top - (i - 1) * 39)
+	end
+	f.bar:ClearAllPoints()
+	f.bar:SetPoint("TOPLEFT", f.rows[1], "TOPRIGHT", 6, -16)
+	f.bar:SetPoint("BOTTOMLEFT", f.rows[math.max(1, shown)], "BOTTOMRIGHT", 6, 16)
 	local rows = W.Rows()
 	W.count, W.shown = #rows, shown
 	W.offset = math.max(0, math.min(W.offset, #rows - shown))
