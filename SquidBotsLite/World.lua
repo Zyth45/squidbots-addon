@@ -84,11 +84,17 @@ W.T = T
 local SKILL_ICON = { [171] = "Trade_Alchemy", [164] = "Trade_BlackSmithing", [333] = "Trade_Engraving",
 	[202] = "Trade_Engineering", [773] = "INV_Inscription_Tradeskill01", [755] = "INV_Misc_Gem_01",
 	[165] = "Trade_LeatherWorking", [197] = "Trade_Tailoring", [185] = "INV_Misc_Food_15", [129] = "Spell_Holy_SealOfSacrifice",
-	[186] = "Trade_Mining", [182] = "Trade_Herbalism", [393] = "INV_Misc_Pelt_Wolf_01", [356] = "Trade_Fishing" }
+	[186] = "Trade_Mining", [182] = "Trade_Herbalism", [393] = "INV_Misc_Pelt_Wolf_01", [356] = "Trade_Fishing",
+	[806] = "INV_Ammo_Arrow_02", [757] = "INV_Staff_08", [505] = "INV_Misc_Herb_07" }
+-- CoA's own professions (Economie, 09/11), not in the client's 3.3.5 names.
+local COA_SKILLS = { en = { [806] = "Fletching", [757] = "Woodworking", [505] = "Bushcraft" },
+	fr = { [806] = "Empennage", [757] = "Travail du bois", [505] = "Survie" } }
 
 function W.SkillName(id)
 	local names = SquidBotsLite_Alts and SquidBotsLite_Alts.SKILLS
 	local lang = SquidBotsLiteDB and SquidBotsLiteDB.lang
+	local coa = (COA_SKILLS[lang] or COA_SKILLS.en)[id]
+	if coa then return coa end
 	return names and ((names[lang] or names.en)[id] or names.en[id]) or ("#" .. tostring(id))
 end
 
