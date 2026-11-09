@@ -7,7 +7,8 @@
 -- GAP: the server answers at most 1 request per second and per brick (more: no answer at all, not even "-").
 local PREFIX, WAIT, ROWS, GAP = "SQBW", 6, 12, 1.1
 local REQUESTS = { GORD = true, GLIST = true, WEV = true, ["WEV?"] = true, ALIST = true, ARCP = true, AQUOTE = true,
-	AORDER = true, AMAIL = true, ["SOUL?"] = true }
+	AORDER = true, AMAIL = true, ["SOUL?"] = true, GOFF = true, GACC = true, GREF = true, GCAT = true, GACT = true,
+	["GACT?"] = true }
 
 local STRINGS = {
 	en = {
@@ -37,6 +38,18 @@ local STRINGS = {
 		R_faction = "other faction", R_price = "the price went up: ask a new quote", R_offline = "the bot is offline",
 		R_notyours = "not your bot",
 		ASK_ART = "Order %d x %s from %s for %s (cash on delivery)?",
+		V_gifts = "Gifts", V_cat = "Catalogue", V_act = "Activities", V_orders = "My orders",
+		GF_HINT = "Gear your guild's members offer you. Accept: it comes by mail. Decline: that item is not offered again for 30 days.",
+		GF_NONE = "No gift offered right now.", GF_LINE = "%s offers it (%s), %s", GF_EXPIRES = "ends in %s",
+		GF_ACCEPT = "Accept", GF_DECLINE = "Decline", GF_EMPTY = "empty slot", GF_CHAT = "%s offers you %s (%s): open World > Guild > Gifts to accept.",
+		GC_HINT = "What your guild's online bots have in stock or can craft. Search by English name; click an item to order it.",
+		GC_SEARCH = "Search (English name)...", GC_NONE = "Nothing found.", GC_STOCK = "in stock: %s x%d", GC_CRAFT = "crafted by %s",
+		GC_REQ = "level %d", GC_PAGE = "Page %d / %d", GC_SLOT = "Slot: %s", GC_USABLE = "Usable now", C_OTHER = "Other",
+		GA_HINT = "Your guild's bots with you: rally them where you are, make a dungeon party, or a guild raid.",
+		GA_gather = "Rally the guild", GA_party5 = "Dungeon party (5)", GA_raid10 = "Guild raid (10)", GA_raid15 = "Guild raid (15)",
+		GA_raid25 = "Guild raid (25)", GS_ready = "ready", GS_busy = "under way", GS_cooldown = "again in %s", GS_nobots = "not enough bots",
+		GA_BOTS = "%d bots available", GA_START = "Start", ASK_ACT = "Start: %s?",
+		R_ingroup = "leave your group first", R_level = "level too low", R_offer = "this offer is gone",
 		ASK_GUILD = "Order %d x %s from your guild? If a bot crafts it or buys it at the auction house, it comes cash on delivery (you pay when you take it from the mail).",
 		YES = "Yes", NO = "No",
 		SOUL = "Soul", ARCH_lazy = "Lazy", ARCH_quester = "Quester", ARCH_wanderer = "Wanderer", ARCH_trader = "Trader",
@@ -69,6 +82,18 @@ local STRINGS = {
 		R_faction = "autre faction", R_price = "le prix a monté : redemandez un devis", R_offline = "le bot est hors ligne",
 		R_notyours = "pas votre bot",
 		ASK_ART = "Commander %d x %s à %s pour %s (contre remboursement) ?",
+		V_gifts = "Dons", V_cat = "Catalogue", V_act = "Activités", V_orders = "Mes commandes",
+		GF_HINT = "L'équipement que les membres de votre guilde vous offrent. Accepter : il arrive par courrier. Refuser : cet objet ne vous est plus proposé pendant 30 jours.",
+		GF_NONE = "Aucun don proposé en ce moment.", GF_LINE = "offert par %s (%s), %s", GF_EXPIRES = "fin dans %s",
+		GF_ACCEPT = "Accepter", GF_DECLINE = "Refuser", GF_EMPTY = "emplacement vide", GF_CHAT = "%s vous offre %s (%s) : Monde > Guilde > Dons pour l'accepter.",
+		GC_HINT = "Ce que les bots de votre guilde en ligne ont en stock ou savent fabriquer. Cherchez par nom anglais ; cliquez un objet pour le commander.",
+		GC_SEARCH = "Chercher (nom anglais)...", GC_NONE = "Rien trouvé.", GC_STOCK = "en stock : %s x%d", GC_CRAFT = "fabriqué par %s",
+		GC_REQ = "niveau %d", GC_PAGE = "Page %d / %d", GC_SLOT = "Emplacement : %s", GC_USABLE = "Utilisable", C_OTHER = "Autre",
+		GA_HINT = "Les bots de votre guilde avec vous : rassemblez-les où vous êtes, formez un groupe de donjon ou un raid de guilde.",
+		GA_gather = "Rassembler la guilde", GA_party5 = "Groupe de donjon (5)", GA_raid10 = "Raid de guilde (10)", GA_raid15 = "Raid de guilde (15)",
+		GA_raid25 = "Raid de guilde (25)", GS_ready = "prêt", GS_busy = "en cours", GS_cooldown = "à nouveau dans %s", GS_nobots = "pas assez de bots",
+		GA_BOTS = "%d bots disponibles", GA_START = "Lancer", ASK_ACT = "Lancer : %s ?",
+		R_ingroup = "quittez d'abord votre groupe", R_level = "niveau trop bas", R_offer = "ce don n'est plus proposé",
 		ASK_GUILD = "Commander %d x %s à votre guilde ? Si un bot le fabrique ou l'achète à l'hôtel des ventes, il arrive contre remboursement (vous payez en le retirant du courrier).",
 		YES = "Oui", NO = "Non",
 		SOUL = "Âme", ARCH_lazy = "Paresseux", ARCH_quester = "Quêteur", ARCH_wanderer = "Vagabond", ARCH_trader = "Marchand",
@@ -78,7 +103,8 @@ local STRINGS = {
 
 local W = {
 	queue = {}, busy = nil, lines = {}, off = {}, at = {},
-	guild = { orders = {}, gifts = {} }, art = { bots = {}, recipes = {}, mails = {}, bot = nil, quote = nil, mode = "bots" },
+	guild = { orders = {}, gifts = {}, mode = "gifts", offers = {}, acts = {},
+		cat = { list = {}, total = 0, page = 1, search = "", slot = nil, usable = false } }, art = { bots = {}, recipes = {}, mails = {}, bot = nil, quote = nil, mode = "bots" },
 	events = { list = {}, firsts = {} }, soul = {}, soulAsked = {}, error = nil, tab = "art", offset = 0,
 }
 SquidBotsLite_World = W
@@ -133,6 +159,18 @@ function W.SkillsText(list, onlyId)
 	return table.concat(parts, "  ")
 end
 
+-- The inventory types of GC lines, named with the client's own words.
+local INVTYPES = { [1] = "INVTYPE_HEAD", [2] = "INVTYPE_NECK", [3] = "INVTYPE_SHOULDER", [4] = "INVTYPE_BODY",
+	[5] = "INVTYPE_CHEST", [6] = "INVTYPE_WAIST", [7] = "INVTYPE_LEGS", [8] = "INVTYPE_FEET", [9] = "INVTYPE_WRIST",
+	[10] = "INVTYPE_HAND", [11] = "INVTYPE_FINGER", [12] = "INVTYPE_TRINKET", [13] = "INVTYPE_WEAPON", [14] = "INVTYPE_SHIELD",
+	[15] = "INVTYPE_RANGED", [16] = "INVTYPE_CLOAK", [17] = "INVTYPE_2HWEAPON", [18] = "INVTYPE_BAG", [19] = "INVTYPE_TABARD",
+	[20] = "INVTYPE_CHEST", [21] = "INVTYPE_WEAPONMAINHAND", [22] = "INVTYPE_WEAPONOFFHAND", [23] = "INVTYPE_HOLDABLE",
+	[25] = "INVTYPE_THROWN", [26] = "INVTYPE_RANGEDRIGHT", [28] = "INVTYPE_RELIC" }
+function W.SlotName(t)
+	local key = INVTYPES[t or 0]
+	return key and (_G[key] or key) or T("C_OTHER")
+end
+
 local function Split(text)
 	local f = {}
 	for part in (text .. "\t"):gmatch("([^\t]*)\t") do table.insert(f, part) end
@@ -176,6 +214,12 @@ function W.Ago(at)
 		or (math.max(1, math.floor(d / 60)) .. " min")
 	if d >= 86400 and not (SquidBotsLiteDB and SquidBotsLiteDB.lang == "fr") then text = math.floor(d / 86400) .. " d" end
 	return string.format(T("AGO"), text)
+end
+
+-- "ilvl +5" stays, "empty" in words.
+function W.GiftReason(reason)
+	if reason == "empty" then return T("GF_EMPTY") end
+	return reason or ""
 end
 
 function W.Reason(word) return T("R_" .. (word or "")) ~= "R_" .. (word or "") and T("R_" .. word) or (word or "?") end
@@ -260,8 +304,10 @@ function W.Finish()
 	if kinds.AB or (q and q.request == "ALIST") then W.art.bots = {} end
 	if kinds.AR then W.art.recipes = {} end
 	if q and q.request == "AMAIL" then W.art.mails, W.art.bulk = {}, true end
+	if q and (q.request == "GOFF" or q.request:find("^GACC") or q.request:find("^GREF")) then W.guild.offers, W.guild.bulk = {}, true end
+	if q and q.request:find("^GCAT") then W.guild.cat.list = {} end
 	for _, f in ipairs(lines) do W.Line(f) end
-	W.art.bulk = nil
+	W.art.bulk, W.guild.bulk = nil, nil
 	if q and q.request:find("^GORD") and not W.error then W.Send("GLIST", "guild") end
 	W.busy = nil
 	W.Refresh()
@@ -308,6 +354,30 @@ function W.Line(f)
 		else
 			W.UpdateOrder(m)
 		end
+	elseif k == "GF" then
+		local o = { id = f[2], item = tonumber(f[3]), bot = f[4], at = tonumber(f[5]) or 0, expires = tonumber(f[6]) or 0,
+			reason = f[7] }
+		if W.guild.bulk then
+			table.insert(W.guild.offers, o)
+		else
+			-- A new offer, pushed: on top, and said in the chat.
+			for i = #W.guild.offers, 1, -1 do if W.guild.offers[i].id == o.id then table.remove(W.guild.offers, i) end end
+			table.insert(W.guild.offers, 1, o)
+			if DEFAULT_CHAT_FRAME then
+				DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSquidBots Lite|r: " .. string.format(T("GF_CHAT"), o.bot or "?",
+					W.Colored(o.item), W.GiftReason(o.reason)))
+			end
+		end
+	elseif k == "GC" then
+		local item = tonumber(f[2])
+		if item and f[12] and f[12] ~= "" then W.names[item] = f[12] end
+		table.insert(W.guild.cat.list, { item = item, source = f[3], bot = f[4], qty = tonumber(f[5]) or 0,
+			price = tonumber(f[6]) or 0, quality = tonumber(f[7]), ilvl = tonumber(f[8]) or 0, req = tonumber(f[9]) or 0,
+			slot = tonumber(f[10]) or 0, skill = tonumber(f[11]) or 0 })
+	elseif k == "GCN" then
+		W.guild.cat.total, W.guild.cat.page = tonumber(f[2]) or 0, tonumber(f[3]) or 1
+	elseif k == "GA" then
+		W.guild.acts[f[2] or "?"] = { state = f[3], bots = tonumber(f[4]) or 0, untilAt = tonumber(f[5]) or 0 }
 	elseif k == "WE" then
 		local id = f[3]
 		for i = #W.events.list, 1, -1 do if W.events.list[i].id == id then table.remove(W.events.list, i) end end
@@ -378,7 +448,9 @@ end
 W.ICONS = { art = "Interface\\Icons\\Trade_BlackSmithing", guild = "Interface\\Icons\\INV_Shirt_GuildTabard_01",
 	events = "Interface\\Icons\\Ability_DualWield", mails = "Interface\\Icons\\INV_Letter_15",
 	back = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up", order = "Interface\\Icons\\INV_Misc_Coin_02",
-	filter = "Interface\\Icons\\INV_Misc_Spyglass_02" }
+	filter = "Interface\\Icons\\INV_Misc_Spyglass_02", v_gifts = "Interface\\Icons\\INV_Holiday_Christmas_Present_01",
+	v_cat = "Interface\\Icons\\INV_Misc_Book_09", v_act = "Interface\\Icons\\Ability_Warrior_BattleShout",
+	v_orders = "Interface\\Icons\\INV_Letter_15" }
 -- Three tabs (18 + 3 x 116) and the right button (124) fit the 520 px panel with room between.
 W.BUTTON_W, W.BUTTON_H = 110, 24
 
@@ -418,7 +490,7 @@ function W.Build()
 	W.frame = f
 	-- 680 wide (3.0, the user's test): the artisans' professions fit in full.
 	f:SetWidth(680)
-	f:SetHeight(460)
+	f:SetHeight(500)
 	f:SetPoint("CENTER", 0, 40)
 	f:SetBackdrop(BACKDROP)
 	f:SetBackdropColor(0.05, 0.05, 0.08, 0.95)
@@ -487,7 +559,7 @@ function W.Build()
 		local row = CreateFrame("Button", nil, f)
 		row:SetWidth(630)
 		row:SetHeight(22)
-		row:SetPoint("TOPLEFT", 16, -122 - (i - 1) * 23)
+		row:SetPoint("TOPLEFT", 16, -146 - (i - 1) * 23)
 		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
 		row.stripe = row:CreateTexture(nil, "BACKGROUND")
 		row.stripe:SetAllPoints()
@@ -506,6 +578,19 @@ function W.Build()
 		row.right:SetWidth(296)
 		row.right:SetHeight(22)
 		row.right:SetJustifyH("LEFT")
+		-- Accept / Decline (gifts), Start (activities).
+		for j = 1, 2 do
+			local b = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+			b:SetWidth(80)
+			b:SetHeight(20)
+			if j == 1 then b:SetPoint("RIGHT", -88, 0) else b:SetPoint("RIGHT", -4, 0) end
+			b:SetNormalFontObject(GameFontNormalSmall)
+			b:SetHighlightFontObject(GameFontHighlightSmall)
+			b:SetDisabledFontObject(GameFontDisableSmall)
+			b:SetScript("OnClick", function(self) if self.run then self.run() end end)
+			b:Hide()
+			row["b" .. j] = b
+		end
 		-- The artisans' columns: name, level, zone, professions.
 		row.cols = {}
 		for c, def in ipairs(W.COLUMNS) do
@@ -547,6 +632,56 @@ function W.Build()
 	W.StyleButton(f.filter, W.ICONS.filter)
 	f.filter:SetScript("OnClick", function() W.FilterMenu() end)
 	f.menu = CreateFrame("Frame", "SquidBotsLiteWorldMenu", UIParent, "UIDropDownMenuTemplate")
+	-- The Guild tab's views: Gifts, Catalogue, Activities, My orders.
+	f.views = {}
+	for i, key in ipairs({ "gifts", "cat", "act", "orders" }) do
+		local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+		b:SetWidth(W.BUTTON_W)
+		b:SetHeight(W.BUTTON_H)
+		b:SetPoint("TOPLEFT", 18 + (i - 1) * (W.BUTTON_W + 6), -68)
+		W.StyleButton(b, W.ICONS["v_" .. key])
+		b:SetScript("OnClick", function() W.guild.mode = key; W.offset = 0; W.error = nil; W.Load() end)
+		b.key = key
+		f.views[i] = b
+	end
+	-- The catalogue's line: search, slot, usable now, pages.
+	f.search = CreateFrame("EditBox", "SquidBotsLiteWorldSearch", f, "InputBoxTemplate")
+	f.search:SetWidth(200)
+	f.search:SetHeight(20)
+	f.search:SetPoint("TOPLEFT", 24, -98)
+	f.search:SetAutoFocus(false)
+	f.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	f.search:SetScript("OnEnterPressed", function(self)
+		self:ClearFocus()
+		W.guild.cat.search = strtrim(self:GetText() or "")
+		W.offset = 0
+		W.CatPage(1)
+	end)
+	f.search:SetScript("OnEditFocusGained", function() W.Refresh() end)
+	f.search:SetScript("OnEditFocusLost", function() W.Refresh() end)
+	f.searchHint = f.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	f.searchHint:SetPoint("LEFT", 4, 0)
+	f.slotBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	f.slotBtn:SetWidth(170)
+	f.slotBtn:SetHeight(W.BUTTON_H)
+	f.slotBtn:SetPoint("LEFT", f.search, "RIGHT", 12, 0)
+	W.StyleButton(f.slotBtn, W.ICONS.filter)
+	f.slotBtn:SetScript("OnClick", function() W.SlotMenu() end)
+	f.usable = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+	f.usable:SetWidth(22)
+	f.usable:SetHeight(22)
+	f.usable:SetPoint("LEFT", f.slotBtn, "RIGHT", 8, 0)
+	f.usable:SetScript("OnClick", function(self) W.guild.cat.usable = self:GetChecked() and true or false; W.offset = 0; W.Refresh() end)
+	f.usableText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.usableText:SetPoint("LEFT", f.usable, "RIGHT", 2, 0)
+	f.prev = CreateFrame("Button", nil, f, "UIPanelScrollUpButtonTemplate")
+	f.prev:SetPoint("TOPRIGHT", -84, -98)
+	f.prev:SetScript("OnClick", function() W.CatPage(W.guild.cat.page - 1) end)
+	f.next = CreateFrame("Button", nil, f, "UIPanelScrollDownButtonTemplate")
+	f.next:SetPoint("TOPRIGHT", -20, -98)
+	f.next:SetScript("OnClick", function() W.CatPage(W.guild.cat.page + 1) end)
+	f.pageText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.pageText:SetPoint("RIGHT", f.next, "LEFT", -6, 0)
 	-- The quote, in big (3.0, the user's test): item, quantity, price, artisan, and Order.
 	local card = CreateFrame("Frame", nil, f)
 	f.card = card
@@ -588,7 +723,7 @@ function W.Build()
 		self.t = 0
 		local moving = false
 		for _, m in ipairs(W.art.mails) do if m.state == "preparing" or m.state == "sent" then moving = true end end
-		if W.tab == "events" or next(W.waiting) or (W.tab == "art" and moving) then W.Refresh() end
+		if W.tab == "events" or next(W.waiting) or (W.tab == "art" and moving) or (W.tab == "guild" and W.guild.mode ~= "orders") then W.Refresh() end
 	end)
 end
 
@@ -636,7 +771,12 @@ end
 
 function W.Load()
 	W.error = nil
-	if W.tab == "guild" then W.Ask("GLIST", "guild")
+	if W.tab == "guild" then
+		local mode = W.guild.mode
+		if mode == "gifts" then W.Ask("GOFF", "gifts")
+		elseif mode == "cat" then W.Ask("GCAT\t" .. W.guild.cat.search .. "\t" .. W.guild.cat.page, "cat")
+		elseif mode == "act" then W.Ask("GACT?", "act")
+		else W.Ask("GLIST", "guild") end
 	elseif W.tab == "art" then
 		if W.art.mode == "mails" then W.Ask("AMAIL", "art")
 		elseif W.art.mode == "recipes" and W.art.bot then W.Ask("ARCP\t" .. W.art.bot, "art")
@@ -703,10 +843,80 @@ function W.Action2()
 	W.Load()
 end
 
--- The rows of the tab: { icon, left, right, click, item }.
+function W.Feature()
+	if W.tab ~= "guild" then return W.tab end
+	return ({ gifts = "gifts", cat = "cat", act = "act" })[W.guild.mode] or "guild"
+end
+
+W.ACTS = { "gather", "party5", "raid10", "raid15", "raid25" }
+
+-- The catalogue: a page asked to the server (its search), the slot and level filtered here.
+function W.CatPage(page)
+	local c = W.guild.cat
+	c.page = math.max(1, page or 1)
+	W.at["GCAT\t" .. c.search .. "\t" .. c.page] = nil
+	W.Ask("GCAT\t" .. c.search .. "\t" .. c.page, "cat")
+end
+
+function W.SlotMenu()
+	local seen, slots = {}, {}
+	for _, x in ipairs(W.guild.cat.list) do
+		local name = W.SlotName(x.slot)
+		if not seen[name] then seen[name] = true; table.insert(slots, { name = name, slot = x.slot }) end
+	end
+	table.sort(slots, function(a, b) return a.name < b.name end)
+	local items = { { text = T("A_ALL"), checked = W.guild.cat.slot == nil, func = function() W.guild.cat.slot = nil; W.offset = 0; W.Refresh() end } }
+	for _, x in ipairs(slots) do
+		table.insert(items, { text = x.name, checked = W.guild.cat.slot == x.name,
+			func = function() W.guild.cat.slot = x.name; W.offset = 0; W.Refresh() end })
+	end
+	EasyMenu(items, W.frame.menu, "cursor", 0, 0, "MENU")
+end
+
+-- The rows of the tab: { icon, left, right, click, item, b1 = { text, enabled, click }, b2 }.
 function W.Rows()
 	local rows, now = {}, time()
-	if W.tab == "guild" then
+	if W.tab == "guild" and W.guild.mode == "gifts" then
+		for _, o in ipairs(W.guild.offers) do
+			local by = string.format(T("GF_LINE"), o.bot or "?", W.GiftReason(o.reason), W.Ago(o.at))
+			if o.expires > now then by = by .. "  |cffffd100" .. string.format(T("GF_EXPIRES"), W.Duration(o.expires - now)) .. "|r" end
+			table.insert(rows, { item = o.item, left = W.Colored(o.item), right = "|cffaaaaaa" .. by .. "|r",
+				b1 = { text = T("GF_ACCEPT"), click = function() W.Send("GACC\t" .. o.id, "gifts") end },
+				b2 = { text = T("GF_DECLINE"), click = function() W.Send("GREF\t" .. o.id, "gifts") end } })
+		end
+		if #W.guild.offers == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GF_NONE") .. "|r", right = "" }) end
+	elseif W.tab == "guild" and W.guild.mode == "cat" then
+		local c, level = W.guild.cat, UnitLevel and UnitLevel("player") or 80
+		for _, x in ipairs(c.list) do
+			if (not c.slot or W.SlotName(x.slot) == c.slot) and (not c.usable or x.req <= level) then
+				local source = x.source == "stock" and string.format(T("GC_STOCK"), x.bot or "?", x.qty)
+					or string.format(T("GC_CRAFT"), x.bot or "?")
+				local req = x.req > 0 and ("  " .. (x.req > level and "|cffff6060" or "|cffaaaaaa") .. string.format(T("GC_REQ"), x.req) .. "|r") or ""
+				table.insert(rows, { item = x.item, left = W.Colored(x.item, x.quality) .. "  |cffaaaaaa" .. W.SlotName(x.slot) .. "|r",
+					right = "|cffaaaaaa" .. source .. "|r" .. req .. (x.price > 0 and ("\n" .. W.Money(x.price)) or ""),
+					click = function()
+						W.Confirm(string.format(T("ASK_GUILD"), 1, W.Colored(x.item, x.quality)), function()
+							W.Send("GORD\t" .. x.item .. "\t1", "guild")
+						end)
+					end })
+			end
+		end
+		if #rows == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GC_NONE") .. "|r", right = "" }) end
+	elseif W.tab == "guild" and W.guild.mode == "act" then
+		for _, kind in ipairs(W.ACTS) do
+			local a = W.guild.acts[kind]
+			local state = ""
+			if a then
+				state = a.state == "cooldown" and string.format(T("GS_cooldown"), W.Duration(a.untilAt - now)) or T("GS_" .. (a.state or ""))
+				local color = a.state == "ready" and "|cff40ff40" or a.state == "busy" and "|cffffd100" or "|cffff6060"
+				state = color .. state .. "|r  |cffaaaaaa" .. string.format(T("GA_BOTS"), a.bots) .. "|r"
+			end
+			table.insert(rows, { left = T("GA_" .. kind), right = state,
+				b1 = { text = T("GA_START"), enabled = a and a.state == "ready", click = function()
+					W.Confirm(string.format(T("ASK_ACT"), T("GA_" .. kind)), function() W.Send("GACT\t" .. kind, "act") end)
+				end } })
+		end
+	elseif W.tab == "guild" then
 		-- Two parts, each with its title: my orders (and how each went), the gifts the guild sent me.
 		table.insert(rows, { left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "" })
 		for _, o in ipairs(W.guild.orders) do
@@ -808,12 +1018,42 @@ function W.Refresh()
 	end
 	local guild, art = W.tab == "guild", W.tab == "art"
 	local recipes = art and W.art.mode == "recipes"
-	if guild or recipes then f.item:Show(); f.qty:Show(); f.qtyLabel:Show(); f.action:Show() else f.item:Hide(); f.qty:Hide(); f.qtyLabel:Hide(); f.action:Hide() end
+	local orders, cat = guild and W.guild.mode == "orders", guild and W.guild.mode == "cat"
+	for _, b in ipairs(f.views) do
+		if guild then
+			b:Show()
+			b:SetText(T("V_" .. b.key))
+			W.PlaceText(b)
+			if b.key == W.guild.mode then b:LockHighlight() else b:UnlockHighlight() end
+		else
+			b:Hide()
+		end
+	end
+	-- The order line: under the views on the Guild tab, under the tabs on the Artisans tab.
+	f.item:ClearAllPoints()
+	f.item:SetPoint("TOPLEFT", 24, guild and -98 or -70)
+	local catControls = { f.search, f.slotBtn, f.usable, f.usableText, f.prev, f.next, f.pageText }
+	for _, c in ipairs(catControls) do if cat then c:Show() else c:Hide() end end
+	if cat then
+		local c = W.guild.cat
+		f.searchHint:SetText((f.search:GetText() == "" and not f.search:HasFocus()) and T("GC_SEARCH") or "")
+		f.slotBtn:SetText(string.format(T("GC_SLOT"), c.slot or T("A_ALL")))
+		W.PlaceText(f.slotBtn)
+		f.usable:SetChecked(c.usable)
+		f.usableText:SetText(T("GC_USABLE"))
+		local pages = math.max(1, math.ceil((c.total or 0) / 30))
+		f.pageText:SetText(string.format(T("GC_PAGE"), c.page, pages))
+		if c.page > 1 then f.prev:Enable() else f.prev:Disable() end
+		if c.page < pages then f.next:Enable() else f.next:Disable() end
+	end
+	if orders or recipes then f.item:Show(); f.qty:Show(); f.qtyLabel:Show(); f.action:Show() else f.item:Hide(); f.qty:Hide(); f.qtyLabel:Hide(); f.action:Hide() end
 	if recipes then f.item:Hide() end
 	f.qtyLabel:SetText(T("G_QTY"))
 	W.PlaceText(f.action)
 	f.itemHint:SetText((f.item:GetText() == "" and not f.item:HasFocus()) and T("G_ITEM") or "")
-	if guild then
+	if guild and not orders then
+		f.hint:SetText(T(W.guild.mode == "gifts" and "GF_HINT" or cat and "GC_HINT" or "GA_HINT"))
+	elseif guild then
 		f.action:SetText(T("G_ORDER"))
 		W.PlaceText(f.action)
 		if W.BoxItem() then f.action:Enable() else f.action:Disable() end
@@ -849,11 +1089,11 @@ function W.Refresh()
 		f.filter:SetText(string.format(T("A_FILTER"), W.art.skill and W.SkillName(W.art.skill) or T("A_ALL")))
 		W.PlaceText(f.filter)
 		f.hint:ClearAllPoints()
-		f.hint:SetPoint("TOPLEFT", 20, -92)
+		f.hint:SetPoint("TOPLEFT", 20, -98)
 	else
 		f.filter:Hide()
 		f.hint:ClearAllPoints()
-		f.hint:SetPoint("TOPLEFT", 20, -96)
+		f.hint:SetPoint("TOPLEFT", 20, guild and ((cat or orders) and -122 or -100) or -96)
 	end
 	local q = recipes and W.art.quote
 	local shown = ROWS
@@ -886,13 +1126,25 @@ function W.Refresh()
 			end
 			row.left:SetText(r.cols and "" or r.left)
 			row.right:SetText(r.cols and "" or r.right)
+			row.right:SetWidth(r.b2 and 130 or r.b1 and 214 or 296)
+			for j = 1, 2 do
+				local b, def = row["b" .. j], r["b" .. j]
+				if def then
+					b:SetText(def.text)
+					b.run = def.click
+					if def.enabled == false then b:Disable() else b:Enable() end
+					b:Show()
+				else
+					b:Hide()
+				end
+			end
 			for c, fs in ipairs(row.cols) do fs:SetText(r.cols and r.cols[c] or "") end
 			row:Show()
 		else
 			row:Hide()
 		end
 	end
-	local feature = W.tab
+	local feature = W.Feature()
 	local status = ""
 	if W.off[feature] then status = "|cffff6060" .. T("OFF") .. "|r"
 	elseif W.error then status = "|cffff6060" .. W.error .. "|r"
