@@ -26,7 +26,7 @@ local STRINGS = {
 		A_BACK = "< Artisans list", A_MAILS = "My orders", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
 		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
-		TIP_RECIPES = "Its recipes: pick one, then Quote.", A_RANK = "%s %d needed", TIP_QUOTE = "Quote: the price of this item, no order yet.",
+		TIP_RECIPES = "Its recipes: pick one, then Quote.", A_RANK = "%s %d needed", A_MAX = "max %d", TIP_QUOTE = "Quote: the price of this item, no order yet.",
 		Q_TITLE = "Quote from %s", Q_COD = "cash on delivery, paid when you take it from the mail",
 		M_preparing = "Preparing", M_sent = "Sent", M_awaiting = "Awaiting pickup", M_paid = "Received",
 		M_returned = "Returned", M_cancelled = "Cancelled", M_pending = "Awaiting pickup",
@@ -85,7 +85,7 @@ local STRINGS = {
 		A_BACK = "< Liste des artisans", A_MAILS = "Mes commandes", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
 		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
 		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
-		TIP_RECIPES = "Ses recettes : choisissez-en une, puis Devis.", A_RANK = "%s %d requis", TIP_QUOTE = "Devis : le prix de cet objet, sans commande.",
+		TIP_RECIPES = "Ses recettes : choisissez-en une, puis Devis.", A_RANK = "%s %d requis", A_MAX = "max %d", TIP_QUOTE = "Devis : le prix de cet objet, sans commande.",
 		Q_TITLE = "Devis de %s", Q_COD = "contre remboursement, payé en le retirant du courrier",
 		M_preparing = "En préparation", M_sent = "Envoyé", M_awaiting = "En attente de réception", M_paid = "Reçu (payé)",
 		M_returned = "Renvoyé", M_cancelled = "Annulé", M_pending = "En attente de réception",
@@ -375,6 +375,10 @@ function W.Line(f)
 		W.art.quote = { bot = f[2], item = tonumber(f[3]), qty = tonumber(f[4]) or 1, copper = tonumber(f[5]) or 0,
 			ok = f[6] == "ok", reason = f[6], id = f[7] }
 		if not W.art.quote.ok then W.error = W.Reason(f[6]) end
+		if W.art.quote.ok and W.art.asked and W.art.quote.qty < W.art.asked then
+			W.art.maxQty = W.art.quote.qty
+			W.art.quote.capped = true
+		end
 	elseif k == "AO" then
 		-- 3.0 (fb83b3fd): "preparing", then the order's AM line; "mailed" from an older server.
 		if f[3] == "preparing" or f[3] == "mailed" then
@@ -538,6 +542,10 @@ function W.SmallBox(parent, name, width)
 	box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 	box:SetScript("OnEditFocusGained", function(self) self:SetBackdropBorderColor(1, 0.82, 0, 1) end)
+	box.Clamp = function(self)
+		local n = tonumber(self:GetText() or "")
+		if n and self.max and n > self.max then self:SetText(tostring(self.max)) end
+	end
 	box:SetScript("OnEditFocusLost", function(self) self:SetBackdropBorderColor(1, 0.82, 0, 0.6) end)
 	return box
 end
@@ -707,7 +715,10 @@ function W.Build()
 		end
 		row.qty = W.SmallBox(row, nil, 32)
 		row.qty:SetPoint("RIGHT", -42, 0)
-		row.qty:SetScript("OnTextChanged", function(self) if self.key then W.cardQty[self.key] = self:GetText() end end)
+		row.qty:SetScript("OnTextChanged", function(self)
+			self:Clamp()
+			if self.key then W.cardQty[self.key] = self:GetText() end
+		end)
 		row.qty:Hide()
 		row:SetScript("OnClick", function(self) if self.click then self.click() end end)
 		row:SetScript("OnEnter", function(self)
@@ -1137,7 +1148,8 @@ function W.Action()
 				if W.frame then W.frame.qty:SetText("1") end
 			end)
 		elseif W.art.pick then
-			W.Send("AQUOTE\t" .. W.art.pick.bot .. "\t" .. W.art.pick.item .. "\t" .. W.CardQty("r" .. W.art.pick.item, 5), "art")
+			W.art.asked = W.CardQty("r" .. W.art.pick.item, W.art.maxQty or 20)
+			W.Send("AQUOTE\t" .. W.art.pick.bot .. "\t" .. W.art.pick.item .. "\t" .. W.art.asked, "art")
 		end
 	end
 end
@@ -1336,11 +1348,12 @@ function W.Rows()
 				local picked = W.art.pick == r
 				local function quote()
 					W.art.pick, W.art.quote = r, nil
-					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.CardQty("r" .. r.item, 5), "art")
+					W.art.asked = W.CardQty("r" .. r.item, W.art.maxQty or 20)
+					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.art.asked, "art")
 				end
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
 					sub = W.RecipeSub(r), right = "", reagents = W.art.reagents and W.art.reagents[r.item],
-					qtyKey = "r" .. r.item, go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
+					qtyKey = "r" .. r.item, qtyMax = W.art.maxQty or 20, go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
 						-- The quantity box is shared with the guild order: back to 1 for each recipe (a 5 typed there made 5 crafts).
 						W.art.pick, W.art.quote = r, nil
 						if W.frame then W.frame.qty:SetText("1") end
@@ -1554,7 +1567,8 @@ function W.Refresh()
 		local card = f.card
 		card.icon:SetTexture(GetItemIcon and GetItemIcon(q.item) or select(10, GetItemInfo(q.item)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 		card.title:SetText(string.format(T("Q_TITLE"), q.bot or "?"))
-		card.item:SetText(W.Colored(q.item) .. "  |cffffffffx" .. q.qty .. "|r")
+		card.item:SetText(W.Colored(q.item) .. "  |cffffffffx" .. q.qty .. "|r"
+			.. (q.capped and ("  |cffff9933" .. string.format(T("A_MAX"), q.qty) .. "|r") or ""))
 		card.price:SetText(W.MoneyBig(q.copper))
 		card.cod:SetText(T("Q_COD"))
 		card.order:SetText(T("A_ORDER"))
@@ -1651,6 +1665,8 @@ function W.Refresh()
 				row.qty.key = nil
 				row.qty:SetText(tostring(W.cardQty[r.qtyKey] or "1"))
 				row.qty.key = r.qtyKey
+				row.qty.max = r.qtyMax or 20
+				row.qty:Clamp()
 				row.qty:Show()
 			else
 				row.qty.key = nil
