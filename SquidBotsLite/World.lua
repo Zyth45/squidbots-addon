@@ -29,6 +29,9 @@ local STRINGS = {
 		R_busy = "the artisan is busy", R_mats = "no materials", R_expired = "quote too old: ask again",
 		R_faction = "other faction", R_price = "the price went up: ask a new quote", R_offline = "the bot is offline",
 		R_notyours = "not your bot",
+		ASK_ART = "Order %d x %s from %s for %s (cash on delivery)?",
+		ASK_GUILD = "Order %d x %s from your guild? If a bot crafts it or buys it at the auction house, it comes cash on delivery (you pay when you take it from the mail).",
+		YES = "Yes", NO = "No",
 		SOUL = "Soul", ARCH_lazy = "Lazy", ARCH_quester = "Quester", ARCH_wanderer = "Wanderer", ARCH_trader = "Trader",
 		ARCH_pvp = "PvP", TRAITS = "pace %d, sociability %d, curiosity %d, greed %d, aggression %d",
 	},
@@ -51,6 +54,9 @@ local STRINGS = {
 		R_busy = "l'artisan est occupé", R_mats = "pas de composants", R_expired = "devis trop vieux : redemandez",
 		R_faction = "autre faction", R_price = "le prix a monté : redemandez un devis", R_offline = "le bot est hors ligne",
 		R_notyours = "pas votre bot",
+		ASK_ART = "Commander %d x %s à %s pour %s (contre remboursement) ?",
+		ASK_GUILD = "Commander %d x %s à votre guilde ? Si un bot le fabrique ou l'achète à l'hôtel des ventes, il arrive contre remboursement (vous payez en le retirant du courrier).",
+		YES = "Oui", NO = "Non",
 		SOUL = "Âme", ARCH_lazy = "Paresseux", ARCH_quester = "Quêteur", ARCH_wanderer = "Vagabond", ARCH_trader = "Marchand",
 		ARCH_pvp = "JcJ", TRAITS = "rythme %d, sociabilité %d, curiosité %d, avidité %d, agressivité %d",
 	},
@@ -412,12 +418,26 @@ function W.Qty(max)
 	return math.max(1, math.min(max, n))
 end
 
+-- A yes / no popup before an order goes out (3.0, the user's test): text, then what Yes does.
+function W.Confirm(text, onYes)
+	StaticPopupDialogs.SQUIDBOTSLITE_WORLD_ORDER = {
+		text = text, button1 = T("YES"), button2 = T("NO"), OnAccept = onYes,
+		timeout = 0, whileDead = true, hideOnEscape = true, showAlert = true,
+	}
+	StaticPopup_Show("SQUIDBOTSLITE_WORLD_ORDER")
+end
+
+-- The guild order: its price is only known once a bot answers (free from a bag, or cash on delivery), so the
+-- popup says it may cost.
 function W.Order()
 	local item = W.BoxItem()
 	if not item then return end
-	W.Send("GORD\t" .. item .. "\t" .. W.Qty(20), "guild")
-	W.frame.item:SetText("")
+	local qty = W.Qty(20)
 	W.frame.item:ClearFocus()
+	W.Confirm(string.format(T("ASK_GUILD"), qty, W.Colored(item)), function()
+		W.Send("GORD\t" .. item .. "\t" .. qty, "guild")
+		if W.frame then W.frame.item:SetText("") end
+	end)
 end
 
 -- The tab's button: Order (guild), Quote / Order (artisans).
@@ -426,7 +446,10 @@ function W.Action()
 	elseif W.tab == "art" then
 		local q = W.art.quote
 		if q and q.ok then
-			W.Send("AORDER\t" .. q.id, "art")
+			-- The price of the last quote; the server checks it again (more than 10 % up: "price", a new quote).
+			W.Confirm(string.format(T("ASK_ART"), q.qty, W.Colored(q.item), q.bot or "?", W.Money(q.copper)), function()
+				W.Send("AORDER\t" .. q.id, "art")
+			end)
 		elseif W.art.pick then
 			W.Send("AQUOTE\t" .. W.art.pick.bot .. "\t" .. W.art.pick.item .. "\t" .. W.Qty(5), "art")
 		end
