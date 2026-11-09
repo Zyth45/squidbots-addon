@@ -672,6 +672,18 @@ function W.Build()
 			row.go:SetPoint("RIGHT", -8, 0)
 			row.go:Hide()
 		end
+		row.qty = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+		row.qty:SetWidth(26)
+		row.qty:SetHeight(18)
+		row.qty:SetPoint("RIGHT", -44, 0)
+		row.qty:SetAutoFocus(false)
+		row.qty:SetNumeric(true)
+		row.qty:SetMaxLetters(2)
+		row.qty:SetJustifyH("CENTER")
+		row.qty:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+		row.qty:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+		row.qty:SetScript("OnTextChanged", function(self) if self.key then W.cardQty[self.key] = self:GetText() end end)
+		row.qty:Hide()
 		row:SetScript("OnClick", function(self) if self.click then self.click() end end)
 		row:SetScript("OnEnter", function(self)
 			if not self.header then self:SetBackdropBorderColor(1, 0.82, 0, 0.55) end
@@ -1045,6 +1057,12 @@ function W.BoxItem()
 	return tonumber(text:match("|Hitem:(%d+)") or text:match("^%s*(%d+)%s*$"))
 end
 
+W.cardQty = {}
+function W.CardQty(key, max)
+	local n = tonumber(W.cardQty[key] or "") or 1
+	return math.max(1, math.min(max, n))
+end
+
 function W.Qty(max)
 	local n = tonumber(W.frame.qty:GetText() or "") or 1
 	return math.max(1, math.min(max, n))
@@ -1082,10 +1100,11 @@ function W.Action()
 			-- The price of the last quote; the server checks it again (more than 10 % up: "price", a new quote).
 			W.Confirm(string.format(T("ASK_ART"), q.qty, W.Colored(q.item), q.bot or "?", W.Money(q.copper)), function()
 				W.Send("AORDER\t" .. q.id, "art")
+				W.cardQty["r" .. tostring(q.item)] = nil
 				if W.frame then W.frame.qty:SetText("1") end
 			end)
 		elseif W.art.pick then
-			W.Send("AQUOTE\t" .. W.art.pick.bot .. "\t" .. W.art.pick.item .. "\t" .. W.Qty(5), "art")
+			W.Send("AQUOTE\t" .. W.art.pick.bot .. "\t" .. W.art.pick.item .. "\t" .. W.CardQty("r" .. W.art.pick.item, 5), "art")
 		end
 	end
 end
@@ -1162,16 +1181,18 @@ function W.Rows()
 				local source = x.source == "stock" and string.format(T("GC_STOCK"), x.bot or "?", x.qty)
 					or string.format(T("GC_CRAFT"), x.bot or "?")
 				local req = x.req > 0 and ("  " .. (x.req > level and "|cffff6060" or "|cffaaaaaa") .. string.format(T("GC_REQ"), x.req) .. "|r") or ""
+				local key = "c" .. x.item
 				local function order()
-					local qty = W.Qty(20)
+					local qty = W.CardQty(key, 20)
 					W.Confirm(string.format(T("ASK_GUILD"), qty, W.Colored(x.item, x.quality)), function()
 						W.Send("GORD\t" .. x.item .. "\t" .. qty, "guild")
-						if W.frame then W.frame.qty:SetText("1") end
+						W.cardQty[key] = nil
+						W.Refresh()
 					end)
 				end
 				table.insert(rows, { item = x.item, left = W.Colored(x.item, x.quality), sub = W.SlotName(x.slot) .. req,
 					right = "|cffaaaaaa" .. source .. "|r" .. (x.price > 0 and ("\n" .. W.Money(x.price)) or ""),
-					go = { icon = W.ICONS.order, title = T("G_ORDER"), line = W.ItemName(x.item), click = order }, click = order })
+					qtyKey = key, go = { icon = W.ICONS.order, title = T("G_ORDER"), line = W.ItemName(x.item), click = order }, click = order })
 			end
 		end
 		if #rows == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GC_NONE") .. "|r", right = "" }) end
@@ -1274,12 +1295,12 @@ function W.Rows()
 				local picked = W.art.pick == r
 				local function quote()
 					W.art.pick, W.art.quote = r, nil
-					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.Qty(5), "art")
+					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.CardQty("r" .. r.item, 5), "art")
 				end
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
 					sub = (r.rank and r.rank > 1) and string.format(T("A_RANK"), W.SkillName(r.skill or 0), r.rank) or W.SkillName(r.skill or 0),
 					right = "|cffaaaaaa" .. (r.bot or "") .. "|r",
-					go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
+					qtyKey = "r" .. r.item, go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
 						-- The quantity box is shared with the guild order: back to 1 for each recipe (a 5 typed there made 5 crafts).
 						W.art.pick, W.art.quote = r, nil
 						if W.frame then W.frame.qty:SetText("1") end
@@ -1414,7 +1435,7 @@ function W.Refresh()
 		if c.page < pages then f.next:Enable() else f.next:Disable() end
 	end
 	if orders or recipes then f.item:Show(); f.qty:Show(); f.qtyLabel:Show(); f.action:Show() else f.item:Hide(); f.qty:Hide(); f.qtyLabel:Hide(); f.action:Hide() end
-	if cat then f.qty:Show(); f.qtyLabel:Show() end
+	if recipes then f.qty:Hide(); f.qtyLabel:Hide() end
 	if recipes then f.item:Hide() end
 	f.qtyLabel:SetText(T("G_QTY"))
 	W.PlaceText(f.action)
@@ -1572,6 +1593,15 @@ function W.Refresh()
 					sk.skill = nil
 					sk:Hide()
 				end
+			end
+			if r.qtyKey then
+				row.qty.key = nil
+				row.qty:SetText(tostring(W.cardQty[r.qtyKey] or "1"))
+				row.qty.key = r.qtyKey
+				row.qty:Show()
+			else
+				row.qty.key = nil
+				row.qty:Hide()
 			end
 			if row.go then
 				if r.go then
