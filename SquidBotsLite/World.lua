@@ -88,7 +88,11 @@ local SKILL_ICON = { [171] = "Trade_Alchemy", [164] = "Trade_BlackSmithing", [33
 	[806] = "INV_Ammo_Arrow_02", [757] = "INV_Staff_08", [505] = "INV_Misc_Herb_07" }
 -- CoA's own professions (Economie, 09/11), not in the client's 3.3.5 names.
 local COA_SKILLS = { en = { [806] = "Fletching", [757] = "Woodworking", [505] = "Bushcraft" },
-	fr = { [806] = "Empennage", [757] = "Travail du bois", [505] = "Survie" } }
+	fr = { [806] = "Empennage", [757] = "Menuiserie", [505] = "Bushcraft" } }
+-- The crafting professions the Artisans tab shows; any other skill (riding, gathering, racial, weapon, language, or
+-- one the addon cannot name) is left out, from an older server's ALIST too.
+local CRAFTS = { [171] = true, [164] = true, [185] = true, [333] = true, [202] = true, [129] = true, [773] = true,
+	[755] = true, [165] = true, [197] = true, [806] = true, [757] = true, [505] = true }
 
 function W.SkillName(id)
 	local names = SquidBotsLite_Alts and SquidBotsLite_Alts.SKILLS
@@ -101,7 +105,10 @@ end
 -- "164:300,197:275" -> { { id = 164, value = 300 }, ... }, best first.
 function W.Skills(text)
 	local list = {}
-	for id, value in (text or ""):gmatch("(%d+):(%d+)") do table.insert(list, { id = tonumber(id), value = tonumber(value) }) end
+	for id, value in (text or ""):gmatch("(%d+):(%d+)") do
+		id = tonumber(id)
+		if CRAFTS[id] then table.insert(list, { id = id, value = tonumber(value) }) end
+	end
 	table.sort(list, function(a, b) return a.value > b.value end)
 	return list
 end
@@ -250,11 +257,9 @@ function W.Line(f)
 	elseif k == "GG" then
 		table.insert(W.guild.gifts, { item = tonumber(f[2]), bot = f[3], at = tonumber(f[4]) or 0 })
 	elseif k == "AB" then
-		if f[5] then
-			table.insert(W.art.bots, { name = f[2], level = tonumber(f[3]), zone = f[4], skills = W.Skills(f[5]) })
-		else
-			table.insert(W.art.bots, { name = f[2], skills = W.Skills(f[3]) })
-		end
+		local bot = f[5] and { name = f[2], level = tonumber(f[3]), zone = f[4], skills = W.Skills(f[5]) }
+			or { name = f[2], skills = W.Skills(f[3]) }
+		if #bot.skills > 0 then table.insert(W.art.bots, bot) end
 	elseif k == "AR" then
 		local item = tonumber(f[3])
 		if item and f[8] and f[8] ~= "" then W.names[item] = f[8] end
@@ -626,7 +631,7 @@ function W.Rows()
 			end)
 			local lastSkill
 			for _, r in ipairs(list) do
-				if r.skill ~= lastSkill then
+				if r.skill ~= lastSkill and CRAFTS[r.skill or 0] then
 					lastSkill = r.skill
 					table.insert(rows, { left = "|cffffd100" .. W.SkillsText({ { id = r.skill or 0, value = 0 } }):gsub(" 0$", "") .. "|r", right = "" })
 				end
