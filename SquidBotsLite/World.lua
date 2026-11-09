@@ -48,7 +48,9 @@ local STRINGS = {
 		GA_HINT = "Your guild's bots with you: rally them where you are, make a dungeon party, or a guild raid.",
 		GA_gather = "Rally the guild", GA_party5 = "Dungeon party (5)", GA_raid10 = "Guild raid (10)", GA_raid15 = "Guild raid (15)",
 		GA_raid25 = "Guild raid (25)", GS_ready = "ready", GS_busy = "under way", GS_cooldown = "again in %s", GS_nobots = "not enough bots",
-		GA_BOTS = "%d bots available", GA_START = "Start", ASK_ACT = "Start: %s?",
+		GA_BOTS = "%d bots available", GA_START = "Start", ASK_ACT = "Start: %s?", GS_blocked = "wait: %s under way",
+		GA_TIP = "Bots available: your guild's bots online right now and free (not in a group, not busy elsewhere). Players and offline members are not counted.",
+		GS_LEFT = "under way, %s left",
 		R_ingroup = "leave your group first", R_level = "level too low", R_offer = "this offer is gone",
 		ASK_GUILD = "Order %d x %s from your guild? If a bot crafts it or buys it at the auction house, it comes cash on delivery (you pay when you take it from the mail).",
 		YES = "Yes", NO = "No",
@@ -92,7 +94,9 @@ local STRINGS = {
 		GA_HINT = "Les bots de votre guilde avec vous : rassemblez-les où vous êtes, formez un groupe de donjon ou un raid de guilde.",
 		GA_gather = "Rassembler la guilde", GA_party5 = "Groupe de donjon (5)", GA_raid10 = "Raid de guilde (10)", GA_raid15 = "Raid de guilde (15)",
 		GA_raid25 = "Raid de guilde (25)", GS_ready = "prêt", GS_busy = "en cours", GS_cooldown = "à nouveau dans %s", GS_nobots = "pas assez de bots",
-		GA_BOTS = "%d bots disponibles", GA_START = "Lancer", ASK_ACT = "Lancer : %s ?",
+		GA_BOTS = "%d bots disponibles", GA_START = "Lancer", ASK_ACT = "Lancer : %s ?", GS_blocked = "attendre : %s en cours",
+		GA_TIP = "Bots disponibles : les bots de votre guilde en ligne en ce moment et libres (pas en groupe, pas occupés ailleurs). Les joueurs et les membres hors ligne ne comptent pas.",
+		GS_LEFT = "en cours, encore %s",
 		R_ingroup = "quittez d'abord votre groupe", R_level = "niveau trop bas", R_offer = "ce don n'est plus proposé",
 		ASK_GUILD = "Commander %d x %s à votre guilde ? Si un bot le fabrique ou l'achète à l'hôtel des ventes, il arrive contre remboursement (vous payez en le retirant du courrier).",
 		YES = "Oui", NO = "Non",
@@ -607,6 +611,10 @@ function W.Build()
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 				GameTooltip:SetHyperlink("item:" .. self.item)
 				GameTooltip:Show()
+			elseif self.tip then
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetText(self.tip, 1, 1, 1, 1, true)
+				GameTooltip:Show()
 			end
 		end)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -904,15 +912,29 @@ function W.Rows()
 		end
 		if #rows == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GC_NONE") .. "|r", right = "" }) end
 	elseif W.tab == "guild" and W.guild.mode == "act" then
+		local running
+		for _, kind in ipairs(W.ACTS) do
+			local a = W.guild.acts[kind]
+			if a and a.state == "busy" and a.untilAt > 0 then running = kind end
+		end
 		for _, kind in ipairs(W.ACTS) do
 			local a = W.guild.acts[kind]
 			local state = ""
 			if a then
-				state = a.state == "cooldown" and string.format(T("GS_cooldown"), W.Duration(a.untilAt - now)) or T("GS_" .. (a.state or ""))
-				local color = a.state == "ready" and "|cff40ff40" or a.state == "busy" and "|cffffd100" or "|cffff6060"
-				state = color .. state .. "|r  |cffaaaaaa" .. string.format(T("GA_BOTS"), a.bots) .. "|r"
+				if a.state == "cooldown" then
+					state = string.format(T("GS_cooldown"), W.Duration(a.untilAt - now))
+				elseif a.state == "busy" and kind == running then
+					state = string.format(T("GS_LEFT"), W.Duration(a.untilAt - now))
+				elseif a.state == "busy" and running then
+					state = string.format(T("GS_blocked"), T("GA_" .. running))
+				else
+					state = T("GS_" .. (a.state or ""))
+				end
+				local color = a.state == "ready" and "|cff40ff40" or (a.state == "busy" and kind == running) and "|cffffd100"
+					or a.state == "busy" and "|cffaaaaaa" or "|cffff6060"
+				state = color .. state .. "|r\n|cffaaaaaa" .. string.format(T("GA_BOTS"), a.bots) .. "|r"
 			end
-			table.insert(rows, { left = T("GA_" .. kind), right = state,
+			table.insert(rows, { left = T("GA_" .. kind), right = state, tip = T("GA_TIP"),
 				b1 = { text = T("GA_START"), enabled = a and a.state == "ready", click = function()
 					W.Confirm(string.format(T("ASK_ACT"), T("GA_" .. kind)), function() W.Send("GACT\t" .. kind, "act") end)
 				end } })
@@ -1120,7 +1142,7 @@ function W.Refresh()
 	for i, row in ipairs(f.rows) do
 		local r = i <= shown and rows[W.offset + i]
 		if r then
-			row.item, row.click = r.item, r.click
+			row.item, row.click, row.tip = r.item, r.click, r.tip
 			if r.item then
 				row.icon:SetTexture(GetItemIcon and GetItemIcon(r.item) or select(10, GetItemInfo(r.item)) or "Interface\\Icons\\INV_Misc_QuestionMark")
 				row.icon:Show()
@@ -1129,7 +1151,9 @@ function W.Refresh()
 			end
 			row.left:SetText(r.cols and "" or r.left)
 			row.right:SetText(r.cols and "" or r.right)
-			row.right:SetWidth(r.b2 and 130 or r.b1 and 214 or 296)
+			row.right:SetWidth(r.b2 and 130 or r.b1 and 210 or 296)
+			row.b1:ClearAllPoints()
+			row.b1:SetPoint("RIGHT", r.b2 and -88 or -4, 0)
 			for j = 1, 2 do
 				local b, def = row["b" .. j], r["b" .. j]
 				if def then
