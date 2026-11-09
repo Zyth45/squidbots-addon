@@ -363,6 +363,14 @@ function W.Line(f)
 		if item and f[8] and f[8] ~= "" then W.names[item] = f[8] end
 		table.insert(W.art.recipes, { bot = f[2], item = item, spell = tonumber(f[4]), skill = tonumber(f[5]),
 			quality = tonumber(f[6]), rank = tonumber(f[7] or "") })
+	elseif k == "ARR" then
+		local item = tonumber(f[3])
+		if item then
+			local list = {}
+			for id, count in (f[4] or ""):gmatch("(%d+):(%d+)") do table.insert(list, { item = tonumber(id), count = tonumber(count) }) end
+			W.art.reagents = W.art.reagents or {}
+			W.art.reagents[item] = list
+		end
 	elseif k == "AQ" then
 		W.art.quote = { bot = f[2], item = tonumber(f[3]), qty = tonumber(f[4]) or 1, copper = tonumber(f[5]) or 0,
 			ok = f[6] == "ok", reason = f[6], id = f[7] }
@@ -673,6 +681,13 @@ function W.Build()
 			sk.text:SetPoint("LEFT", sk.icon, "RIGHT", 3, 0)
 			sk:EnableMouse(true)
 			sk:SetScript("OnEnter", function(self)
+				if self.reagent then
+					GameTooltip:SetOwner(self, "ANCHOR_TOP")
+					GameTooltip:SetHyperlink("item:" .. self.reagent.item)
+					GameTooltip:AddLine(self.reagent.count .. " x " .. W.ItemName(self.reagent.item), 1, 1, 1)
+					GameTooltip:Show()
+					return
+				end
 				if not self.skill then return end
 				GameTooltip:SetOwner(self, "ANCHOR_TOP")
 				GameTooltip:SetText(W.SkillName(self.skill.id), 1, 0.82, 0)
@@ -1324,7 +1339,7 @@ function W.Rows()
 					W.Send("AQUOTE\t" .. r.bot .. "\t" .. r.item .. "\t" .. W.CardQty("r" .. r.item, 5), "art")
 				end
 				table.insert(rows, { item = r.item, left = (picked and "> " or "") .. W.Colored(r.item, r.quality),
-					sub = W.RecipeSub(r), right = "",
+					sub = W.RecipeSub(r), right = "", reagents = W.art.reagents and W.art.reagents[r.item],
 					qtyKey = "r" .. r.item, go = { icon = W.ICONS.order, title = T("A_QUOTE"), line = T("TIP_QUOTE"), click = quote }, click = function()
 						-- The quantity box is shared with the guild order: back to 1 for each recipe (a 5 typed there made 5 crafts).
 						W.art.pick, W.art.quote = r, nil
@@ -1609,7 +1624,20 @@ function W.Refresh()
 			row.right:SetWidth(r.b2 and 130 or r.b1 and 200 or 240)
 			for j, sk in ipairs(row.skills) do
 				local one = r.skills and r.skills[j]
-				if one then
+				local reagent = r.reagents and j <= 4 and r.reagents[j]
+				sk.reagent = nil
+				if reagent then
+					sk.skill, sk.reagent = nil, reagent
+					W.ItemName(reagent.item)
+					sk.icon:SetTexture(GetItemIcon and GetItemIcon(reagent.item) or select(10, GetItemInfo(reagent.item)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+					sk.text:SetText(reagent.count)
+					sk:Show()
+				elseif r.reagents and j == 5 and #r.reagents > 4 then
+					sk.skill = nil
+					sk.icon:SetTexture(nil)
+					sk.text:SetText("+" .. (#r.reagents - 4))
+					sk:Show()
+				elseif one then
 					sk.skill = one
 					sk.icon:SetTexture(SKILL_ICON[one.id] and ("Interface\\Icons\\" .. SKILL_ICON[one.id]) or "Interface\\Icons\\INV_Misc_QuestionMark")
 					sk.text:SetText(((W.art.skill == one.id) and "|cffffd100" or "") .. one.value)
