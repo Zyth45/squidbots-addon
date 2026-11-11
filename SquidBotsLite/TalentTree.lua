@@ -10,10 +10,10 @@ local PREFIX, WAIT = "SQBA", 6
 local STRINGS = {
 	en = { TREE = "Tree", LIST = "List", PTS = "%d / %d points", NONE = "No tree yet: this realm's CoA Bots does not send it (3.0 or later).",
 		NOCLASS = "No tree known for this bot's class.", RANK = "Rank %d / %d", LEARN = "Click: learn one rank.", LOCKED = "Not available yet.",
-		RO = "Read only: not one of your characters." },
+		RO = "Read only: not one of your characters.", OTHER = "Another spec of the class: to look at only." },
 	fr = { TREE = "Arbre", LIST = "Liste", PTS = "%d / %d points", NONE = "Pas encore d'arbre : le CoA Bots de ce royaume ne l'envoie pas (3.0 ou plus).",
 		NOCLASS = "Aucun arbre connu pour la classe de ce bot.", RANK = "Rang %d / %d", LEARN = "Clic : apprendre un rang.", LOCKED = "Pas encore disponible.",
-		RO = "Lecture seule : ce n'est pas un de vos personnages." },
+		RO = "Lecture seule : ce n'est pas un de vos personnages.", OTHER = "Une autre spé de la classe : à regarder seulement." },
 }
 
 local TT = { mode = "tree", data = nil, pending = nil, tree = nil, askedAt = nil, name = nil, LINE = 2 }
@@ -31,16 +31,26 @@ local function Split(text)
 end
 
 -- entry -> class slug, built once from the layouts.
-function TT.ClassOf(entry)
-	if not TT.byEntry then
-		TT.byEntry = {}
-		for slug, c in pairs(SquidBotsLite_TalentLayouts and SquidBotsLite_TalentLayouts.classes or {}) do
-			for _, tree in pairs(c.trees) do
-				for _, n in ipairs(tree.n) do TT.byEntry[n[1]] = slug end
-			end
+function TT.Index()
+	if TT.byEntry then return end
+	TT.byEntry, TT.treeOfEntry = {}, {}
+	for slug, c in pairs(SquidBotsLite_TalentLayouts and SquidBotsLite_TalentLayouts.classes or {}) do
+		for key, tree in pairs(c.trees) do
+			for _, n in ipairs(tree.n) do TT.byEntry[n[1]], TT.treeOfEntry[n[1]] = slug, key end
 		end
 	end
+end
+
+function TT.ClassOf(entry)
+	TT.Index()
 	return TT.byEntry[entry]
+end
+
+-- The server names a spec tree by the core's SpecId (47 Valkyrie, 55 Soul), CoA Spec by its own (90, 80): the layout
+-- tree is found by the entries the server sent for it (each entry is in one tree only).
+function TT.LayoutKeyOf(entry)
+	TT.Index()
+	return TT.treeOfEntry[entry]
 end
 
 function TT.Reset()
@@ -71,26 +81,40 @@ function TT.OnAddon(prefix, message, channel, sender)
 		if tree and entry then
 			p.nodes[entry] = { tree = tree, spell = tonumber(f[5]) or 0, rank = tonumber(f[6]) or 0, max = tonumber(f[7]) or 1,
 				learnable = f[8] == "1" }
-			if not p.trees[tree] then p.trees[tree] = true; table.insert(p.trees, tree) end
 			p.class = p.class or TT.ClassOf(entry)
+			-- The server's tree id -> the layout's tree key; the tabs are layout keys.
+			p.keyOf = p.keyOf or {}
+			local key = TT.LayoutKeyOf(entry)
+			if key and not p.keyOf[tree] then p.keyOf[tree] = key end
+			if key and not p.trees[key] then p.trees[key] = true; table.insert(p.trees, key); p.sent = p.sent or {}; p.sent[key] = true end
 		end
 	elseif f[2] == "pts" then
 		local tree = tonumber(f[3])
-		if tree then p.pts[tree] = { spent = tonumber(f[4]) or 0, budget = tonumber(f[5]) or 0 } end
+		if tree then p.ptsRaw = p.ptsRaw or {}; p.ptsRaw[tree] = { spent = tonumber(f[4]) or 0, budget = tonumber(f[5]) or 0 } end
 	elseif f[2] == "-" then
 		TT.data, TT.pending = p, nil
-		-- The class tree ("Class") first, then the specs, as the server sent them.
+		-- The points by layout key; the other specs of the class after the bot's own (to look at: no ranks, read only).
+		for tree, pts in pairs(p.ptsRaw or {}) do
+			local key = p.keyOf and p.keyOf[tree]
+			if key then p.pts[key] = pts end
+		end
 		local layout = TT.Layout()
 		if layout then
+			for key in pairs(layout.trees) do
+				if not p.trees[key] then p.trees[key] = true; table.insert(p.trees, key) end
+			end
+		end
+		-- The class tree ("Class") first, then the bot's spec, then the others.
+		if layout then
 			table.sort(p.trees, function(a, b)
-				local ta, tb = TT.LayoutTree(layout, a), TT.LayoutTree(layout, b)
-				local ca = ta and ta.name == "Class" and 0 or 1
-				local cb = tb and tb.name == "Class" and 0 or 1
+				local ta, tb = layout.trees[a], layout.trees[b]
+				local ca = ta and ta.name == "Class" and 0 or (p.sent and p.sent[a]) and 1 or 2
+				local cb = tb and tb.name == "Class" and 0 or (p.sent and p.sent[b]) and 1 or 2
 				if ca ~= cb then return ca < cb end
 				return a < b
 			end)
 		end
-		if not TT.tree or not p.pts[TT.tree] and not TT.HasTree(TT.tree) then TT.tree = p.trees[1] end
+		if not TT.tree or not TT.HasTree(TT.tree) then TT.tree = p.trees[1] end
 		TT.Redraw()
 	end
 end
@@ -142,11 +166,11 @@ function TT.Build(page)
 	v.bg:SetTexture("Interface\\Buttons\\WHITE8X8")
 	v.bg:SetVertexColor(0.04, 0.04, 0.06, 0.97)
 	v.tabs = {}
-	for i = 1, 4 do
+	for i = 1, 5 do
 		local b = CreateFrame("Button", nil, v, "UIPanelButtonTemplate")
-		b:SetWidth(112)
+		b:SetWidth(84)
 		b:SetHeight(20)
-		b:SetPoint("TOPLEFT", 6 + (i - 1) * 116, -2)
+		b:SetPoint("TOPLEFT", 6 + (i - 1) * 86, -2)
 		b:SetNormalFontObject(GameFontNormalSmall)
 		b:SetHighlightFontObject(GameFontHighlightSmall)
 		b:SetScript("OnClick", function(self) TT.tree = self.tree; TT.Redraw() end)
@@ -154,13 +178,13 @@ function TT.Build(page)
 		v.tabs[i] = b
 	end
 	v.pts = v:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	v.pts:SetPoint("TOPRIGHT", -94, -6)
+	v.pts:SetPoint("BOTTOMRIGHT", -8, 6)
 	v.note = v:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	v.note:SetPoint("CENTER", 0, 0)
 	v.note:SetWidth(400)
 	v.grid = CreateFrame("Frame", nil, v)
 	v.grid:SetPoint("TOPLEFT", 6, -28)
-	v.grid:SetPoint("BOTTOMRIGHT", -6, 4)
+	v.grid:SetPoint("BOTTOMRIGHT", -6, 20)
 	v.nodes, v.lines = {}, {}
 	v:Hide()
 	page.treeSwitch:SetFrameLevel(v:GetFrameLevel() + 10)
@@ -219,7 +243,7 @@ end
 -- Draws the tree chosen: cells sized to fit the grid, a node per layout entry, an elbow line per link.
 function TT.DrawTree()
 	local v, layout, d = TT.view, TT.Layout(), TT.data
-	local tree = TT.LayoutTree(layout, TT.tree)
+	local tree = layout and layout.trees[TT.tree]
 	for _, b in ipairs(v.nodes) do b:Hide() end
 	for _, l in ipairs(v.lines) do l:Hide() end
 	if not tree then return end
@@ -276,7 +300,7 @@ function TT.DrawTree()
 		end
 	end
 	local p = d.pts[TT.tree]
-	v.pts:SetText(p and string.format(T("PTS"), p.spent, p.budget) or "")
+	v.pts:SetText(p and string.format(T("PTS"), p.spent, p.budget) or (d.sent and d.sent[TT.tree] and "" or T("OTHER")))
 end
 
 function TT.Redraw()
@@ -303,8 +327,11 @@ function TT.Redraw()
 		local b = v.tabs[i]
 		if b then
 			b.tree = tree
-			local lt = TT.LayoutTree(layout, tree)
-			b:SetText(lt and lt.name or tostring(tree))
+			local lt = layout.trees[tree]
+			-- The spec's name, never a number; the specs the bot has not taken are dimmed (look only).
+			local label = lt and lt.name or "?"
+			if lt and lt.name ~= "Class" and not (d.sent and d.sent[tree]) then label = "|cff888888" .. label .. "|r" end
+			b:SetText(label)
 			if tree == TT.tree then b:LockHighlight() else b:UnlockHighlight() end
 			b:Show()
 		end

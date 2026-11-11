@@ -332,7 +332,13 @@ local function Finish()
 		return
 	end
 	hideFrom[done.name] = GetTime() + 1
-	if done.name ~= current then return end
+	if done.name ~= current then
+		-- Another bot's answer: the sheet's own questions (queued meanwhile) go on.
+		sheet.status:SetText("")
+		local nextOne = table.remove(queue, 1)
+		if nextOne then Ask(nextOne.kind, nextOne.command) end
+		return
+	end
 	if done.kind == "bags" then
 		bags = ParseBags(done.lines)
 	elseif done.kind == "quests" then
