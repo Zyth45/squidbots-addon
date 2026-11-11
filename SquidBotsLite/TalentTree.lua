@@ -10,10 +10,12 @@ local PREFIX, WAIT = "SQBA", 6
 local STRINGS = {
 	en = { TREE = "Tree", LIST = "List", PTS = "%d / %d points", NONE = "No tree yet: this realm's CoA Bots does not send it (3.0 or later).",
 		NOCLASS = "No tree known for this bot's class.", RANK = "Rank %d / %d", LEARN = "Click: learn one rank.", LOCKED = "Not available yet.",
-		RO = "Read only: not one of your characters.", OTHER = "Another spec of the class: to look at only." },
+		RO = "Read only: not one of your characters.", OTHER = "Another spec of the class: to look at only.",
+		KNOWN = "Learned (a spec spell the level gives).", AT_LEVEL = "Unlocked at level %d.", SPEC_SPELL = "A spec spell the level gives." },
 	fr = { TREE = "Arbre", LIST = "Liste", PTS = "%d / %d points", NONE = "Pas encore d'arbre : le CoA Bots de ce royaume ne l'envoie pas (3.0 ou plus).",
 		NOCLASS = "Aucun arbre connu pour la classe de ce bot.", RANK = "Rang %d / %d", LEARN = "Clic : apprendre un rang.", LOCKED = "Pas encore disponible.",
-		RO = "Lecture seule : ce n'est pas un de vos personnages.", OTHER = "Une autre spé de la classe : à regarder seulement." },
+		RO = "Lecture seule : ce n'est pas un de vos personnages.", OTHER = "Une autre spé de la classe : à regarder seulement.",
+		KNOWN = "Appris (un sort de spé donné par le niveau).", AT_LEVEL = "Débloqué au niveau %d.", SPEC_SPELL = "Un sort de spé donné par le niveau." },
 }
 
 local TT = { mode = "tree", data = nil, pending = nil, tree = nil, askedAt = nil, name = nil, LINE = 2 }
@@ -88,6 +90,17 @@ function TT.OnAddon(prefix, message, channel, sender)
 			if key and not p.keyOf[tree] then p.keyOf[tree] = key end
 			if key and not p.trees[key] then p.trees[key] = true; table.insert(p.trees, key); p.sent = p.sent or {}; p.sent[key] = true end
 		end
+	elseif f[2] == "a" then
+		local tree, entry = tonumber(f[3]), tonumber(f[4])
+		if tree and entry then
+			p.spells = p.spells or {}
+			p.spells[entry] = { spell = tonumber(f[5]) or 0, known = f[6] == "1", level = tonumber(f[7]) or 0 }
+			p.class = p.class or TT.ClassOf(entry)
+			p.keyOf = p.keyOf or {}
+			local key = TT.LayoutKeyOf(entry)
+			if key and not p.keyOf[tree] then p.keyOf[tree] = key end
+			if key and not p.trees[key] then p.trees[key] = true; table.insert(p.trees, key); p.sent = p.sent or {}; p.sent[key] = true end
+		end
 	elseif f[2] == "pts" then
 		local tree = tonumber(f[3])
 		if tree then p.ptsRaw = p.ptsRaw or {}; p.ptsRaw[tree] = { spent = tonumber(f[4]) or 0, budget = tonumber(f[5]) or 0 } end
@@ -99,12 +112,7 @@ function TT.OnAddon(prefix, message, channel, sender)
 			if key then p.pts[key] = pts end
 		end
 		local layout = TT.Layout()
-		if layout then
-			for key in pairs(layout.trees) do
-				if not p.trees[key] then p.trees[key] = true; table.insert(p.trees, key) end
-			end
-		end
-		-- The class tree ("Class") first, then the bot's spec, then the others.
+		-- The class tree ("Class") first, then the bot's spec.
 		if layout then
 			table.sort(p.trees, function(a, b)
 				local ta, tb = layout.trees[a], layout.trees[b]
@@ -211,6 +219,14 @@ function TT.Node(i)
 	b:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		if self.spell and self.spell > 0 then GameTooltip:SetHyperlink("spell:" .. self.spell) else GameTooltip:SetText(self.label or "?", 1, 0.82, 0) end
+		if self.ability then
+			-- A spec spell given by the level: learned, or the level that brings it.
+			if self.known then GameTooltip:AddLine(T("KNOWN"), 0.4, 0.8, 1)
+			elseif (self.level or 0) > 0 then GameTooltip:AddLine(string.format(T("AT_LEVEL"), self.level), 0.6, 0.6, 0.6)
+			else GameTooltip:AddLine(T("SPEC_SPELL"), 0.6, 0.6, 0.6) end
+			GameTooltip:Show()
+			return
+		end
 		GameTooltip:AddLine(string.format(T("RANK"), self.cur or 0, self.max or 1), 1, 1, 1)
 		local _, ro = TT.State()
 		if ro then GameTooltip:AddLine(T("RO"), 0.6, 0.6, 0.6, true)
@@ -221,7 +237,7 @@ function TT.Node(i)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	b:SetScript("OnClick", function(self)
 		local name, ro = TT.State()
-		if ro or not self.learnable or not name or not SquidBotsLite_QuietWhisper then return end
+		if ro or self.ability or not self.learnable or not name or not SquidBotsLite_QuietWhisper then return end
 		SquidBotsLite_QuietWhisper("talents learn " .. self.entry, name)
 		-- The answer changes the ranks: asked again a moment later.
 		local t, wait = 0, CreateFrame("Frame")
@@ -252,22 +268,31 @@ function TT.DrawTree()
 	local cw, ch = gw / tree.w, gh / tree.h
 	local pos = {}
 	for i, n in ipairs(tree.n) do
-		local entry, col, row, maxRank = n[1], n[2], n[3], n[4]
+		local entry, col, row, maxRank, kind = n[1], n[2], n[3], n[4], n[5]
 		local x, y = (col + 0.5) * cw, (row + 0.5) * ch
 		pos[entry] = { x = x, y = y }
 		local b = TT.Node(i)
 		local s = d.nodes[entry]
-		b.entry, b.spell, b.label = entry, s and s.spell or 0, layout.names[entry]
-		b.cur, b.max, b.learnable = s and s.rank or 0, s and s.max or maxRank, s and s.learnable or false
+		local a = kind == 2 and d.spells and d.spells[entry]
+		b.ability, b.known, b.level = kind == 2, a and a.known or false, a and a.level or 0
+		b.entry, b.spell, b.label = entry, a and a.spell or s and s.spell or 0, layout.names[entry]
+		b.cur, b.max, b.learnable = s and s.rank or 0, s and s.max or maxRank, (not b.ability) and s and s.learnable or false
 		local _, _, icon = GetSpellInfo(b.spell or 0)
 		b.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
 		local full = b.cur >= b.max
+		if b.ability then
+			-- A spec spell: blue edge, lit once the bot has it; no rank, it is not bought with points.
+			b.icon:SetDesaturated(not b.known)
+			if b.known then b.border:SetVertexColor(0.35, 0.7, 1, 1) else b.border:SetVertexColor(0.2, 0.3, 0.45, 1) end
+			b.rank:SetText("")
+		else
 		b.icon:SetDesaturated(b.cur == 0 and not b.learnable)
 		-- Gold when full, green when it has ranks or can take one, dark otherwise.
 		if full then b.border:SetVertexColor(1, 0.82, 0, 1)
 		elseif b.cur > 0 or b.learnable then b.border:SetVertexColor(0.3, 0.9, 0.3, 1)
 		else b.border:SetVertexColor(0.25, 0.25, 0.28, 1) end
 		b.rank:SetText((b.max > 1 or b.cur > 0) and (b.cur .. "/" .. b.max) or "")
+		end
 		b.rank:SetTextColor(full and 1 or 0.4, full and 0.82 or 1, full and 0 or 0.4)
 		b:ClearAllPoints()
 		b:SetPoint("CENTER", v.grid, "TOPLEFT", x, -y)
