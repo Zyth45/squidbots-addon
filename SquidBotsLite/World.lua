@@ -1640,6 +1640,10 @@ function W.Refresh()
 				local one = r.skills and r.skills[j]
 				local reagent = r.reagents and j <= 4 and r.reagents[j]
 				sk.reagent = nil
+				-- Reagents sit further left than an artisan's professions: their "+N" overlapped the card's quantity
+				-- box ("+21 ?" on the a47 test).
+				sk:ClearAllPoints()
+				sk:SetPoint("LEFT", r.reagents and (240 + (j - 1) * 50) or (300 + (j - 1) * 54), 0)
 				if reagent then
 					sk.skill, sk.reagent = nil, reagent
 					W.ItemName(reagent.item)
