@@ -36,7 +36,9 @@ local STRINGS = {
 		E_FIRSTS = "Server firsts", GM_TITLE = "GM", GM_INV = "Invasions", GM_RUSH = "Gold rush", GM_LIST = "List",
 		GM_NEXT = "Next", GM_START = "Start", GM_STOP = "Stop", GM_STATUS = "Status", GM_scourge = "Scourge", GM_legion = "Legion",
 		GM_aq = "Ahn'Qiraj", GM_HINT = "The server's answer shows here.", GM_CRAID = "Capital raid", GM_SW = "Stormwind",
-		GM_ORG = "Orgrimmar", F_level = "level %s", F_boss = "%s",
+		GM_ORG = "Orgrimmar", GM_TIP_START = "Start it on the target chosen above.", GM_TIP_STOP = "Stop it (the target chosen above).",
+		GM_TIP_LIST = "What the server has, and its state.", GM_TIP_NEXT = "When the next one comes.", GM_TIP_STATUS = "The rush under way, if any.",
+		GM_TIP_RUSH = "Start a gold rush here (open world).", GM_TIP_RUSH_STOP = "Stop the gold rush.", F_level = "level %s", F_boss = "%s",
 		R_quality = "quality too high", R_daily = "daily limit reached", R_noguild = "no guild", R_item = "unknown item",
 		R_qty = "quantity not allowed", R_off = "off on this realm", R_nobot = "no guild bot online", R_cannot = "no such recipe",
 		R_busy = "the artisan is busy", R_mats = "no materials", R_expired = "quote too old: ask again",
@@ -95,7 +97,9 @@ local STRINGS = {
 		E_FIRSTS = "Server first", GM_TITLE = "MJ", GM_INV = "Invasions", GM_RUSH = "Ruée vers l'or", GM_LIST = "Liste",
 		GM_NEXT = "Suivante", GM_START = "Lancer", GM_STOP = "Arrêter", GM_STATUS = "État", GM_scourge = "Fléau", GM_legion = "Légion",
 		GM_aq = "Ahn'Qiraj", GM_HINT = "La réponse du serveur s'affiche ici.", GM_CRAID = "Raid capitale", GM_SW = "Hurlevent",
-		GM_ORG = "Orgrimmar", F_level = "niveau %s", F_boss = "%s",
+		GM_ORG = "Orgrimmar", GM_TIP_START = "La lancer sur la cible choisie au-dessus.", GM_TIP_STOP = "L'arrêter (la cible choisie au-dessus).",
+		GM_TIP_LIST = "Ce que le serveur a, et son état.", GM_TIP_NEXT = "Quand vient la prochaine.", GM_TIP_STATUS = "La ruée en cours, s'il y en a une.",
+		GM_TIP_RUSH = "Lancer une ruée vers l'or ici (monde ouvert).", GM_TIP_RUSH_STOP = "Arrêter la ruée vers l'or.", F_level = "niveau %s", F_boss = "%s",
 		R_quality = "qualité trop haute", R_daily = "limite du jour atteinte", R_noguild = "pas de guilde", R_item = "objet inconnu",
 		R_qty = "quantité refusée", R_off = "coupé sur ce royaume", R_nobot = "aucun bot de guilde en ligne", R_cannot = "recette inconnue",
 		R_busy = "l'artisan est occupé", R_mats = "pas de composants", R_expired = "devis trop vieux : redemandez",
@@ -464,7 +468,7 @@ function W.OnSystem(message)
 	if not W.gmUntil or GetTime() > W.gmUntil or not message then return end
 	W.gmOut = W.gmOut or {}
 	table.insert(W.gmOut, message)
-	while #W.gmOut > 4 do table.remove(W.gmOut, 1) end
+	while #W.gmOut > 2 do table.remove(W.gmOut, 1) end
 	W.Refresh()
 end
 
@@ -712,6 +716,10 @@ function W.Build()
 				function(self) if self.run then self.run() end end)
 			row.go:SetPoint("RIGHT", -8, 0)
 			row.go:Hide()
+			row.go2 = UI.IconButton(row, 24, W.ICONS.cancel, function(self) return self.tipTitle, self.tipLine end,
+				function(self) if self.run then self.run() end end)
+			row.go2:SetPoint("RIGHT", row.go, "LEFT", -6, 0)
+			row.go2:Hide()
 		end
 		row.qty = W.SmallBox(row, nil, 32)
 		row.qty:SetPoint("RIGHT", -42, 0)
@@ -952,56 +960,75 @@ function W.Build()
 	local gm = CreateFrame("Frame", nil, f)
 	f.gm = gm
 	gm:SetWidth(646)
-	gm:SetHeight(100)
-	gm:SetPoint("BOTTOMLEFT", 16, 40)
-	gm:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-	gm:SetBackdropColor(0.15, 0.04, 0.04, 0.9)
-	gm:SetBackdropBorderColor(1, 0.3, 0.3, 0.5)
+	gm:SetHeight(136)
+	gm:SetPoint("BOTTOMLEFT", 16, 38)
 	gm.title = gm:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	gm.title:SetPoint("TOPLEFT", 8, -6)
-	gm.labels, gm.buttons = {}, {}
-	local function Button(x, y, key, command)
-		local b = CreateFrame("Button", nil, gm, "UIPanelButtonTemplate")
-		b:SetWidth(58)
-		b:SetHeight(18)
-		b:SetPoint("TOPLEFT", x, y)
-		b:SetNormalFontObject(GameFontNormalSmall)
-		b:SetHighlightFontObject(GameFontHighlightSmall)
-		b:SetScript("OnClick", function() W.GM(command) end)
-		b.key = key
-		table.insert(gm.buttons, b)
+	gm.title:SetPoint("TOPLEFT", 4, 0)
+	gm.blocks, gm.targets = {}, {}
+	local UIg = SquidBotsLite_UI
+	-- One block: { key, icon, targets = { { key, command word } }, actions = { { icon, tip, command (%s = target) } } }.
+	local defs = {
+		{ key = "GM_INV", icon = "Interface\\Icons\\Spell_Shadow_RaiseDead", targets = { { "GM_scourge", "scourge" }, { "GM_legion", "legion" }, { "GM_aq", "aq" } },
+			actions = { { W.ICONS.start, "GM_TIP_START", "invasion start %s" }, { W.ICONS.cancel, "GM_TIP_STOP", "invasion stop %s" },
+				{ "Interface\\Icons\\INV_Misc_Note_01", "GM_TIP_LIST", "invasion list" }, { "Interface\\Icons\\INV_Misc_PocketWatch_01", "GM_TIP_NEXT", "invasion next" } } },
+		{ key = "GM_CRAID", icon = "Interface\\Icons\\INV_BannerPVP_02", targets = { { "GM_SW", "stormwind" }, { "GM_ORG", "orgrimmar" } },
+			actions = { { W.ICONS.start, "GM_TIP_START", "capitalraid start %s" }, { W.ICONS.cancel, "GM_TIP_STOP", "capitalraid stop" },
+				{ "Interface\\Icons\\INV_Misc_Note_01", "GM_TIP_LIST", "capitalraid list" } } },
+		{ key = "GM_RUSH", icon = "Interface\\Icons\\INV_Misc_Coin_01",
+			actions = { { W.ICONS.start, "GM_TIP_RUSH", "rush start" }, { W.ICONS.cancel, "GM_TIP_RUSH_STOP", "rush stop" },
+				{ "Interface\\Icons\\INV_Misc_PocketWatch_01", "GM_TIP_STATUS", "rush status" } } },
+	}
+	for i, def in ipairs(defs) do
+		local block = CreateFrame("Frame", nil, gm)
+		block:SetWidth(210)
+		block:SetHeight(86)
+		block:SetPoint("TOPLEFT", (i - 1) * 218, -18)
+		block:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+		block:SetBackdropColor(0.09, 0.09, 0.11, 0.95)
+		block:SetBackdropBorderColor(1, 0.82, 0, 0.3)
+		block.icon = block:CreateTexture(nil, "ARTWORK")
+		block.icon:SetWidth(22)
+		block.icon:SetHeight(22)
+		block.icon:SetPoint("TOPLEFT", 6, -6)
+		block.icon:SetTexture(def.icon)
+		block.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		block.label = block:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		block.label:SetPoint("LEFT", block.icon, "RIGHT", 6, 0)
+		block.key = def.key
+		block.target = def.targets and def.targets[1][2] or nil
+		block.toggles = {}
+		for j, t in ipairs(def.targets or {}) do
+			local b = CreateFrame("Button", nil, block, "UIPanelButtonTemplate")
+			b:SetWidth(64)
+			b:SetHeight(18)
+			b:SetPoint("TOPLEFT", 6 + (j - 1) * 66, -34)
+			b:SetNormalFontObject(GameFontNormalSmall)
+			b:SetHighlightFontObject(GameFontHighlightSmall)
+			b.key, b.word = t[1], t[2]
+			b:SetScript("OnClick", function() block.target = t[2]; W.Refresh() end)
+			table.insert(block.toggles, b)
+		end
+		for j, a in ipairs(def.actions) do
+			if UIg and UIg.IconButton then
+				local tipKey = a[2]
+				local b = UIg.IconButton(block, 22, a[1], function() return T(def.key), T(tipKey) end, function()
+					W.GM(a[3]:find("%%s") and string.format(a[3], block.target or "") or a[3])
+				end)
+				b:SetPoint("BOTTOMLEFT", 6 + (j - 1) * 28, 6)
+			end
+		end
+		gm.blocks[i] = block
 	end
-	local function Label(x, y, key)
-		local l = gm:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		l:SetPoint("TOPLEFT", x, y)
-		l.key = key
-		table.insert(gm.labels, l)
-	end
-	-- Invasions: List, Next; then Start / Stop for each of the three.
-	Label(50, -9, "GM_INV")
-	Button(130, -6, "GM_LIST", "invasion list")
-	Button(190, -6, "GM_NEXT", "invasion next")
-	for i, key in ipairs({ "scourge", "legion", "aq" }) do
-		local x = 260 + (i - 1) * 128
-		Label(x, -30, "GM_" .. key)
-		Button(x, -42, "GM_START", "invasion start " .. key)
-		Button(x + 60, -42, "GM_STOP", "invasion stop " .. key)
-	end
-	-- Capital raid: List, Start on Stormwind or Orgrimmar, Stop.
-	Label(262, -9, "GM_CRAID")
-	Button(352, -6, "GM_LIST", "capitalraid list")
-	Button(412, -6, "GM_SW", "capitalraid start stormwind")
-	Button(472, -6, "GM_ORG", "capitalraid start orgrimmar")
-	Button(532, -6, "GM_STOP", "capitalraid stop")
-	-- Gold rush: Start (in the open world), Stop, Status.
-	Label(8, -30, "GM_RUSH")
-	Button(8, -42, "GM_START", "rush start")
-	Button(68, -42, "GM_STOP", "rush stop")
-	Button(128, -42, "GM_STATUS", "rush status")
-	gm.out = gm:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	gm.out:SetPoint("TOPLEFT", 8, -66)
-	gm.out:SetWidth(630)
-	gm.out:SetHeight(30)
+	-- The server's answer: a dark box under the blocks.
+	gm.outBox = CreateFrame("Frame", nil, gm)
+	gm.outBox:SetPoint("TOPLEFT", 0, -110)
+	gm.outBox:SetPoint("BOTTOMRIGHT", 0, 0)
+	gm.outBox:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+	gm.outBox:SetBackdropColor(0.03, 0.03, 0.04, 0.95)
+	gm.outBox:SetBackdropBorderColor(1, 1, 1, 0.08)
+	gm.out = gm.outBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	gm.out:SetPoint("TOPLEFT", 6, -4)
+	gm.out:SetPoint("BOTTOMRIGHT", -6, 4)
 	gm.out:SetJustifyH("LEFT")
 	gm.out:SetJustifyV("TOP")
 	gm:Hide()
@@ -1208,9 +1235,11 @@ function W.Rows()
 		for _, o in ipairs(W.guild.offers) do
 			local by = string.format(T("GF_LINE"), o.bot or "?", W.GiftReason(o.reason), W.Ago(o.at))
 			if o.expires > now then by = by .. "  |cffffd100" .. string.format(T("GF_EXPIRES"), W.Duration(o.expires - now)) .. "|r" end
-			table.insert(rows, { item = o.item, left = W.Colored(o.item), right = "|cffaaaaaa" .. by .. "|r",
-				b1 = { text = T("GF_ACCEPT"), click = function() W.Send("GACC\t" .. o.id, "gifts") end },
-				b2 = { text = T("GF_DECLINE"), click = function() W.Send("GREF\t" .. o.id, "gifts") end } })
+			table.insert(rows, { item = o.item, left = W.Colored(o.item), sub = by,
+				go = { icon = "Interface\\Icons\\INV_Misc_Gift_02", title = T("GF_ACCEPT"), line = W.ItemName(o.item),
+					click = function() W.Send("GACC\t" .. o.id, "gifts") end },
+				go2 = { icon = W.ICONS.cancel, title = T("GF_DECLINE"), line = W.ItemName(o.item),
+					click = function() W.Send("GREF\t" .. o.id, "gifts") end } })
 		end
 		if #W.guild.offers == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("GF_NONE") .. "|r", right = "" }) end
 		if #W.guild.gifts > 0 then table.insert(rows, { header = true, left = "|cffffd100" .. T("G_RECEIVED") .. "|r", right = "" }) end
@@ -1240,6 +1269,7 @@ function W.Rows()
 					W.Confirm(string.format(T("ASK_GUILD"), qty, W.Colored(x.item, x.quality)), function()
 						W.Send("GORD\t" .. x.item .. "\t" .. qty, "guild")
 						W.cardQty[key] = nil
+						W.guild.mode, W.offset = "orders", 0
 						W.Refresh()
 					end)
 				end
@@ -1582,11 +1612,16 @@ function W.Refresh()
 	local gmShown = W.tab == "events" and W.events.gm
 	if gmShown then
 		f.gm:Show()
-		f.gm.title:SetText(T("GM_TITLE"))
-		for _, l in ipairs(f.gm.labels) do l:SetText(T(l.key)) end
-		for _, b in ipairs(f.gm.buttons) do b:SetText(T(b.key)) end
-		f.gm.out:SetText(W.gmOut and #W.gmOut > 0 and table.concat(W.gmOut, "  |  ") or ("|cffaaaaaa" .. T("GM_HINT") .. "|r"))
-		shown = math.min(shown, ROWS - 3)
+		f.gm.title:SetText("|cffff6060" .. T("GM_TITLE") .. "|r")
+		for _, block in ipairs(f.gm.blocks) do
+			block.label:SetText(T(block.key))
+			for _, b in ipairs(block.toggles) do
+				b:SetText(T(b.key))
+				if b.word == block.target then b:LockHighlight() else b:UnlockHighlight() end
+			end
+		end
+		f.gm.out:SetText(W.gmOut and #W.gmOut > 0 and table.concat(W.gmOut, "\n") or ("|cffaaaaaa" .. T("GM_HINT") .. "|r"))
+		shown = math.min(shown, ROWS - 4)
 	else
 		f.gm:Hide()
 	end
@@ -1675,6 +1710,15 @@ function W.Refresh()
 			else
 				row.qty.key = nil
 				row.qty:Hide()
+			end
+			if row.go2 then
+				if r.go2 then
+					row.go2.run, row.go2.tipTitle, row.go2.tipLine = r.go2.click, r.go2.title, r.go2.line
+					row.go2.icon:SetTexture(r.go2.icon)
+					row.go2:Show()
+				else
+					row.go2:Hide()
+				end
 			end
 			if row.go then
 				if r.go then
