@@ -10,6 +10,8 @@
 ## SavedVariablesPerCharacter: SquidBotsLiteCharDB
 SquidBotsLite.lua
 Manager.lua
+TalentLayouts.lua
+TalentTree.lua
 Missions.lua
 Alts.lua
 Dashboard.lua

@@ -146,7 +146,7 @@ local sheet, current, tab
 -- 3.0: a sheet opened read only (a random bot of the group, from its sheet icon): its own tabs only, and only the
 -- questions below are whispered; any order is refused with a line in the chat.
 local readOnly = { on = false, HIDDEN = { bags = true, mounts = true, pets = true },
-	ASK = { ["stats"] = true, ["quests all"] = true, ["talents ?"] = true, ["co ?"] = true, ["nc ?"] = true } }
+	ASK = { ["stats"] = true, ["quests all"] = true, ["talents ?"] = true, ["talents tree"] = true, ["co ?"] = true, ["nc ?"] = true } }
 local capture, hideFrom, lastAsked = nil, {}, {}
 local bags, quests, stats, mounts, bank = {}, {}, {}, {}, {}
 local talents, talentSpent, talentOffset = {}, nil, 0
@@ -1573,7 +1573,9 @@ Render = function()
 	elseif tab == "quests" then RenderQuests(pages.quests)
 	elseif tab == "mounts" then RenderMounts(pages.mounts)
 	elseif tab == "pets" then SquidBotsLite_Pets.Render(pages.pets)
-	elseif tab == "talents" then RenderTalents(pages.talents)
+	elseif tab == "talents" then
+		RenderTalents(pages.talents)
+		if SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Render(pages.talents) end
 	elseif tab == "strats" then RenderStrats(pages.strats)
 	else RenderInfo(pages.info) end
 end
@@ -1593,6 +1595,7 @@ local function Load()
 		SquidBotsLite_Pets.Ask()
 	elseif tab == "talents" then
 		Ask("talents", "talents ?")
+		if SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Ask() end
 	elseif tab == "strats" then
 		Ask("co", "co ?")
 		Ask("nc", "nc ?")
@@ -1651,6 +1654,8 @@ local function Build()
 		page:SetPoint("TOPLEFT", 8, -86)
 		page:SetPoint("BOTTOMRIGHT", -8, 40)
 		def[3](page)
+		-- 3.0: the Talents tab's tree view (TalentTree.lua).
+		if def[1] == "talents" and SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Build(page) end
 		pages[def[1]] = page
 	end
 	sheet.refresh = CreateFrame("Button", nil, sheet, "UIPanelButtonTemplate")
@@ -1875,6 +1880,7 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
 		if pages.mounts and pages.mounts.search then pages.mounts.search:SetText(""); pages.mounts.search:ClearFocus() end
 		SquidBotsLite_Pets.Reset()
+		if SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Reset() end
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
 		bagMode = "bags"
@@ -1898,6 +1904,11 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 	if not sheet.gold then Ask("stats", "stats") end
 	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
 	if not (info and info.spec) and SquidBotsLite_AskSpecs then SquidBotsLite_AskSpecs(name) end
+end
+
+-- The sheet's bot, and whether its sheet is read only (TalentTree.lua).
+function SquidBotsLite_SheetState()
+	return current, readOnly.on
 end
 
 function SquidBotsLite_SheetDebug()
