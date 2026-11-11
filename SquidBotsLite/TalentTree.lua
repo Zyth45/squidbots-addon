@@ -8,12 +8,12 @@
 
 local PREFIX, WAIT = "SQBA", 6
 local STRINGS = {
-	en = { TREE = "Tree", LIST = "List", PTS = "%d / %d points", NONE = "No tree yet: this realm's CoA Bots does not send it (3.0 or later).",
-		NOCLASS = "No tree known for this bot's class.", RANK = "Rank %d / %d", LEARN = "Click: learn one rank.", LOCKED = "Not available yet.",
+	en = { TREE = "Tree", LIST = "List", PTS = "%d / %d points", NONE = "No tree yet: this realm's CoA Bots does not send it (3.0 or later); the talents are in the list.",
+		NOCLASS = "No tree view for this bot's class (the 21 CoA classes only): its talents are in the list.", RANK = "Rank %d / %d", LEARN = "Click: learn one rank.", LOCKED = "Not available yet.",
 		RO = "Read only: not one of your characters.", OTHER = "Another spec of the class: to look at only.",
 		KNOWN = "Learned (a spec spell the level gives).", AT_LEVEL = "Unlocked at level %d.", SPEC_SPELL = "A spec spell the level gives." },
-	fr = { TREE = "Arbre", LIST = "Liste", PTS = "%d / %d points", NONE = "Pas encore d'arbre : le CoA Bots de ce royaume ne l'envoie pas (3.0 ou plus).",
-		NOCLASS = "Aucun arbre connu pour la classe de ce bot.", RANK = "Rang %d / %d", LEARN = "Clic : apprendre un rang.", LOCKED = "Pas encore disponible.",
+	fr = { TREE = "Arbre", LIST = "Liste", PTS = "%d / %d points", NONE = "Pas encore d'arbre : le CoA Bots de ce royaume ne l'envoie pas (3.0 ou plus) ; les talents sont dans la liste.",
+		NOCLASS = "Pas de vue en arbre pour la classe de ce bot (les 21 classes CoA seulement) : ses talents sont dans la liste.", RANK = "Rang %d / %d", LEARN = "Clic : apprendre un rang.", LOCKED = "Pas encore disponible.",
 		RO = "Lecture seule : ce n'est pas un de vos personnages.", OTHER = "Une autre spé de la classe : à regarder seulement.",
 		KNOWN = "Appris (un sort de spé donné par le niveau).", AT_LEVEL = "Débloqué au niveau %d.", SPEC_SPELL = "Un sort de spé donné par le niveau." },
 }
@@ -159,6 +159,15 @@ function TT.Build(page)
 	page.treeSwitch:SetPoint("TOPRIGHT", -32, 0)
 	page.treeSwitch:SetNormalFontObject(GameFontNormalSmall)
 	page.treeSwitch:SetHighlightFontObject(GameFontHighlightSmall)
+	page.treeSwitch:SetScript("OnEnter", function(self)
+		if not TT.reason then return end
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:SetText(T("TREE"), 1, 0.82, 0)
+		GameTooltip:AddLine(T(TT.reason), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	page.treeSwitch:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	page.treeSwitch:SetMotionScriptsWhileDisabled(true)
 	page.treeSwitch:SetScript("OnClick", function()
 		TT.mode = TT.mode == "tree" and "list" or "tree"
 		if TT.mode == "tree" and not TT.data then TT.Ask() end
@@ -332,9 +341,14 @@ function TT.Redraw()
 	local page, v = TT.page, TT.view
 	if not page or not v then return end
 	page.treeSwitch:SetText(T(TT.mode == "tree" and "LIST" or "TREE"))
-	if TT.mode ~= "tree" or not page:IsShown() then v:Hide() return end
-	v:Show()
 	local d, layout = TT.data, TT.Layout()
+	-- No tree for this bot (a classic class of a Warcraft Reborn realm, an older server, no answer): the list stays,
+	-- the switch is greyed and says why in its tooltip; never an empty tree nor a wait without end.
+	local reason = (d and not layout) and "NOCLASS" or (not d and TT.askedAt and GetTime() - TT.askedAt > WAIT) and "NONE" or nil
+	TT.reason = reason
+	if reason then page.treeSwitch:SetText(T("TREE")); page.treeSwitch:Disable() else page.treeSwitch:Enable() end
+	if TT.mode ~= "tree" or not page:IsShown() or reason then v:Hide() return end
+	v:Show()
 	for _, b in ipairs(v.tabs) do b:Hide() end
 	if not d then
 		for _, b in ipairs(v.nodes) do b:Hide() end
@@ -369,6 +383,16 @@ function TT.Render(page)
 	TT.page = page
 	TT.Redraw()
 end
+
+-- A realm or class without the tree (Warcraft Reborn's classic classes) answers "talents tree" with "Unknown command.":
+-- kept out of the chat, and the view falls back to the list at once.
+ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", function(_, _, message, name)
+	if name == TT.name and TT.askedAt and GetTime() - TT.askedAt < 5 and message == "Unknown command." then
+		if not TT.data then TT.data = { nodes = {}, pts = {}, trees = {} } end
+		TT.Redraw()
+		return true
+	end
+end)
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("CHAT_MSG_ADDON")
