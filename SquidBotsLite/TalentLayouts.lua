@@ -1,5 +1,5 @@
 -- SquidBots Lite 3.0: the talent trees of the 21 CoA classes, for the bot sheet's tree view.
--- Generated from CoA Spec's layouts (D:\CoA-Addon\in\talents, the user's files) by gen_layouts.py: do not edit.
+-- Generated from our CoA Spec layouts by gen_layouts.py: do not edit.
 -- classes[slug] = { name, trees = { [treeId] = { name, w, h, n = { { entry, col, row, maxRank, kind }, ... },
 --   kind 2 = a spec spell the level gives (not a talent), 0 = a talent.
 --   e = { { fromEntry, toEntry }, ... } } }, names = { [entry] = "Talent name" } }
