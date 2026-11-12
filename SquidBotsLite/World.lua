@@ -38,7 +38,9 @@ local STRINGS = {
 		GM_aq = "Ahn'Qiraj", GM_HINT = "The server's answer shows here.", GM_CRAID = "Capital raid", GM_SW = "Stormwind",
 		GM_ORG = "Orgrimmar", GM_TIP_START = "Start it on the target chosen above.", GM_TIP_STOP = "Stop it (the target chosen above).",
 		GM_TIP_LIST = "What the server has, and its state.", GM_TIP_NEXT = "When the next one comes.", GM_TIP_STATUS = "The rush under way, if any.",
-		GM_TIP_RUSH = "Start a gold rush here (open world).", GM_TIP_RUSH_STOP = "Stop the gold rush.", F_level = "level %s", F_boss = "%s",
+		GM_TIP_RUSH = "Start a gold rush here (open world).", GM_TIP_RUSH_STOP = "Stop the gold rush.", GM_SENT = "Sent: .coaworld %s",
+		GM_NOANSWER = "No answer from the server in 3 s. Type the same command by hand to check: .coaworld %s",
+		GM_CHOSEN = "Target: %s. Start launches it.", F_level = "level %s", F_boss = "%s",
 		R_quality = "quality too high", R_daily = "daily limit reached", R_noguild = "no guild", R_item = "unknown item",
 		R_qty = "quantity not allowed", R_off = "off on this realm", R_nobot = "no guild bot online", R_cannot = "no such recipe",
 		R_busy = "the artisan is busy", R_mats = "no materials", R_expired = "quote too old: ask again",
@@ -99,7 +101,9 @@ local STRINGS = {
 		GM_aq = "Ahn'Qiraj", GM_HINT = "La réponse du serveur s'affiche ici.", GM_CRAID = "Raid capitale", GM_SW = "Hurlevent",
 		GM_ORG = "Orgrimmar", GM_TIP_START = "La lancer sur la cible choisie au-dessus.", GM_TIP_STOP = "L'arrêter (la cible choisie au-dessus).",
 		GM_TIP_LIST = "Ce que le serveur a, et son état.", GM_TIP_NEXT = "Quand vient la prochaine.", GM_TIP_STATUS = "La ruée en cours, s'il y en a une.",
-		GM_TIP_RUSH = "Lancer une ruée vers l'or ici (monde ouvert).", GM_TIP_RUSH_STOP = "Arrêter la ruée vers l'or.", F_level = "niveau %s", F_boss = "%s",
+		GM_TIP_RUSH = "Lancer une ruée vers l'or ici (monde ouvert).", GM_TIP_RUSH_STOP = "Arrêter la ruée vers l'or.", GM_SENT = "Envoyé : .coaworld %s",
+		GM_NOANSWER = "Pas de réponse du serveur en 3 s. Tapez la même commande à la main pour vérifier : .coaworld %s",
+		GM_CHOSEN = "Cible : %s. Lancer la démarre.", F_level = "niveau %s", F_boss = "%s",
 		R_quality = "qualité trop haute", R_daily = "limite du jour atteinte", R_noguild = "pas de guilde", R_item = "objet inconnu",
 		R_qty = "quantité refusée", R_off = "coupé sur ce royaume", R_nobot = "aucun bot de guilde en ligne", R_cannot = "recette inconnue",
 		R_busy = "l'artisan est occupé", R_mats = "pas de composants", R_expired = "devis trop vieux : redemandez",
@@ -459,13 +463,15 @@ function W.UpdateOrder(m)
 end
 
 function W.GM(command)
-	W.gmOut, W.gmUntil = {}, GetTime() + 3
+	-- What was sent shows at once; the server's lines replace it; none in 3 s: said so, with the command to type.
+	W.gmOut, W.gmUntil, W.gmCmd, W.gmAnswered = { "|cffaaaaaa" .. string.format(T("GM_SENT"), command) .. "|r" }, GetTime() + 3, command, false
 	SendChatMessage(".coaworld " .. command, "SAY")
 	W.Refresh()
 end
 
 function W.OnSystem(message)
 	if not W.gmUntil or GetTime() > W.gmUntil or not message then return end
+	if not W.gmAnswered then W.gmOut, W.gmAnswered = {}, true end
 	W.gmOut = W.gmOut or {}
 	table.insert(W.gmOut, message)
 	while #W.gmOut > 2 do table.remove(W.gmOut, 1) end
@@ -475,6 +481,10 @@ end
 -- The 6 s rule, and the countdowns.
 function W.Tick()
 	W.Next()
+	if W.gmCmd and not W.gmAnswered and W.gmUntil and GetTime() > W.gmUntil then
+		W.gmOut, W.gmAnswered = { "|cffff8040" .. string.format(T("GM_NOANSWER"), W.gmCmd) .. "|r" }, true
+		W.Refresh()
+	end
 	if W.busy and GetTime() - W.busy.sentAt > WAIT then
 		local q = W.busy
 		W.busy, W.lines = nil, {}
@@ -965,18 +975,17 @@ function W.Build()
 	gm.title = gm:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	gm.title:SetPoint("TOPLEFT", 4, 0)
 	gm.blocks, gm.targets = {}, {}
-	local UIg = SquidBotsLite_UI
 	-- One block: { key, icon, targets = { { key, command word } }, actions = { { icon, tip, command (%s = target) } } }.
 	local defs = {
 		{ key = "GM_INV", icon = "Interface\\Icons\\Spell_Shadow_RaiseDead", targets = { { "GM_scourge", "scourge" }, { "GM_legion", "legion" }, { "GM_aq", "aq" } },
-			actions = { { W.ICONS.start, "GM_TIP_START", "invasion start %s" }, { W.ICONS.cancel, "GM_TIP_STOP", "invasion stop %s" },
-				{ "Interface\\Icons\\INV_Misc_Note_01", "GM_TIP_LIST", "invasion list" }, { "Interface\\Icons\\INV_Misc_PocketWatch_01", "GM_TIP_NEXT", "invasion next" } } },
+			actions = { { W.ICONS.start, "GM_TIP_START", "invasion start %s", "GM_START" }, { W.ICONS.cancel, "GM_TIP_STOP", "invasion stop %s", "GM_STOP" },
+				{ "Interface\\Icons\\INV_Misc_Note_01", "GM_TIP_LIST", "invasion list", "GM_LIST" }, { "Interface\\Icons\\INV_Misc_PocketWatch_01", "GM_TIP_NEXT", "invasion next", "GM_NEXT" } } },
 		{ key = "GM_CRAID", icon = "Interface\\Icons\\INV_BannerPVP_02", targets = { { "GM_SW", "stormwind" }, { "GM_ORG", "orgrimmar" } },
-			actions = { { W.ICONS.start, "GM_TIP_START", "capitalraid start %s" }, { W.ICONS.cancel, "GM_TIP_STOP", "capitalraid stop" },
-				{ "Interface\\Icons\\INV_Misc_Note_01", "GM_TIP_LIST", "capitalraid list" } } },
+			actions = { { W.ICONS.start, "GM_TIP_START", "capitalraid start %s", "GM_START" }, { W.ICONS.cancel, "GM_TIP_STOP", "capitalraid stop", "GM_STOP" },
+				{ "Interface\\Icons\\INV_Misc_Note_01", "GM_TIP_LIST", "capitalraid list", "GM_LIST" } } },
 		{ key = "GM_RUSH", icon = "Interface\\Icons\\INV_Misc_Coin_01",
-			actions = { { W.ICONS.start, "GM_TIP_RUSH", "rush start" }, { W.ICONS.cancel, "GM_TIP_RUSH_STOP", "rush stop" },
-				{ "Interface\\Icons\\INV_Misc_PocketWatch_01", "GM_TIP_STATUS", "rush status" } } },
+			actions = { { W.ICONS.start, "GM_TIP_RUSH", "rush start", "GM_START" }, { W.ICONS.cancel, "GM_TIP_RUSH_STOP", "rush stop", "GM_STOP" },
+				{ "Interface\\Icons\\INV_Misc_PocketWatch_01", "GM_TIP_STATUS", "rush status", "GM_STATUS" } } },
 	}
 	for i, def in ipairs(defs) do
 		local block = CreateFrame("Frame", nil, gm)
@@ -996,7 +1005,7 @@ function W.Build()
 		block.label:SetPoint("LEFT", block.icon, "RIGHT", 6, 0)
 		block.key = def.key
 		block.target = def.targets and def.targets[1][2] or nil
-		block.toggles = {}
+		block.toggles, block.acts = {}, {}
 		for j, t in ipairs(def.targets or {}) do
 			local b = CreateFrame("Button", nil, block, "UIPanelButtonTemplate")
 			b:SetWidth(64)
@@ -1005,17 +1014,33 @@ function W.Build()
 			b:SetNormalFontObject(GameFontNormalSmall)
 			b:SetHighlightFontObject(GameFontHighlightSmall)
 			b.key, b.word = t[1], t[2]
-			b:SetScript("OnClick", function() block.target = t[2]; W.Refresh() end)
+			b:SetScript("OnClick", function()
+				block.target = t[2]
+				W.gmOut, W.gmCmd = { string.format(T("GM_CHOSEN"), T(t[1])) }, nil
+				W.Refresh()
+			end)
 			table.insert(block.toggles, b)
 		end
 		for j, a in ipairs(def.actions) do
-			if UIg and UIg.IconButton then
-				local tipKey = a[2]
-				local b = UIg.IconButton(block, 22, a[1], function() return T(def.key), T(tipKey) end, function()
-					W.GM(a[3]:find("%%s") and string.format(a[3], block.target or "") or a[3])
-				end)
-				b:SetPoint("BOTTOMLEFT", 6 + (j - 1) * 28, 6)
-			end
+			-- Text buttons (the user lost the rush's Start / Stop / Status when they became bare icons).
+			local b = CreateFrame("Button", nil, block, "UIPanelButtonTemplate")
+			local n = #def.actions
+			local w = math.floor((198 - (n - 1) * 3) / n)
+			b:SetWidth(w)
+			b:SetHeight(20)
+			b:SetPoint("BOTTOMLEFT", 6 + (j - 1) * (w + 3), 6)
+			b:SetNormalFontObject(GameFontNormalSmall)
+			b:SetHighlightFontObject(GameFontHighlightSmall)
+			b.key, b.tipKey = a[4], a[2]
+			b:SetScript("OnClick", function() W.GM(a[3]:find("%%s") and string.format(a[3], block.target or "") or a[3]) end)
+			b:SetScript("OnEnter", function(self)
+				GameTooltip:SetOwner(self, "ANCHOR_TOP")
+				GameTooltip:SetText(T(def.key), 1, 0.82, 0)
+				GameTooltip:AddLine(T(self.tipKey), 1, 1, 1, true)
+				GameTooltip:Show()
+			end)
+			b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			table.insert(block.acts, b)
 		end
 		gm.blocks[i] = block
 	end
@@ -1615,6 +1640,7 @@ function W.Refresh()
 		f.gm.title:SetText("|cffff6060" .. T("GM_TITLE") .. "|r")
 		for _, block in ipairs(f.gm.blocks) do
 			block.label:SetText(T(block.key))
+			for _, b in ipairs(block.acts) do b:SetText(T(b.key)) end
 			for _, b in ipairs(block.toggles) do
 				b:SetText(T(b.key))
 				if b.word == block.target then b:LockHighlight() else b:UnlockHighlight() end
