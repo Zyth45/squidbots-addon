@@ -13,6 +13,10 @@ local STRINGS = {
 		NOT_IN_GROUP = "Invite it to your group to see its gear.", OUT_OF_RANGE = "Come closer to see its gear.",
 		EMPTY_BAGS = "Nothing in the bags.", NO_QUESTS = "No quest.",
 		GIVE = "Give it to me", SOULBOUND = "Soulbound: cannot be traded", TRADE_RANGE = "Trade: stand next to the bot (10 yards).", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot next to a vendor)", SELL_GREY = "Sell junk",
+		BULK_BTN = "Sell / destroy", BULK_JUNK = "Sell its junk (as before)", BULK_SELL = "Sell its %s items...", BULK_DESTROY = "Destroy its %s items...",
+		Q_GREY = "grey", Q_WHITE = "white", BULK_T_SELL = "%s sells these %s items:", BULK_T_DESTROY = "%s destroys these %s items (every stack of each):",
+		BULK_H_SELL = "Untick what it keeps. The bot must stand next to a vendor.", BULK_H_DESTROY = "Untick what it keeps. A destroyed item is gone for good.",
+		BULK_GO_SELL = "Sell (%d)", BULK_GO_DESTROY = "Destroy (%d)", BULK_NONE = "No %s item in its bags.", BULK_MORE = "+%d more not shown (left alone).",
 		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.",
@@ -73,6 +77,10 @@ local STRINGS = {
 		NOT_IN_GROUP = "Invitez-le dans votre groupe pour voir son équipement.", OUT_OF_RANGE = "Approchez-vous pour voir son équipement.",
 		EMPTY_BAGS = "Rien dans les sacs.", NO_QUESTS = "Aucune quête.",
 		GIVE = "Me le donner", SOULBOUND = "Lié : impossible à échanger", TRADE_RANGE = "Échange : placez-vous à côté du bot (10 mètres).", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot à côté d'un marchand)", SELL_GREY = "Vendre la camelote",
+		BULK_BTN = "Vendre / détruire", BULK_JUNK = "Vendre sa camelote (comme avant)", BULK_SELL = "Vendre ses objets %s...", BULK_DESTROY = "Détruire ses objets %s...",
+		Q_GREY = "gris", Q_WHITE = "blancs", BULK_T_SELL = "%s vend ces objets %s :", BULK_T_DESTROY = "%s détruit ces objets %s (toutes les piles de chacun) :",
+		BULK_H_SELL = "Décochez ce qu'il garde. Le bot doit se tenir à côté d'un marchand.", BULK_H_DESTROY = "Décochez ce qu'il garde. Un objet détruit est perdu pour de bon.",
+		BULK_GO_SELL = "Vendre (%d)", BULK_GO_DESTROY = "Détruire (%d)", BULK_NONE = "Aucun objet %s dans ses sacs.", BULK_MORE = "+%d autres non affichés (laissés tels quels).",
 		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.",
@@ -607,6 +615,128 @@ local function Destroy(item, link)
 	if dialog then dialog.data, dialog.item = link, item end
 end
 
+-- 3.1: sell or destroy an alt's grey or white items at once, from a list where each one can be unticked first.
+-- The bot's own commands take several links in one whisper ("s <links>", "destroy <links>"): sent in short
+-- batches, 1.1 s apart.
+local Bulk
+do
+	local QUALITY = { grey = "^|cff9d9d9d", white = "^|cffffffff" }
+	local COLS, PER_COL = 3, 16
+	local queue, nextAt = {}, 0
+	local pump = CreateFrame("Frame")
+	pump:SetScript("OnUpdate", function()
+		if #queue == 0 or GetTime() < nextAt then return end
+		-- To the bot the list was made for, even if another sheet opened meanwhile.
+		local q, shown = table.remove(queue, 1), current
+		current = q.name
+		Whisper(q.text)
+		current = shown
+		nextAt = GetTime() + 1.1
+	end)
+	local function Batches(word, links)
+		local line
+		for _, link in ipairs(links) do
+			if line and #line + 1 + #link > 250 then table.insert(queue, { name = current, text = line }); line = nil end
+			line = line and (line .. " " .. link) or (word .. " " .. link)
+		end
+		if line then table.insert(queue, { name = current, text = line }) end
+	end
+	local f
+	local function Count()
+		local n = 0
+		for _, row in ipairs(f.rows) do if row:IsShown() and row:GetChecked() then n = n + 1 end end
+		f.go:SetText(string.format(T(f.action == "sell" and "BULK_GO_SELL" or "BULK_GO_DESTROY"), n))
+		if n > 0 then f.go:Enable() else f.go:Disable() end
+	end
+	local function Build()
+		f = CreateFrame("Frame", "SquidBotsLiteBulk", UIParent)
+		f:SetWidth(COLS * 196 + 24)
+		f:SetHeight(PER_COL * 20 + 110)
+		f:SetPoint("CENTER")
+		f:SetFrameStrata("DIALOG")
+		f:SetBackdrop(BACKDROP)
+		f:SetBackdropColor(0, 0, 0, 0.92)
+		f:EnableMouse(true)
+		table.insert(UISpecialFrames, "SquidBotsLiteBulk")
+		f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		f.title:SetPoint("TOPLEFT", 16, -16)
+		f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		f.hint:SetPoint("TOPLEFT", 16, -34)
+		f.more = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		f.more:SetPoint("BOTTOMLEFT", 16, 44)
+		f.rows = {}
+		for i = 1, COLS * PER_COL do
+			local row = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+			row:SetWidth(20)
+			row:SetHeight(20)
+			row:SetPoint("TOPLEFT", 12 + math.floor((i - 1) / PER_COL) * 196, -52 - ((i - 1) % PER_COL) * 20)
+			row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			row.label:SetPoint("LEFT", row, "RIGHT", 2, 0)
+			row.label:SetWidth(170)
+			row.label:SetHeight(18)
+			row.label:SetJustifyH("LEFT")
+			row:SetScript("OnClick", Count)
+			row:SetScript("OnEnter", function(self)
+				if not self.item then return end
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:SetHyperlink(self.item.link:match("|H(item:[^|]+)|h"))
+				GameTooltip:Show()
+			end)
+			row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			f.rows[i] = row
+		end
+		f.go = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+		f.go:SetWidth(120)
+		f.go:SetHeight(22)
+		f.go:SetPoint("BOTTOMRIGHT", -140, 16)
+		f.go:SetScript("OnClick", function()
+			local links = {}
+			for _, row in ipairs(f.rows) do
+				if row:IsShown() and row:GetChecked() and row.item then
+					table.insert(links, SendableLink(row.item))
+					TakeOut(bags, row.item)
+				end
+			end
+			Batches(f.action == "sell" and "s" or "destroy", links)
+			f:Hide()
+			AfterChange()
+		end)
+		f.cancel = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+		f.cancel:SetWidth(120)
+		f.cancel:SetHeight(22)
+		f.cancel:SetPoint("BOTTOMRIGHT", -16, 16)
+		f.cancel:SetText(CANCEL or "Cancel")
+		f.cancel:SetScript("OnClick", function() f:Hide() end)
+	end
+	-- action: "sell" or "destroy"; quality: "grey" or "white".
+	Bulk = function(action, quality)
+		local word = T(quality == "grey" and "Q_GREY" or "Q_WHITE")
+		local list = {}
+		for _, item in ipairs(bags) do
+			if item.link and item.link:find(QUALITY[quality]) then table.insert(list, item) end
+		end
+		if #list == 0 then Print(string.format(T("BULK_NONE"), word)) return end
+		if not f then Build() end
+		f.action = action
+		f.title:SetText(string.format(T(action == "sell" and "BULK_T_SELL" or "BULK_T_DESTROY"), current or "?", word))
+		f.hint:SetText(T(action == "sell" and "BULK_H_SELL" or "BULK_H_DESTROY"))
+		for i, row in ipairs(f.rows) do
+			local item = list[i]
+			row.item = item
+			if item then
+				row.label:SetText(item.link .. (item.count and item.count > 1 and (" x" .. item.count) or ""))
+				row:SetChecked(true)
+				row:Show()
+			else
+				row:Hide()
+			end
+		end
+		f.more:SetText(#list > #f.rows and string.format(T("BULK_MORE"), #list - #f.rows) or "")
+		Count()
+		f:Show()
+	end
+end
+
 local function ItemMenu(item)
 	local link = SendableLink(item)
 	if bagMode == "bank" then
@@ -774,13 +904,23 @@ local function BuildBags(page)
 	page.grey:SetHeight(22)
 	page.grey:SetPoint("LEFT", page.trade, "RIGHT", 8, 0)
 	page.grey:SetScript("OnClick", function()
-		Sell("junk", true)
-		-- The grey items leave the list at once.
-		for i = #bags, 1, -1 do
-			if bags[i].link:find("^|cff9d9d9d") then table.remove(bags, i) end
-		end
-		if Render then Render() end
-		AfterChange()
+		local grey, white = T("Q_GREY"), T("Q_WHITE")
+		EasyMenu({
+			{ text = T("BULK_JUNK"), notCheckable = true, func = function()
+				Sell("junk", true)
+				-- The grey items leave the list at once.
+				for i = #bags, 1, -1 do
+					if bags[i].link:find("^|cff9d9d9d") then table.remove(bags, i) end
+				end
+				if Render then Render() end
+				AfterChange()
+			end },
+			{ text = string.format(T("BULK_SELL"), grey), notCheckable = true, func = function() Bulk("sell", "grey") end },
+			{ text = string.format(T("BULK_SELL"), white), notCheckable = true, func = function() Bulk("sell", "white") end },
+			{ text = string.format(T("BULK_DESTROY"), grey), notCheckable = true, func = function() Bulk("destroy", "grey") end },
+			{ text = string.format(T("BULK_DESTROY"), white), notCheckable = true, func = function() Bulk("destroy", "white") end },
+		}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+		if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 	end)
 	page.bank = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.bank:SetWidth(110)
@@ -1498,7 +1638,7 @@ local function RenderBags(page)
 	page.hint:SetText(T("ITEM_HINT") .. " " .. T("DROP_HINT"))
 	page.trade:SetText(T("TRADE"))
 	page.bank:SetText(bagMode == "bank" and T("BAGS_BTN") or T("BANK"))
-	page.grey:SetText(T("SELL_GREY"))
+	page.grey:SetText(T("BULK_BTN"))
 	for i, b in ipairs(page.buttons) do
 		local item = list[i]
 		b.item = item
