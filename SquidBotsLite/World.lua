@@ -1389,9 +1389,10 @@ function W.Rows()
 			for _, r in ipairs(W.art.recipes) do table.insert(list, r) end
 			table.sort(list, function(a, b)
 				if a.skill ~= b.skill then return W.SkillName(a.skill or 0) < W.SkillName(b.skill or 0) end
+				-- The server's order (best first): quality, then the rank the recipe needs.
+				if (a.quality or 0) ~= (b.quality or 0) then return (a.quality or 0) > (b.quality or 0) end
 				local ra, rb = a.rank or 0, b.rank or 0
-				if ra ~= rb then return ra < rb end
-				if (a.quality or 0) ~= (b.quality or 0) then return (a.quality or 0) < (b.quality or 0) end
+				if ra ~= rb then return ra > rb end
 				return (W.ItemName(a.item)) < (W.ItemName(b.item))
 			end)
 			local lastSkill
