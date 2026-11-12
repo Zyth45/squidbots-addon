@@ -213,6 +213,7 @@ end
 local function IsAlt(name)
 	return name and SquidBotsLiteDB and SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]
 end
+A.IsAlt = IsAlt
 
 local function Mode()
 	return SquidBotsLiteDB and SquidBotsLiteDB.altsMessages or "addon"
@@ -1461,7 +1462,8 @@ function Handle.OFFLINE(name)
 end
 
 function Handle.HELLO(name, f)
-	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", at = GetTime() }
+	-- 6th field (CoA Bots 3.1): the alt bags commands (cmp, bags, sell, destroy) are on.
+	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", bags = f[6] == "1", at = GetTime() }
 	A.RefreshLog()
 end
 

@@ -17,11 +17,18 @@ local STRINGS = {
 		Q_GREY = "grey", Q_WHITE = "white", BULK_T_SELL = "%s sells these %s items:", BULK_T_DESTROY = "%s destroys these %s items (every stack of each):",
 		BULK_H_SELL = "Untick what it keeps. The bot must stand next to a vendor.", BULK_H_DESTROY = "Untick what it keeps. A destroyed item is gone for good.",
 		BULK_GO_SELL = "Sell (%d)", BULK_GO_DESTROY = "Destroy (%d)", BULK_NONE = "No %s item in its bags.", BULK_MORE = "+%d more not shown (left alone).",
+		BULK_ASKING = "Asking %s for its list...", BULK_SOLD = "%s sold %d items for %s.", BULK_DESTROYED = "%s destroyed %d items.",
+		BULK_ERR = "%s: %s.", BULK_R_changed = "its bags changed, open the list again", BULK_R_novendor = "no vendor next to it",
+		BULK_R_combat = "in combat", BULK_R_dead = "dead", BULK_R_quality = "quality too high", BULK_R_off = "off on this realm",
+		BULK_TOOMANY = "Too many unticked items for one order: untick fewer, or sell those one by one.",
+		BULK_H_SERVER = "The bot leaves out quest items, what it would wear, what it keeps and what has a use.",
 		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.",
 		CMP_WORN = "Worn by %s", CMP_ILVL = "%s wears item level %d here (%s)", CMP_NONE = "%s: nothing known in that slot (Gear tab, in range).",
-		CMP_LEVEL = "%s is level %d: this needs %d.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
+		CMP_LEVEL = "%s is level %d: this needs %d.", CMP_ASKING = "Asking %s...", CMP_V_equip = "%s: better, that slot is empty.",
+		CMP_V_replace = "%s: better than what it wears.", CMP_V_bad = "%s: worse than what it wears.", CMP_V_cannot = "%s cannot use it.",
+		CMP_SCORE = "%s's score: %s, worn %s (%s)", CMP_NOTFOUND = "%s: unknown item.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
 		PETS = "Pets", PET_CAT_loot = "Loot", PET_CAT_quest = "Quests", PET_CAT_class = "Class trainer",
 		PET_CAT_craft = "Professions", PETS_FAV = "Favourite", PETS_USE = "Use", PETS_DISMISS = "Dismiss",
@@ -81,11 +88,18 @@ local STRINGS = {
 		Q_GREY = "gris", Q_WHITE = "blancs", BULK_T_SELL = "%s vend ces objets %s :", BULK_T_DESTROY = "%s détruit ces objets %s (toutes les piles de chacun) :",
 		BULK_H_SELL = "Décochez ce qu'il garde. Le bot doit se tenir à côté d'un marchand.", BULK_H_DESTROY = "Décochez ce qu'il garde. Un objet détruit est perdu pour de bon.",
 		BULK_GO_SELL = "Vendre (%d)", BULK_GO_DESTROY = "Détruire (%d)", BULK_NONE = "Aucun objet %s dans ses sacs.", BULK_MORE = "+%d autres non affichés (laissés tels quels).",
+		BULK_ASKING = "Demande de sa liste à %s...", BULK_SOLD = "%s a vendu %d objets pour %s.", BULK_DESTROYED = "%s a détruit %d objets.",
+		BULK_ERR = "%s : %s.", BULK_R_changed = "ses sacs ont changé, rouvrez la liste", BULK_R_novendor = "aucun marchand à côté de lui",
+		BULK_R_combat = "en combat", BULK_R_dead = "mort", BULK_R_quality = "qualité trop haute", BULK_R_off = "coupé sur ce royaume",
+		BULK_TOOMANY = "Trop d'objets décochés pour un seul ordre : décochez-en moins, ou vendez-les un par un.",
+		BULK_H_SERVER = "Le bot laisse de côté les objets de quête, ce qu'il porterait, ce qu'il garde et ce qui s'utilise.",
 		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.",
 		CMP_WORN = "Porté par %s", CMP_ILVL = "%s porte ici un niveau d'objet %d (%s)", CMP_NONE = "%s : rien de connu à cet emplacement (onglet Équipement, à portée).",
-		CMP_LEVEL = "%s est niveau %d : il faut le niveau %d.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
+		CMP_LEVEL = "%s est niveau %d : il faut le niveau %d.", CMP_ASKING = "Question à %s...", CMP_V_equip = "%s : mieux, cet emplacement est vide.",
+		CMP_V_replace = "%s : mieux que ce qu'il porte.", CMP_V_bad = "%s : moins bien que ce qu'il porte.", CMP_V_cannot = "%s ne peut pas l'utiliser.",
+		CMP_SCORE = "Score de %s : %s, porté %s (%s)", CMP_NOTFOUND = "%s : objet inconnu.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
 		PETS = "Familiers", PET_CAT_loot = "Butin", PET_CAT_quest = "Quêtes", PET_CAT_class = "Maître de classe",
 		PET_CAT_craft = "Métiers", PETS_FAV = "Favori", PETS_USE = "Sortir", PETS_DISMISS = "Renvoyer",
@@ -618,6 +632,14 @@ end
 -- 3.1: sell or destroy an alt's grey or white items at once, from a list where each one can be unticked first.
 -- The bot's own commands take several links in one whisper ("s <links>", "destroy <links>"): sent in short
 -- batches, 1.1 s apart.
+-- 3.1: the alt answers for itself (CoA Bots 3.1 with AiPlayerbot.CoaAltBags.Enable, HELLO's 6th field): its own
+-- verdict on an item, and the bag lists it would sell or destroy. Only the account's alts; otherwise the 3.1 path
+-- of the addon alone (the Gear tab's view, "s"/"destroy" with links).
+local function AltBags(name)
+	local A = SquidBotsLite_Alts
+	return name and A and A.hello and A.hello.bags and A.IsAlt and A.IsAlt(name) and A.Send and true or false
+end
+
 local Bulk
 do
 	local QUALITY = { grey = "^|cff9d9d9d", white = "^|cffffffff" }
@@ -690,6 +712,20 @@ do
 		f.go:SetHeight(22)
 		f.go:SetPoint("BOTTOMRIGHT", -140, 16)
 		f.go:SetScript("OnClick", function()
+			if f.server then
+				-- The token covers the whole preview: what is unticked or not shown is skipped.
+				local skip = {}
+				for i, item in ipairs(f.server.items) do
+					local row = f.rows[i]
+					if not (row and row:IsShown() and row:GetChecked()) then table.insert(skip, item.bag .. ":" .. item.slot) end
+				end
+				local q = f.server.quality
+				local text = f.action .. " " .. q .. " " .. f.server.token .. (#skip > 0 and (" skip " .. table.concat(skip, ",")) or "")
+				if #text > 250 then Print(T("BULK_TOOMANY")) return end
+				SquidBotsLite_Alts.Send(f.server.name, text)
+				f:Hide()
+				return
+			end
 			local links = {}
 			for _, row in ipairs(f.rows) do
 				if row:IsShown() and row:GetChecked() and row.item then
@@ -708,18 +744,11 @@ do
 		f.cancel:SetText(CANCEL or "Cancel")
 		f.cancel:SetScript("OnClick", function() f:Hide() end)
 	end
-	-- action: "sell" or "destroy"; quality: "grey" or "white".
-	Bulk = function(action, quality)
-		local word = T(quality == "grey" and "Q_GREY" or "Q_WHITE")
-		local list = {}
-		for _, item in ipairs(bags) do
-			if item.link and item.link:find(QUALITY[quality]) then table.insert(list, item) end
-		end
-		if #list == 0 then Print(string.format(T("BULK_NONE"), word)) return end
+	local function Fill(action, word, list, server, name)
 		if not f then Build() end
-		f.action = action
-		f.title:SetText(string.format(T(action == "sell" and "BULK_T_SELL" or "BULK_T_DESTROY"), current or "?", word))
-		f.hint:SetText(T(action == "sell" and "BULK_H_SELL" or "BULK_H_DESTROY"))
+		f.action, f.server = action, server
+		f.title:SetText(string.format(T(action == "sell" and "BULK_T_SELL" or "BULK_T_DESTROY"), name or "?", word))
+		f.hint:SetText(T(action == "sell" and "BULK_H_SELL" or "BULK_H_DESTROY") .. (server and (" " .. T("BULK_H_SERVER")) or ""))
 		for i, row in ipairs(f.rows) do
 			local item = list[i]
 			row.item = item
@@ -734,6 +763,59 @@ do
 		f.more:SetText(#list > #f.rows and string.format(T("BULK_MORE"), #list - #f.rows) or "")
 		Count()
 		f:Show()
+	end
+	-- The alt's preview ("alt bags <q> [destroy]"): BAGS it ..., BAGS sum ... <token>, BAGS -.
+	local preview
+	local Q = { grey = 0, white = 1 }
+	local function LinkOf(id, quality, name)
+		local _, link = GetItemInfo(id)
+		if link then return link end
+		local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+		return (color and color.hex or "|cffffffff") .. "|Hitem:" .. id .. ":0:0:0:0:0:0:0:0|h[" .. (name ~= "" and name or ("#" .. id)) .. "]|h|r"
+	end
+	local function Bulk_OnLine(name, f)
+		local kind = f[2]
+		if kind == "it" and preview and preview.name == name then
+			local id, quality = tonumber(f[5]) or 0, tonumber(f[7]) or 0
+			table.insert(preview.items, { bag = f[3], slot = f[4], id = id, count = tonumber(f[6]) or 1, quality = quality,
+				price = tonumber(f[8]) or 0, link = LinkOf(id, quality, f[9] or "") })
+		elseif kind == "sum" and preview and preview.name == name then
+			preview.token = f[5]
+		elseif kind == "done" then
+			if f[3] == "sell" then
+				Print(string.format(T("BULK_SOLD"), name, tonumber(f[4]) or 0, GetCoinTextureString and GetCoinTextureString(tonumber(f[5]) or 0) or (f[5] or "0")))
+			else
+				Print(string.format(T("BULK_DESTROYED"), name, tonumber(f[4]) or 0))
+			end
+			if name == current then AfterChange() end
+		elseif kind == "err" then
+			if preview and preview.name == name then preview = nil end
+			Print(string.format(T("BULK_ERR"), name, T("BULK_R_" .. (f[3] or "")) or f[3] or "?"))
+		elseif kind == "-" and preview and preview.name == name then
+			local p = preview
+			preview = nil
+			if not p.token then return end
+			if #p.items == 0 then Print(string.format(T("BULK_NONE"), p.word)) return end
+			Fill(p.action, p.word, p.items, p, name)
+		end
+	end
+	-- action: "sell" or "destroy"; quality: "grey" or "white".
+	Bulk = function(action, quality)
+		local word = T(quality == "grey" and "Q_GREY" or "Q_WHITE")
+		if AltBags(current) then
+			preview = { name = current, action = action, quality = Q[quality], word = word, items = {} }
+			Print(string.format(T("BULK_ASKING"), current))
+			-- Alts.lua loads after this file: its handler table is there by now.
+			SquidBotsLite_Alts.Handle.BAGS = Bulk_OnLine
+			SquidBotsLite_Alts.Send(current, "bags " .. Q[quality] .. (action == "destroy" and " destroy" or ""))
+			return
+		end
+		local list = {}
+		for _, item in ipairs(bags) do
+			if item.link and item.link:find(QUALITY[quality]) then table.insert(list, item) end
+		end
+		if #list == 0 then Print(string.format(T("BULK_NONE"), word)) return end
+		Fill(action, word, list, nil, current)
 	end
 end
 
@@ -2091,6 +2173,85 @@ do
 			t:SetPoint("TOPRIGHT", left, "TOPLEFT", 0, -10)
 		end
 	end
+	-- The alt's answer to "alt cmp <itemString>": CMP item, CMP worn (one per slot), or CMP err; then CMP -.
+	-- Kept a minute per alt and item; one question at a time per alt, in order.
+	local cache, waiting = {}, {}
+	local function Worn(tooltip, n, str, name)
+		if not tips[n] then
+			tips[n] = CreateFrame("GameTooltip", "SquidBotsLiteCompare" .. n, UIParent, "GameTooltipTemplate")
+			tips[n]:SetFrameStrata("TOOLTIP")
+		end
+		local t = tips[n]
+		t:SetOwner(tooltip, "ANCHOR_NONE")
+		t:SetHyperlink(str)
+		t:AddLine(string.format(T("CMP_WORN"), name), 0.4, 0.8, 1)
+		t:Show()
+		Place(t, tooltip)
+	end
+	local OnCmp
+	local function Asked(tooltip, link)
+		local str = link:match("|H(item:[^|]+)|h") or link
+		local key = current .. "|" .. str
+		local c = cache[key]
+		if not c or GetTime() - c.at > 60 then
+			local queue = waiting[current] or {}
+			waiting[current] = queue
+			local asked = false
+			for _, w in ipairs(queue) do if w.key == key then asked = true end end
+			if not asked or (queue[1] and GetTime() - queue[1].sent > 5) then
+				if asked then table.remove(queue, 1) end
+				table.insert(queue, { key = key, sent = GetTime(), worn = {} })
+				SquidBotsLite_Alts.Handle.CMP = OnCmp
+				SquidBotsLite_Alts.Send(current, "cmp " .. str)
+			end
+			tooltip:AddLine(string.format(T("CMP_ASKING"), current), 0.6, 0.6, 0.6)
+			tooltip:Show()
+			return
+		end
+		if c.err then
+			if c.err ~= "notgear" then tooltip:AddLine(string.format(T("CMP_NOTFOUND"), current), 0.6, 0.6, 0.6) end
+			tooltip:Show()
+			return
+		end
+		local v = c.usage and T("CMP_V_" .. c.usage)
+		local good = c.usage == "equip" or c.usage == "replace"
+		if v and c.usage ~= "other" then tooltip:AddLine(string.format(v, current), good and 0.25 or 1, good and 1 or 0.4, good and 0.25 or 0.4) end
+		local n = 0
+		for _, w in ipairs(c.worn) do
+			if w.str and w.str ~= "-" and w.id ~= 0 then
+				n = n + 1
+				Worn(tooltip, n, w.str, current)
+				if c.score and c.score > 0 then
+					local d = c.score - (w.score or 0)
+					local diff = d > 0 and string.format("|cff40ff40+%.1f|r", d) or d < 0 and string.format("|cffff6060%.1f|r", d) or "="
+					tooltip:AddLine(string.format(T("CMP_SCORE"), current, string.format("%.1f", c.score), string.format("%.1f", w.score or 0), diff), 0.4, 0.8, 1)
+				end
+			end
+		end
+		tooltip:Show()
+	end
+	OnCmp = function(name, f)
+		local queue = waiting[name]
+		local w = queue and queue[1]
+		if not w then return end
+		if f[2] == "item" then
+			w.usage, w.score = f[6], tonumber(f[7] or "")
+		elseif f[2] == "worn" then
+			table.insert(w.worn, { slot = tonumber(f[3]), id = tonumber(f[4]) or 0, score = tonumber(f[5] or ""), str = f[6] })
+		elseif f[2] == "err" then
+			w.err = f[3] or "?"
+		elseif f[2] == "-" then
+			table.remove(queue, 1)
+			cache[w.key] = { at = GetTime(), usage = w.usage, score = w.score, worn = w.worn, err = w.err }
+			-- The item still under the mouse: its tooltip again, now with the answer.
+			if name == current and GameTooltip:IsShown() then
+				local owner = GameTooltip:GetOwner()
+				local enter = owner and owner.GetScript and owner:GetScript("OnEnter")
+				if enter then enter(owner) end
+			end
+		end
+	end
+
 	local function OnItem(tooltip)
 		HideTips()
 		if not (sheet and sheet:IsShown() and current) then return end
@@ -2098,6 +2259,7 @@ do
 		if not link then return end
 		local _, _, _, ilvl, need, _, _, _, loc = GetItemInfo(link)
 		local slots = loc and SLOTS[loc]
+		if slots and AltBags(current) then return Asked(tooltip, link) end
 		local unit = UnitOf(current)
 		if not slots or not unit then return end
 		local level = UnitLevel(unit) or 0
