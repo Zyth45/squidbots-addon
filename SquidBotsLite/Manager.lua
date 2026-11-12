@@ -15,7 +15,9 @@ local STRINGS = {
 		GIVE = "Give it to me", SOULBOUND = "Soulbound: cannot be traded", TRADE_RANGE = "Trade: stand next to the bot (10 yards).", EQUIP = "Equip", USE = "Use", SELL = "Sell (bot next to a vendor)", SELL_GREY = "Sell junk",
 		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
-		GEAR_HINT = "Right-click a piece to take it off.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
+		GEAR_HINT = "Right-click a piece to take it off.",
+		CMP_WORN = "Worn by %s", CMP_ILVL = "%s wears item level %d here (%s)", CMP_NONE = "%s: nothing known in that slot (Gear tab, in range).",
+		CMP_LEVEL = "%s is level %d: this needs %d.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
 		PETS = "Pets", PET_CAT_loot = "Loot", PET_CAT_quest = "Quests", PET_CAT_class = "Class trainer",
 		PET_CAT_craft = "Professions", PETS_FAV = "Favourite", PETS_USE = "Use", PETS_DISMISS = "Dismiss",
@@ -73,7 +75,9 @@ local STRINGS = {
 		GIVE = "Me le donner", SOULBOUND = "Lié : impossible à échanger", TRADE_RANGE = "Échange : placez-vous à côté du bot (10 mètres).", EQUIP = "Équiper", USE = "Utiliser", SELL = "Vendre (bot à côté d'un marchand)", SELL_GREY = "Vendre la camelote",
 		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
-		GEAR_HINT = "Clic droit sur une pièce pour la retirer.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
+		GEAR_HINT = "Clic droit sur une pièce pour la retirer.",
+		CMP_WORN = "Porté par %s", CMP_ILVL = "%s porte ici un niveau d'objet %d (%s)", CMP_NONE = "%s : rien de connu à cet emplacement (onglet Équipement, à portée).",
+		CMP_LEVEL = "%s est niveau %d : il faut le niveau %d.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
 		PETS = "Familiers", PET_CAT_loot = "Butin", PET_CAT_quest = "Quêtes", PET_CAT_class = "Maître de classe",
 		PET_CAT_craft = "Métiers", PETS_FAV = "Favori", PETS_USE = "Sortir", PETS_DISMISS = "Renvoyer",
@@ -1913,6 +1917,85 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 	if not sheet.gold then Ask("stats", "stats") end
 	local info = SquidBotsLiteDB.altInfo and SquidBotsLiteDB.altInfo[name]
 	if not (info and info.spec) and SquidBotsLite_AskSpecs then SquidBotsLite_AskSpecs(name) end
+end
+
+-- 3.1: an item's tooltip, while a bot's sheet is open, also shows what the bot wears in that slot (a tooltip
+-- beside it, like the game's own compare) and the item level difference. The bot must be in the group: its gear
+-- is read like the Gear tab's.
+do
+	local SLOTS = { INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 }, INVTYPE_BODY = { 4 },
+		INVTYPE_CHEST = { 5 }, INVTYPE_ROBE = { 5 }, INVTYPE_WAIST = { 6 }, INVTYPE_LEGS = { 7 }, INVTYPE_FEET = { 8 },
+		INVTYPE_WRIST = { 9 }, INVTYPE_HAND = { 10 }, INVTYPE_FINGER = { 11, 12 }, INVTYPE_TRINKET = { 13, 14 },
+		INVTYPE_CLOAK = { 15 }, INVTYPE_WEAPON = { 16, 17 }, INVTYPE_SHIELD = { 17 }, INVTYPE_2HWEAPON = { 16 },
+		INVTYPE_WEAPONMAINHAND = { 16 }, INVTYPE_WEAPONOFFHAND = { 17 }, INVTYPE_HOLDABLE = { 17 },
+		INVTYPE_RANGED = { 18 }, INVTYPE_THROWN = { 18 }, INVTYPE_RANGEDRIGHT = { 18 }, INVTYPE_RELIC = { 18 },
+		INVTYPE_TABARD = { 19 } }
+	local tips = {}
+	local function HideTips() for _, t in ipairs(tips) do t:Hide() end end
+	-- Beside the outermost tooltip already shown, on the side with room (bags sit at the screen's right).
+	local function Place(t, owner)
+		local shown = { owner }
+		local others = { ShoppingTooltip1 or false, ShoppingTooltip2 or false, tips[1] or false, tips[2] or false }
+		for _, o in ipairs(others) do
+			if o and o ~= t and o:IsShown() and o:GetLeft() then table.insert(shown, o) end
+		end
+		local left, right = owner, owner
+		for _, o in ipairs(shown) do
+			if (o:GetLeft() or 0) < (left:GetLeft() or 0) then left = o end
+			if (o:GetRight() or 0) > (right:GetRight() or 0) then right = o end
+		end
+		t:ClearAllPoints()
+		if (right:GetRight() or 0) + (t:GetWidth() or 0) <= (UIParent:GetRight() or 0) then
+			t:SetPoint("TOPLEFT", right, "TOPRIGHT", 0, -10)
+		else
+			t:SetPoint("TOPRIGHT", left, "TOPLEFT", 0, -10)
+		end
+	end
+	local function OnItem(tooltip)
+		HideTips()
+		if not (sheet and sheet:IsShown() and current) then return end
+		local _, link = tooltip:GetItem()
+		if not link then return end
+		local _, _, _, ilvl, need, _, _, _, loc = GetItemInfo(link)
+		local slots = loc and SLOTS[loc]
+		local unit = UnitOf(current)
+		if not slots or not unit then return end
+		local level = UnitLevel(unit) or 0
+		if need and level > 0 and need > level then
+			tooltip:AddLine(string.format(T("CMP_LEVEL"), current, level, need), 1, 0.3, 0.3)
+		end
+		local n, known = 0, false
+		for _, slot in ipairs(slots) do
+			local worn = GetInventoryItemLink(unit, slot)
+			if worn then
+				known = true
+				-- Hovering the bot's own piece (Gear tab): nothing to compare with.
+				if worn == link then HideTips(); tooltip:Show(); return end
+				n = n + 1
+				if not tips[n] then
+					tips[n] = CreateFrame("GameTooltip", "SquidBotsLiteCompare" .. n, UIParent, "GameTooltipTemplate")
+					tips[n]:SetFrameStrata("TOOLTIP")
+				end
+				local t = tips[n]
+				t:SetOwner(tooltip, "ANCHOR_NONE")
+				t:SetHyperlink(worn)
+				t:AddLine(string.format(T("CMP_WORN"), current), 0.4, 0.8, 1)
+				t:Show()
+				Place(t, tooltip)
+				local wl = select(4, GetItemInfo(worn))
+				if ilvl and wl then
+					local d = ilvl - wl
+					local diff = d > 0 and ("|cff40ff40+" .. d .. "|r") or d < 0 and ("|cffff6060" .. d .. "|r") or "="
+					tooltip:AddLine(string.format(T("CMP_ILVL"), current, wl, diff), 0.4, 0.8, 1)
+				end
+			end
+		end
+		if not known then tooltip:AddLine(string.format(T("CMP_NONE"), current), 0.6, 0.6, 0.6) end
+		tooltip:Show()
+	end
+	GameTooltip:HookScript("OnTooltipSetItem", OnItem)
+	GameTooltip:HookScript("OnHide", HideTips)
+	GameTooltip:HookScript("OnTooltipCleared", HideTips)
 end
 
 -- The sheet's bot, and whether its sheet is read only (TalentTree.lua).
