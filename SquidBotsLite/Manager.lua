@@ -1557,10 +1557,9 @@ Render = function()
 	if info.xp then
 		sheet.xp:SetValue(info.xp)
 		sheet.xp.text:SetText(string.format("%s %d%%%s", T("XP"), info.xp, (info.rest or 0) > 0 and (" (+" .. info.rest .. "%)") or ""))
-		sheet.xp:Show()
-	else
-		sheet.xp:Hide()
 	end
+	sheet.xp.has = info.xp ~= nil
+	sheet.xp:Update()
 	sheet.refresh:SetText(T("REFRESH"))
 	for _, def in ipairs(TABS) do
 		local key = def[1]
@@ -1644,7 +1643,7 @@ local function Build()
 		b:SetWidth(70)
 		b:SetHeight(22)
 		b:SetPoint("TOPLEFT", 12 + (i - 1) * 72, -36)
-		b:SetScript("OnClick", function() tab = def[1]; Load() end)
+		b:SetScript("OnClick", function() tab = def[1]; sheet.xp:Update(); Load() end)
 		-- A small icon before the name, the name a size smaller to make room.
 		b:SetNormalFontObject(GameFontNormalSmall)
 		b:SetHighlightFontObject(GameFontHighlightSmall)
@@ -1685,6 +1684,10 @@ local function Build()
 	xpBg:SetTexture(0, 0, 0, 0.6)
 	sheet.xp.text = sheet.xp:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sheet.xp.text:SetPoint("CENTER")
+	-- The Pets tab has its buttons ("Dismiss", "Uses them by itself") where the bar sits: no bar on that tab.
+	sheet.xp.Update = function(self)
+		if self.has and tab ~= "pets" then self:Show() else self:Hide() end
+	end
 	sheet.status = sheet:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sheet.status:SetPoint("BOTTOMLEFT", 18, 20)
 	-- The flat buttons of the other panels (SquidBotsLite.lua).
