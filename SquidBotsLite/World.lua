@@ -1434,8 +1434,11 @@ function W.Rows()
 		for _, e in ipairs(W.events.list) do
 			local left = e.at - now
 			local when = e.state == "warn" and string.format(T("E_IN"), W.Duration(left)) or string.format(T("E_LEFT"), W.Duration(left))
+			-- The place once when the place and the zone are the same (a capital raid: "Stormwind, Stormwind").
+			local place, zone = e.place or "", e.zone or ""
+			local where = (place == "" or place == zone) and zone or (zone == "" and place or (place .. ", " .. zone))
 			table.insert(rows, { left = "|cffff8000" .. T("E_" .. e.kind) .. "|r " .. (e.name or ""),
-				right = (e.place or "") .. ", " .. (e.zone or "") .. "  |cffffd100" .. when .. "|r" })
+				right = where .. "  |cffffd100" .. when .. "|r" })
 		end
 		if #W.events.firsts > 0 then
 			table.insert(rows, { header = true, left = "|cffffd100" .. T("E_FIRSTS") .. "|r", right = "" })
