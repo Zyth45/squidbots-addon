@@ -25,10 +25,10 @@ local STRINGS = {
 		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
 		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.",
-		CMP_WORN = "Worn by %s", CMP_ILVL = "%s wears item level %d here (%s)", CMP_NONE = "%s: nothing known in that slot (Gear tab, in range).",
-		CMP_LEVEL = "%s is level %d: this needs %d.", CMP_ASKING = "Asking %s...", CMP_V_equip = "%s: better, that slot is empty.",
-		CMP_V_replace = "%s: better than what it wears.", CMP_V_bad = "%s: worse than what it wears.", CMP_V_cannot = "%s cannot use it.",
-		CMP_SCORE = "%s's score: %s, worn %s (%s)", CMP_NOTFOUND = "%s: unknown item.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
+		CMP_WORN = "Worn by %s", CMP_ILVL = "Item level %s compared with what %s wears (%d)", CMP_NONE = "%s: nothing known in that slot (Gear tab, in range).",
+		CMP_LEVEL = "%s is level %d: this needs %d.", CMP_ASKING = "Asking %s...", CMP_V_equip = "Upgrade for %s: that slot is empty.",
+		CMP_V_replace = "Upgrade for %s%s", CMP_V_bad = "Worse than what %s wears%s", CMP_V_cannot = "%s cannot use this.",
+		CMP_SCORE = "Score: this one %s, worn %s", CMP_NOTFOUND = "%s: unknown item.", CMP_NOANSWER = "%s did not answer: compared from the group.", TRADE_HINT = "Give it to me opens a trade with the bot: accept it.",
 		MOUNTS = "Mounts", AUTO_MOUNT = "Automatic choice", PREFERRED = "preferred",
 		PETS = "Pets", PET_CAT_loot = "Loot", PET_CAT_quest = "Quests", PET_CAT_class = "Class trainer",
 		PET_CAT_craft = "Professions", PETS_FAV = "Favourite", PETS_USE = "Use", PETS_DISMISS = "Dismiss",
@@ -96,10 +96,10 @@ local STRINGS = {
 		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
 		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.",
-		CMP_WORN = "Porté par %s", CMP_ILVL = "%s porte ici un niveau d'objet %d (%s)", CMP_NONE = "%s : rien de connu à cet emplacement (onglet Équipement, à portée).",
-		CMP_LEVEL = "%s est niveau %d : il faut le niveau %d.", CMP_ASKING = "Question à %s...", CMP_V_equip = "%s : mieux, cet emplacement est vide.",
-		CMP_V_replace = "%s : mieux que ce qu'il porte.", CMP_V_bad = "%s : moins bien que ce qu'il porte.", CMP_V_cannot = "%s ne peut pas l'utiliser.",
-		CMP_SCORE = "Score de %s : %s, porté %s (%s)", CMP_NOTFOUND = "%s : objet inconnu.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
+		CMP_WORN = "Porté par %s", CMP_ILVL = "Niveau d'objet %s par rapport à ce que porte %s (%d)", CMP_NONE = "%s : rien de connu à cet emplacement (onglet Équipement, à portée).",
+		CMP_LEVEL = "%s est niveau %d : il faut le niveau %d.", CMP_ASKING = "Question à %s...", CMP_V_equip = "Mieux pour %s : cet emplacement est vide.",
+		CMP_V_replace = "Mieux pour %s%s", CMP_V_bad = "Moins bien que ce que porte %s%s", CMP_V_cannot = "%s ne peut pas l'utiliser.",
+		CMP_SCORE = "Score : celui-ci %s, porté %s", CMP_NOTFOUND = "%s : objet inconnu.", CMP_NOANSWER = "%s n'a pas répondu : comparé depuis le groupe.", TRADE_HINT = "Me le donner ouvre un échange avec le bot : acceptez-le.",
 		MOUNTS = "Montures", AUTO_MOUNT = "Choix automatique", PREFERRED = "préférée",
 		PETS = "Familiers", PET_CAT_loot = "Butin", PET_CAT_quest = "Quêtes", PET_CAT_class = "Maître de classe",
 		PET_CAT_craft = "Métiers", PETS_FAV = "Favori", PETS_USE = "Sortir", PETS_DISMISS = "Renvoyer",
@@ -2167,15 +2167,25 @@ do
 			if (o:GetRight() or 0) > (right:GetRight() or 0) then right = o end
 		end
 		t:ClearAllPoints()
-		if (right:GetRight() or 0) + (t:GetWidth() or 0) <= (UIParent:GetRight() or 0) then
+		-- Like the game's own comparison: beside the tooltips, on the side away from the bot's sheet, if it fits.
+		local roomRight = (right:GetRight() or 0) + (t:GetWidth() or 0) <= (UIParent:GetRight() or 0)
+		local roomLeft = (left:GetLeft() or 0) - (t:GetWidth() or 0) >= 0
+		local away = "right"
+		local sx, ox = sheet and sheet:IsShown() and sheet:GetCenter(), owner:GetCenter()
+		if sx and ox and sx > ox then away = "left" end
+		if (away == "right" and roomRight) or (away == "left" and not roomLeft and roomRight) then
 			t:SetPoint("TOPLEFT", right, "TOPRIGHT", 0, -10)
 		else
 			t:SetPoint("TOPRIGHT", left, "TOPLEFT", 0, -10)
 		end
 	end
-	-- The alt's answer to "alt cmp <itemString>": CMP item, CMP worn (one per slot), or CMP err; then CMP -.
-	-- Kept a minute per alt and item; one question at a time per alt, in order.
-	local cache, waiting = {}, {}
+	-- The alt's answer to "alt cmp <itemString>": CMP item <id> ..., CMP worn (one per slot), or CMP err; then CMP -.
+	-- An answer goes to the question about its item id, never simply to the oldest one: a single lost or doubled
+	-- answer then shifted every later one onto the wrong item (gloves shown with a robe, "Asking..." for ever).
+	-- Only the hovered item's slots are kept. No answer within WAIT seconds: the addon's own comparison, and a late
+	-- answer still shows if the tooltip is on that item. Kept a minute per alt and item.
+	local WAIT, RETRY = 2, 5
+	local cache, waiting, receiving = {}, {}, {}
 	local function Worn(tooltip, n, str, name)
 		if not tips[n] then
 			tips[n] = CreateFrame("GameTooltip", "SquidBotsLiteCompare" .. n, UIParent, "GameTooltipTemplate")
@@ -2188,67 +2198,154 @@ do
 		t:Show()
 		Place(t, tooltip)
 	end
+	-- The item the tooltip shows now, if it is for this alt's sheet: its item string.
+	local function Shown(name)
+		if name ~= current or not GameTooltip:IsShown() then return end
+		local _, link = GameTooltip:GetItem()
+		return link and (link:match("|H(item:[^|]+)|h") or link)
+	end
+	local function Redraw(name, key)
+		local str = Shown(name)
+		if not str or name .. "|" .. str ~= key then return end
+		local owner = GameTooltip:GetOwner()
+		local enter = owner and owner.GetScript and owner:GetScript("OnEnter")
+		if enter then enter(owner) end
+	end
+	-- A question past WAIT: the tooltip again, now with the addon's own comparison.
+	local timer = CreateFrame("Frame")
+	timer:Hide()
+	timer:SetScript("OnUpdate", function(self)
+		local now, open = GetTime(), false
+		for name, queue in pairs(waiting) do
+			for _, w in ipairs(queue) do
+				if not w.late then
+					if now - w.sent >= WAIT then
+						w.late = true
+						Redraw(name, w.key)
+					else
+						open = true
+					end
+				end
+			end
+		end
+		if not open then self:Hide() end
+	end)
 	local OnCmp
-	local function Asked(tooltip, link)
+	-- true: the tooltip has the alt's answer, or "Asking" for WAIT seconds at most; false: no answer in time.
+	local function Asked(tooltip, link, slots)
 		local str = link:match("|H(item:[^|]+)|h") or link
 		local key = current .. "|" .. str
 		local c = cache[key]
-		if not c or GetTime() - c.at > 60 then
+		if c and c.busy and GetTime() - c.at <= RETRY then return false end
+		if not c or GetTime() - c.at > (c.busy and RETRY or 60) then
 			local queue = waiting[current] or {}
 			waiting[current] = queue
-			local asked = false
-			for _, w in ipairs(queue) do if w.key == key then asked = true end end
-			if not asked or (queue[1] and GetTime() - queue[1].sent > 5) then
-				if asked then table.remove(queue, 1) end
-				table.insert(queue, { key = key, sent = GetTime(), worn = {} })
+			local w
+			for i = #queue, 1, -1 do
+				if queue[i].key == key then
+					if GetTime() - queue[i].sent > RETRY then table.remove(queue, i) else w = queue[i] end
+				end
+			end
+			if not w then
+				w = { key = key, id = tonumber(str:match("item:(%d+)")), slots = slots, sent = GetTime(), worn = {} }
+				table.insert(queue, w)
 				SquidBotsLite_Alts.Handle.CMP = OnCmp
 				SquidBotsLite_Alts.Send(current, "cmp " .. str)
+				timer:Show()
 			end
+			if GetTime() - w.sent >= WAIT then return false end
 			tooltip:AddLine(string.format(T("CMP_ASKING"), current), 0.6, 0.6, 0.6)
 			tooltip:Show()
-			return
+			return true
 		end
 		if c.err then
 			if c.err ~= "notgear" then tooltip:AddLine(string.format(T("CMP_NOTFOUND"), current), 0.6, 0.6, 0.6) end
 			tooltip:Show()
-			return
+			return true
 		end
-		local v = c.usage and T("CMP_V_" .. c.usage)
-		local good = c.usage == "equip" or c.usage == "replace"
-		if v and c.usage ~= "other" then tooltip:AddLine(string.format(v, current), good and 0.25 or 1, good and 1 or 0.4, good and 0.25 or 0.4) end
+		-- One plain line: the verdict, and how much better or worse than the weaker worn piece in %.
+		local base
+		for _, w in ipairs(c.worn) do
+			if w.id ~= 0 and w.score and w.score > 0 and (not base or w.score < base) then base = w.score end
+		end
+		local pct = ""
+		if base and c.score and c.score > 0 then
+			local d = math.floor((c.score - base) / base * 100 + 0.5)
+			pct = string.format(" (%s%d%%)", d > 0 and "+" or "", d)
+		end
+		local v = c.usage and c.usage ~= "other" and T("CMP_V_" .. c.usage)
+		if v then
+			local good, cannot = c.usage == "equip" or c.usage == "replace", c.usage == "cannot"
+			local r, g, b = 1, 0.35, 0.35
+			if good then r, g, b = 0.25, 1, 0.25 elseif cannot then r, g, b = 0.6, 0.6, 0.6 end
+			tooltip:AddLine(string.format(v, current, pct), r, g, b)
+		end
 		local n = 0
 		for _, w in ipairs(c.worn) do
 			if w.str and w.str ~= "-" and w.id ~= 0 then
 				n = n + 1
 				Worn(tooltip, n, w.str, current)
-				if c.score and c.score > 0 then
-					local d = c.score - (w.score or 0)
-					local diff = d > 0 and string.format("|cff40ff40+%.1f|r", d) or d < 0 and string.format("|cffff6060%.1f|r", d) or "="
-					tooltip:AddLine(string.format(T("CMP_SCORE"), current, string.format("%.1f", c.score), string.format("%.1f", w.score or 0), diff), 0.4, 0.8, 1)
+				-- The raw scores only while Shift is held.
+				if IsShiftKeyDown() and c.score then
+					tooltip:AddLine(string.format(T("CMP_SCORE"), string.format("%.1f", c.score), string.format("%.1f", w.score or 0)), 0.6, 0.6, 0.6)
 				end
 			end
 		end
 		tooltip:Show()
+		return true
 	end
+
+	local function ById(queue, id)
+		if not id then return end
+		for _, w in ipairs(queue) do
+			if w.id == id then return w end
+		end
+	end
+	-- 3.0.1 servers end every worn, err and "-" line with the asked item id; older ones do not.
 	OnCmp = function(name, f)
 		local queue = waiting[name]
-		local w = queue and queue[1]
-		if not w then return end
+		if not queue then return end
 		if f[2] == "item" then
-			w.usage, w.score = f[6], tonumber(f[7] or "")
+			local w = ById(queue, tonumber(f[3] or ""))
+			receiving[name] = w
+			if w then w.usage, w.score, w.worn, w.err = f[6], tonumber(f[7] or ""), {}, nil end
 		elseif f[2] == "worn" then
-			table.insert(w.worn, { slot = tonumber(f[3]), id = tonumber(f[4]) or 0, score = tonumber(f[5] or ""), str = f[6] })
-		elseif f[2] == "err" then
-			w.err = f[3] or "?"
-		elseif f[2] == "-" then
-			table.remove(queue, 1)
-			cache[w.key] = { at = GetTime(), usage = w.usage, score = w.score, worn = w.worn, err = w.err }
-			-- The item still under the mouse: its tooltip again, now with the answer.
-			if name == current and GameTooltip:IsShown() then
-				local owner = GameTooltip:GetOwner()
-				local enter = owner and owner.GetScript and owner:GetScript("OnEnter")
-				if enter then enter(owner) end
+			local w, slot = ById(queue, tonumber(f[7] or "")) or receiving[name], tonumber(f[3] or "")
+			if not w or not slot then return end
+			for _, s in ipairs(w.slots or {}) do
+				if s == slot then
+					table.insert(w.worn, { slot = slot, id = tonumber(f[4]) or 0, score = tonumber(f[5] or ""), str = f[6] })
+					break
+				end
 			end
+		elseif f[2] == "err" then
+			local w = ById(queue, tonumber(f[4] or ""))
+			if w then
+				w.err, receiving[name] = f[3] or "?", w
+			elseif not f[4] and queue[1] then
+				-- An older server's error names no item: kept only when one question is open, else left out
+				-- (the questions still open get their own answers, or the addon's own comparison after WAIT).
+				if #queue == 1 then
+					queue[1].err, receiving[name] = f[3] or "?", queue[1]
+				else
+					receiving[name] = nil
+				end
+			end
+		elseif f[2] == "-" then
+			local w = ById(queue, tonumber(f[3] or "")) or receiving[name]
+			receiving[name] = nil
+			if not w then return end
+			for i, x in ipairs(queue) do
+				if x == w then table.remove(queue, i) break end
+			end
+			if w.err == "busy" then
+				-- Too many questions at once: the addon's own comparison for a few seconds, then asked again.
+				cache[w.key] = { at = GetTime(), busy = true }
+			else
+				cache[w.key] = { at = GetTime(), usage = w.usage, score = w.score, worn = w.worn, err = w.err }
+			end
+			-- The item still under the mouse: its tooltip again, now with the answer.
+			Redraw(name, w.key)
 		end
 	end
 
@@ -2259,9 +2356,17 @@ do
 		if not link then return end
 		local _, _, _, ilvl, need, _, _, _, loc = GetItemInfo(link)
 		local slots = loc and SLOTS[loc]
-		if slots and AltBags(current) then return Asked(tooltip, link) end
+		local late = false
+		if slots and AltBags(current) then
+			if Asked(tooltip, link, slots) then return end
+			late = true
+			tooltip:AddLine(string.format(T("CMP_NOANSWER"), current), 0.6, 0.6, 0.6)
+		end
 		local unit = UnitOf(current)
-		if not slots or not unit then return end
+		if not slots or not unit then
+			if late then tooltip:Show() end
+			return
+		end
 		local level = UnitLevel(unit) or 0
 		if need and level > 0 and need > level then
 			tooltip:AddLine(string.format(T("CMP_LEVEL"), current, level, need), 1, 0.3, 0.3)
@@ -2288,7 +2393,7 @@ do
 				if ilvl and wl then
 					local d = ilvl - wl
 					local diff = d > 0 and ("|cff40ff40+" .. d .. "|r") or d < 0 and ("|cffff6060" .. d .. "|r") or "="
-					tooltip:AddLine(string.format(T("CMP_ILVL"), current, wl, diff), 0.4, 0.8, 1)
+					tooltip:AddLine(string.format(T("CMP_ILVL"), diff, current, wl), 0.4, 0.8, 1)
 				end
 			end
 		end
