@@ -215,6 +215,8 @@ end
 -- Listings: "c", "quests all", "stats" come back as one whisper per line
 -- ---------------------------------------------------------------------------
 local Render
+-- 3.0.1: whether an item is an upgrade for the sheet's alt, by its own answer (the compare block, further down).
+local IconVerdict
 
 -- A request too soon after the same one (the server would drop its lines) waits its turn instead of being lost.
 local later = {}
@@ -866,6 +868,24 @@ local function ItemButton(parent, size)
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	return b
+end
+
+-- 3.0.1: a small green arrow in the corner of an item that is an upgrade for the sheet's alt.
+local function UpMark(b, on)
+	if not on then
+		if b.sqbUp then b.sqbUp:Hide() end
+		return
+	end
+	if not b.sqbUp then
+		b.sqbUp = b:CreateTexture(nil, "OVERLAY")
+		b.sqbUp:SetTexture("Interface\\Buttons\\UI-MicroStream-Green")
+		-- The texture points down: turned upside down.
+		b.sqbUp:SetTexCoord(0, 1, 1, 0)
+		b.sqbUp:SetWidth(16)
+		b.sqbUp:SetHeight(16)
+		b.sqbUp:SetPoint("TOPLEFT", -2, 2)
+	end
+	b.sqbUp:Show()
 end
 
 -- Green and better get their colour on the border; white, grey and an empty slot stay black.
@@ -1729,8 +1749,10 @@ local function RenderBags(page)
 			b.icon:Show()
 			SetQuality(b, select(3, GetItemInfo(item.id)))
 			b.count:SetText(item.count > 1 and item.count or "")
+			UpMark(b, bagMode ~= "bank" and IconVerdict and IconVerdict(item.link))
 			b:Show()
 		else
+			UpMark(b, false)
 			b:Hide()
 		end
 	end
@@ -1809,6 +1831,7 @@ Render = function()
 		if SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Render(pages.talents) end
 	elseif tab == "strats" then RenderStrats(pages.strats)
 	else RenderInfo(pages.info) end
+	if SquidBotsLite_MarkContainers then SquidBotsLite_MarkContainers() end
 end
 
 local function Load()
@@ -1838,6 +1861,8 @@ end
 
 local function Build()
 	sheet = CreateFrame("Frame", "SquidBotsLiteSheet", UIParent)
+	-- 3.0.1: the arrows on the player's own bags go with the sheet.
+	sheet:SetScript("OnHide", function() if SquidBotsLite_MarkContainers then SquidBotsLite_MarkContainers() end end)
 	-- 3.0: 520 wide (was 470): seven tabs.
 	sheet:SetWidth(520)
 	sheet:SetHeight(540)
@@ -2214,6 +2239,31 @@ do
 	-- A question past WAIT: the tooltip again, now with the addon's own comparison.
 	local timer = CreateFrame("Frame")
 	timer:Hide()
+	local OnCmp
+	-- One question to the alt (none if the same one is already open).
+	local function Question(name, key, str, slots)
+		local queue = waiting[name] or {}
+		waiting[name] = queue
+		for i = #queue, 1, -1 do
+			if queue[i].key == key then
+				if GetTime() - queue[i].sent > RETRY then table.remove(queue, i) else return queue[i] end
+			end
+		end
+		local w = { key = key, id = tonumber(str:match("item:(%d+)")), slots = slots, sent = GetTime(), worn = {} }
+		table.insert(queue, w)
+		SquidBotsLite_Alts.Handle.CMP = OnCmp
+		SquidBotsLite_Alts.Send(name, "cmp " .. str)
+		timer:Show()
+		return w
+	end
+	-- 3.0.1: the icons' questions wait here and go ICON_FLIGHT at a time per alt (the server keeps 16 per bot).
+	local ICON_FLIGHT = 4
+	local wants = {}
+	local function InFlight(name)
+		local n = 0
+		for _, w in ipairs(waiting[name] or {}) do if not w.late then n = n + 1 end end
+		return n
+	end
 	timer:SetScript("OnUpdate", function(self)
 		local now, open = GetTime(), false
 		for name, queue in pairs(waiting) do
@@ -2228,9 +2278,36 @@ do
 				end
 			end
 		end
+		for name, list in pairs(wants) do
+			while #list > 0 and InFlight(name) < ICON_FLIGHT do
+				local q = table.remove(list, 1)
+				Question(name, q.key, q.str, q.slots)
+			end
+			if #list > 0 then open = true else wants[name] = nil end
+		end
 		if not open then self:Hide() end
 	end)
-	local OnCmp
+	IconVerdict = function(link)
+		if not (current and link and AltBags(current)) then return false end
+		local _, _, _, _, _, _, _, _, loc = GetItemInfo(link)
+		local slots = loc and SLOTS[loc]
+		if not slots then return false end
+		local str = link:match("|H(item:[^|]+)|h") or link
+		local key = current .. "|" .. str
+		local c = cache[key]
+		-- A stale answer still shows while it is asked again; nothing is guessed without an answer.
+		local stale = not c or GetTime() - c.at > (c.busy and RETRY or 60)
+		if stale then
+			local list = wants[current] or {}
+			wants[current] = list
+			local queued = false
+			for _, q in ipairs(list) do if q.key == key then queued = true end end
+			for _, w in ipairs(waiting[current] or {}) do if w.key == key and not w.late then queued = true end end
+			if not queued then table.insert(list, { key = key, str = str, slots = slots }) end
+			timer:Show()
+		end
+		return c and not c.busy and not c.err and (c.usage == "equip" or c.usage == "replace") or false
+	end
 	-- true: the tooltip has the alt's answer, or "Asking" for WAIT seconds at most; false: no answer in time.
 	local function Asked(tooltip, link, slots)
 		local str = link:match("|H(item:[^|]+)|h") or link
@@ -2238,21 +2315,7 @@ do
 		local c = cache[key]
 		if c and c.busy and GetTime() - c.at <= RETRY then return false end
 		if not c or GetTime() - c.at > (c.busy and RETRY or 60) then
-			local queue = waiting[current] or {}
-			waiting[current] = queue
-			local w
-			for i = #queue, 1, -1 do
-				if queue[i].key == key then
-					if GetTime() - queue[i].sent > RETRY then table.remove(queue, i) else w = queue[i] end
-				end
-			end
-			if not w then
-				w = { key = key, id = tonumber(str:match("item:(%d+)")), slots = slots, sent = GetTime(), worn = {} }
-				table.insert(queue, w)
-				SquidBotsLite_Alts.Handle.CMP = OnCmp
-				SquidBotsLite_Alts.Send(current, "cmp " .. str)
-				timer:Show()
-			end
+			local w = Question(current, key, str, slots)
 			if GetTime() - w.sent >= WAIT then return false end
 			tooltip:AddLine(string.format(T("CMP_ASKING"), current), 0.6, 0.6, 0.6)
 			tooltip:Show()
@@ -2346,6 +2409,7 @@ do
 			end
 			-- The item still under the mouse: its tooltip again, now with the answer.
 			Redraw(name, w.key)
+			if name == current then SquidBotsLite_IconsChanged() end
 		end
 	end
 
@@ -2399,6 +2463,26 @@ do
 		end
 		if not known then tooltip:AddLine(string.format(T("CMP_NONE"), current), 0.6, 0.6, 0.6) end
 		tooltip:Show()
+	end
+	-- 3.0.1: the player's own bags (the game's bag frames) show the arrow too, while an alt's sheet is open.
+	local function MarkContainer(frame)
+		if not (frame and frame.GetID and frame:GetName()) then return end
+		local bag = frame:GetID()
+		local on = sheet and sheet:IsShown() and current
+		for i = 1, frame.size or 0 do
+			local b = _G[frame:GetName() .. "Item" .. i]
+			if b then UpMark(b, on and IconVerdict(GetContainerItemLink(bag, b:GetID())) or false) end
+		end
+	end
+	if ContainerFrame_Update then hooksecurefunc("ContainerFrame_Update", MarkContainer) end
+	function SquidBotsLite_MarkContainers()
+		for i = 1, NUM_CONTAINER_FRAMES or 0 do
+			local frame = _G["ContainerFrame" .. i]
+			if frame and frame:IsShown() then MarkContainer(frame) end
+		end
+	end
+	function SquidBotsLite_IconsChanged()
+		if sheet and sheet:IsShown() and tab == "bags" then Render() else SquidBotsLite_MarkContainers() end
 	end
 	GameTooltip:HookScript("OnTooltipSetItem", OnItem)
 	GameTooltip:HookScript("OnHide", HideTips)
