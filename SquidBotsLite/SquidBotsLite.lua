@@ -47,7 +47,7 @@ local STRINGS = {
 		GATHER = "Gathering (whole group)",
 		DC_DISABLED = "Dungeon clear is disabled on this realm.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
-		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
+		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.", DC_ABSENT = "No dungeon clear on this realm: click Dungeon again for the SquidBots dungeon mode.", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
 		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
 		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
@@ -167,7 +167,7 @@ local STRINGS = {
 		GATHER = "Récolte (tout le groupe)",
 		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
-		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
+		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.", DC_ABSENT = "Pas de dungeon clear sur ce royaume : recliquez sur Donjon pour le mode donjon SquidBots.", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
 		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
 		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
@@ -745,7 +745,8 @@ local ShowAlts, ShowSpecs
 -- whisper comes back). The answer is kept out of the chat. dc.module: nil (not known yet), "on", "off" (installed,
 -- DungeonClear.Enable = 0), "absent".
 -- One table for all of it: the client allows 200 locals in a file's main chunk.
-local dc = { module = nil, probeAt = nil, waitUntil = nil, pull = nil, PROBE_DELAY = 8, PROBE_WAIT = 5, LINE_KEEP = 6 }
+local dc = { module = nil, probeAt = nil, waitUntil = nil, pull = nil, PROBE_DELAY = 8, PROBE_WAIT = 5, LINE_KEEP = 6,
+	REPROBE_GAP = 10, ABSENT_KEEP = 60 }
 
 function dc.Send(args)
 	SendChatMessage(".dc " .. args, "SAY")
@@ -767,11 +768,21 @@ function dc.Tick()
 	if buttons.dungeon then
 		buttons.dungeon.tip = (dc.module == "on" or dc.module == "off") and "TIP_DUNGEON_DC" or "TIP_DUNGEON"
 	end
+	-- The Dungeon button clicked while the answer was not known: the panel as soon as it is.
+	if dc.openOnAnswer and dc.module then
+		dc.openOnAnswer = nil
+		if dc.module == "on" or dc.module == "off" then
+			dc.ShowPanel()
+		else
+			dc.absentAt = GetTime()
+			Print(L.DC_ABSENT)
+		end
+	end
 	if dc.module or not dc.probeAt then return end
 	local now = GetTime()
 	if not dc.waitUntil then
 		if now < dc.probeAt then return end
-		dc.waitUntil = now + dc.PROBE_WAIT
+		dc.waitUntil, dc.lastProbe = now + dc.PROBE_WAIT, now
 		SendChatMessage(".dc status", "WHISPER", nil, UnitName("player"))
 	elseif now > dc.waitUntil then
 		dc.module, dc.waitUntil = "absent", nil
@@ -780,6 +791,24 @@ end
 
 function dc.Probing()
 	return dc.waitUntil and GetTime() <= dc.waitUntil
+end
+
+function dc.InDungeon()
+	local inside, kind = IsInInstance()
+	return inside and (kind == "party" or kind == "raid")
+end
+
+-- 3.0.1: the probe again when the module is not known to be there (entering a dungeon, the group changing, the
+-- Dungeon button). One probe, 8 s after loading, could miss: the module then stayed unknown and the button ran the
+-- old dungeon mode. open: the panel opens on the answer.
+function dc.Reprobe(open)
+	if open then dc.openOnAnswer = true end
+	if dc.module == "on" or dc.module == "off" or dc.Probing() then return end
+	local now = GetTime()
+	-- Not before the first probe (the chat is not ready right after loading), nor too often on its own.
+	if not dc.probeAt or (dc.probeAt > now and not dc.lastProbe) then return end
+	if not open and dc.lastProbe and now - dc.lastProbe < dc.REPROBE_GAP then return end
+	dc.module, dc.waitUntil, dc.probeAt = nil, nil, now
 end
 
 -- The probe's answers: a system line from the module, or the whisper back to oneself without it. The chat
@@ -1941,6 +1970,9 @@ local function BuildBar()
 		{ "dungeon", "Interface\\Icons\\Achievement_Dungeon_ClassicDungeonMaster", "DUNGEON", "TIP_DUNGEON", function()
 			if dc.module == "on" or dc.module == "off" then
 				dc.TogglePanel()
+			elseif dc.InDungeon() and not (dc.module == "absent" and dc.absentAt and GetTime() - dc.absentAt < dc.ABSENT_KEEP) then
+				-- Not known yet in a dungeon: asked again, the panel opens on the answer (never the old mode by mistake).
+				dc.Reprobe(true)
 			else
 				dc.DungeonMode()
 			end
@@ -3651,6 +3683,7 @@ end
 dc.auto:SetScript("OnEvent", function(_, event)
 	if event ~= "PLAYER_REGEN_ENABLED" then
 		dc.autoAt = GetTime() + 3
+		if dc.InDungeon() then dc.Reprobe() end
 	elseif dc.autoWait then
 		dc.autoAt = GetTime() + 1
 	end
@@ -3815,6 +3848,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 		dc.OnWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)
 	elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+		dc.Reprobe()
 		-- A raid of more than 5 or not: the Main Tank button shows or hides.
 		if bar then RefreshMainTankButton() end
 		-- An alt logging in joins the group: its row is confirmed sooner than by the list.
