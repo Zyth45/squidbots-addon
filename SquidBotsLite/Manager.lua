@@ -629,11 +629,11 @@ local function Destroy(item, link)
 	if dialog then dialog.data, dialog.item = link, item end
 end
 
--- 3.1: sell or destroy an alt's grey or white items at once, from a list where each one can be unticked first.
+-- 3.0.1: sell or destroy an alt's grey or white items at once, from a list where each one can be unticked first.
 -- The bot's own commands take several links in one whisper ("s <links>", "destroy <links>"): sent in short
 -- batches, 1.1 s apart.
--- 3.1: the alt answers for itself (CoA Bots 3.1 with AiPlayerbot.CoaAltBags.Enable, HELLO's 6th field): its own
--- verdict on an item, and the bag lists it would sell or destroy. Only the account's alts; otherwise the 3.1 path
+-- 3.0.1: the alt answers for itself (CoA Bots 3.0.1 with AiPlayerbot.CoaAltBags.Enable, HELLO's 6th field): its own
+-- verdict on an item, and the bag lists it would sell or destroy. Only the account's alts; otherwise the addon alone
 -- of the addon alone (the Gear tab's view, "s"/"destroy" with links).
 local function AltBags(name)
 	local A = SquidBotsLite_Alts
@@ -2141,7 +2141,7 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 	if not (info and info.spec) and SquidBotsLite_AskSpecs then SquidBotsLite_AskSpecs(name) end
 end
 
--- 3.1: an item's tooltip, while a bot's sheet is open, also shows what the bot wears in that slot (a tooltip
+-- 3.0.1: an item's tooltip, while a bot's sheet is open, also shows what the bot wears in that slot (a tooltip
 -- beside it, like the game's own compare) and the item level difference. The bot must be in the group: its gear
 -- is read like the Gear tab's.
 do

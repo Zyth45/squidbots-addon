@@ -1462,7 +1462,7 @@ function Handle.OFFLINE(name)
 end
 
 function Handle.HELLO(name, f)
-	-- 6th field (CoA Bots 3.1): the alt bags commands (cmp, bags, sell, destroy) are on.
+	-- 6th field (CoA Bots 3.0.1): the alt bags commands (cmp, bags, sell, destroy) are on.
 	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", bags = f[6] == "1", at = GetTime() }
 	A.RefreshLog()
 end
