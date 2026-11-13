@@ -20,6 +20,10 @@ local STRINGS = {
 		BULK_ASKING = "Asking %s for its list...", BULK_SOLD = "%s sold %d items for %s.", BULK_DESTROYED = "%s destroyed %d items.",
 		BULK_ERR = "%s: %s.", BULK_R_changed = "its bags changed, open the list again", BULK_R_novendor = "no vendor next to it",
 		BULK_R_combat = "in combat", BULK_R_dead = "dead", BULK_R_quality = "quality too high", BULK_R_off = "off on this realm",
+		BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
+		BS_NONE = "No bag in its bags to put here.", BS_DONE = "%s put on %s.", BS_ERR = "%s: %s.", BS_R_notfound = "that bag is not in its bags",
+		BS_R_notbag = "not a bag", BS_R_nospace = "no room for what the old bag holds", BS_R_combat = "in combat", BS_R_dead = "dead",
+		BS_R_off = "off on this realm", BS_HINT = "Click a bag slot to put one of its bags there.",
 		BULK_TOOMANY = "Too many unticked items for one order: untick fewer, or sell those one by one.",
 		BULK_H_SERVER = "The bot leaves out quest items, what it would wear, what it keeps and what has a use.",
 		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
@@ -91,6 +95,10 @@ local STRINGS = {
 		BULK_ASKING = "Demande de sa liste à %s...", BULK_SOLD = "%s a vendu %d objets pour %s.", BULK_DESTROYED = "%s a détruit %d objets.",
 		BULK_ERR = "%s : %s.", BULK_R_changed = "ses sacs ont changé, rouvrez la liste", BULK_R_novendor = "aucun marchand à côté de lui",
 		BULK_R_combat = "en combat", BULK_R_dead = "mort", BULK_R_quality = "qualité trop haute", BULK_R_off = "coupé sur ce royaume",
+		BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
+		BS_NONE = "Aucun sac dans ses sacs à mettre ici.", BS_DONE = "%s a mis %s.", BS_ERR = "%s : %s.", BS_R_notfound = "ce sac n'est pas dans ses sacs",
+		BS_R_notbag = "ce n'est pas un sac", BS_R_nospace = "pas de place pour ce que contient l'ancien sac", BS_R_combat = "en combat", BS_R_dead = "mort",
+		BS_R_off = "coupé sur ce royaume", BS_HINT = "Cliquez sur un emplacement de sac pour y mettre un de ses sacs.",
 		BULK_TOOMANY = "Trop d'objets décochés pour un seul ordre : décochez-en moins, ou vendez-les un par un.",
 		BULK_H_SERVER = "Le bot laisse de côté les objets de quête, ce qu'il porterait, ce qu'il garde et ce qui s'utilise.",
 		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
@@ -821,6 +829,81 @@ do
 	end
 end
 
+-- 3.0.1: an alt's four bags (CoA Bots 3.0.1, alt bags on): "bagslots" gives each one (BAGSLOT slot <1..4> <id|0>
+-- <size> <free> <itemString|-> bagslots, then "BAGSLOT - bagslots"); "bagequip <itemString> [<1..4>]" puts one of
+-- its bags on (BAGSLOT done <slot> <id> <req> or BAGSLOT err <reason> <req>, then "BAGSLOT - <req>").
+local BagSlots = { by = {}, ASK_EVERY = 30 }
+function BagSlots.Shown()
+	return AltBags(current) and bagMode ~= "bank"
+end
+function BagSlots.Ask(force)
+	if not AltBags(current) then return end
+	local d = BagSlots.by[current]
+	-- Asked again every ASK_EVERY seconds at most; an unanswered question (older server) after 10 s.
+	if not force and d and GetTime() - d.at < (d.asking and 10 or BagSlots.ASK_EVERY) then return end
+	BagSlots.by[current] = { at = GetTime(), asking = true, got = d and d.got or {} }
+	SquidBotsLite_Alts.Handle.BAGSLOT = BagSlots.OnLine
+	SquidBotsLite_Alts.Send(current, "bagslots")
+end
+function BagSlots.Equip(name, str, slot)
+	BagSlots.pending = BagSlots.pending or {}
+	BagSlots.pending[tonumber(str:match("item:(%d+)")) or 0] = { name = name, str = str }
+	SquidBotsLite_Alts.Handle.BAGSLOT = BagSlots.OnLine
+	SquidBotsLite_Alts.Send(name, "bagequip " .. str .. (slot and (" " .. slot) or ""))
+end
+function BagSlots.OnLine(name, f)
+	if f[2] == "slot" then
+		local d = BagSlots.by[name]
+		local slot = tonumber(f[3] or "")
+		if not d or not slot then return end
+		d.new = d.new or {}
+		d.new[slot] = { id = tonumber(f[4]) or 0, size = tonumber(f[5]) or 0, free = tonumber(f[6]) or 0, str = f[7] ~= "-" and f[7] or nil }
+	elseif f[2] == "done" or f[2] == "err" then
+		local req = tonumber(f[2] == "done" and f[5] or f[4] or "")
+		local p = BagSlots.pending and BagSlots.pending[req or 0]
+		if f[2] == "done" then
+			local bag = p and (select(2, GetItemInfo(p.str)) or p.str) or ("item " .. (f[4] or "?"))
+			Print(string.format(T("BS_DONE"), name, bag))
+		else
+			local why = T("BS_R_" .. (f[3] or "")) or f[3] or "?"
+			Print(string.format(T("BS_ERR"), name, why))
+		end
+	elseif f[2] == "-" then
+		if f[3] == "bagslots" then
+			local d = BagSlots.by[name]
+			if not d then return end
+			d.got, d.new, d.asking, d.at = d.new or d.got, nil, false, GetTime()
+		else
+			local req = tonumber(f[3] or "")
+			if BagSlots.pending and req then BagSlots.pending[req] = nil end
+			-- After a change: its four bags and its bag list again.
+			if name == current then
+				BagSlots.Ask(true)
+				Ask("bags", "c")
+			end
+		end
+		if name == current and Render then Render() end
+	end
+end
+-- A bag slot clicked: one of the alt's bags to put there.
+function BagSlots.Menu(slot)
+	local items = { { text = T("BS_TITLE"), isTitle = true, notCheckable = true } }
+	for _, item in ipairs(bags) do
+		local loc = select(9, GetItemInfo(item.link))
+		if loc == "INVTYPE_BAG" then
+			local str = item.link:match("|H(item:[^|]+)|h")
+			table.insert(items, { text = string.format(T("BS_PUT_HERE"), item.link), notCheckable = true,
+				func = function() BagSlots.Equip(current, str, slot) end })
+		end
+	end
+	if #items == 1 then
+		Print(T("BS_NONE"))
+		return
+	end
+	EasyMenu(items, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
+end
+
 local function ItemMenu(item)
 	local link = SendableLink(item)
 	if bagMode == "bank" then
@@ -832,7 +915,7 @@ local function ItemMenu(item)
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 		return
 	end
-	EasyMenu({
+	local menu = {
 		{ text = item.link, isTitle = true, notCheckable = true },
 		item.soulbound and { text = T("SOULBOUND"), notCheckable = true, disabled = true }
 			or { text = T("GIVE"), notCheckable = true, func = function() Give(link); AfterChange() end },
@@ -842,7 +925,12 @@ local function ItemMenu(item)
 		{ text = T("DEPOSIT"), notCheckable = true, func = function() Whisper("bank " .. link); TakeOut(bags, item); AfterChange() end },
 		{ text = T("DESTROY"), notCheckable = true, func = function() Destroy(item, link) end },
 		{ text = T("LINK"), notCheckable = true, func = function() InsertLink(link) end },
-	}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
+	}
+	if AltBags(current) and select(9, GetItemInfo(item.link)) == "INVTYPE_BAG" then
+		table.insert(menu, 5, { text = T("BS_PUT"), notCheckable = true,
+			func = function() BagSlots.Equip(current, item.link:match("|H(item:[^|]+)|h"), nil) end })
+	end
+	EasyMenu(menu, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 end
 
@@ -986,6 +1074,30 @@ local function BuildBags(page)
 		end)
 		b:SetScript("OnReceiveDrag", DropOnBags)
 		page.buttons[i] = b
+	end
+	-- 3.0.1: its four bags, in a column right of the grid.
+	page.slotsTitle = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	page.slotsTitle:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 14, 0)
+	page.slots = {}
+	for i = 1, 4 do
+		local b = ItemButton(page, 36)
+		b:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 14, -16 - (i - 1) * 56)
+		b.slot = i
+		b.free = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+		b.free:SetPoint("TOPLEFT", b, "BOTTOMLEFT", -4, -2)
+		b:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			if self.bag and self.bag.str then
+				GameTooltip:SetHyperlink(self.bag.str)
+				GameTooltip:AddLine(string.format(T("BS_FREE"), self.bag.free, self.bag.size), 0.6, 0.8, 1)
+			else
+				GameTooltip:SetText(T("BS_EMPTY"))
+			end
+			GameTooltip:AddLine(T("BS_HINT"), 0.6, 0.6, 0.6, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnClick", function(self) BagSlots.Menu(self.slot) end)
+		page.slots[i] = b
 	end
 	page.note = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	page.note:SetPoint("TOP", 0, -120)
@@ -1741,6 +1853,31 @@ local function RenderBags(page)
 	page.trade:SetText(T("TRADE"))
 	page.bank:SetText(bagMode == "bank" and T("BAGS_BTN") or T("BANK"))
 	page.grey:SetText(T("BULK_BTN"))
+	local shown = BagSlots.Shown()
+	if shown then BagSlots.Ask() end
+	local d = shown and BagSlots.by[current]
+	-- Nothing shown before the first answer (a server without the command never answers).
+	shown = shown and d and d.got and next(d.got) ~= nil
+	page.slotsTitle:SetText(shown and T("BS_TITLE") or "")
+	for i, b in ipairs(page.slots) do
+		local bag = d and d.got and d.got[i]
+		b.bag = bag
+		if shown then
+			if bag and bag.id ~= 0 then
+				b.icon:SetTexture((GetItemIcon and GetItemIcon(bag.id)) or select(10, GetItemInfo(bag.id)) or "Interface\\Icons\\INV_Misc_Bag_08")
+				b.free:SetText(string.format("%d/%d", bag.free, bag.size))
+				SetQuality(b, select(3, GetItemInfo(bag.id)))
+			else
+				b.icon:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+				b.free:SetText("")
+				SetQuality(b, nil)
+			end
+			b:Show()
+		else
+			b.free:SetText("")
+			b:Hide()
+		end
+	end
 	for i, b in ipairs(page.buttons) do
 		local item = list[i]
 		b.item = item
