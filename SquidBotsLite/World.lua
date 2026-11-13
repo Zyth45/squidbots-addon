@@ -25,7 +25,7 @@ local STRINGS = {
 		S_bought = "bought at the AH (cash on delivery)", S_none = "nobody could", S_refused = "refused",
 		A_BACK = "< Artisans list", A_MAILS = "My orders", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
 		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
-		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
+		C_ARTISAN = "Artisan", C_LEVEL = "Lvl", C_ZONE = "Zone", C_PROFS = "Professions", A_FILTER = "Profession: %s", A_SEARCH = "Search a recipe", A_SORT = "Sort: %s", A_SORT_best = "best first", A_SORT_name = "name", A_SORT_low = "lowest rank first", A_NOMATCH = "No recipe matches.", A_ALL = "All", A_PRICE = "%s x%d: %s, cash on delivery.",
 		TIP_RECIPES = "Its recipes: pick one, then Quote.", A_RANK = "%s %d needed", A_MAX = "max %d", TIP_QUOTE = "Quote: the price of this item, no order yet.",
 		Q_TITLE = "Quote from %s", Q_COD = "cash on delivery, paid when you take it from the mail",
 		M_preparing = "Preparing", M_sent = "Sent", M_awaiting = "Awaiting pickup", M_paid = "Received",
@@ -88,7 +88,7 @@ local STRINGS = {
 		S_bought = "acheté à l'HV (contre remboursement)", S_none = "personne n'a pu", S_refused = "refusé",
 		A_BACK = "< Liste des artisans", A_MAILS = "Mes commandes", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
 		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
-		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
+		C_ARTISAN = "Artisan", C_LEVEL = "Niv.", C_ZONE = "Zone", C_PROFS = "Métiers", A_FILTER = "Métier : %s", A_SEARCH = "Chercher une recette", A_SORT = "Tri : %s", A_SORT_best = "les meilleures d'abord", A_SORT_name = "nom", A_SORT_low = "rang le plus bas d'abord", A_NOMATCH = "Aucune recette ne correspond.", A_ALL = "Tous", A_PRICE = "%s x%d : %s, contre remboursement.",
 		TIP_RECIPES = "Ses recettes : choisissez-en une, puis Devis.", A_RANK = "%s %d requis", A_MAX = "max %d", TIP_QUOTE = "Devis : le prix de cet objet, sans commande.",
 		Q_TITLE = "Devis de %s", Q_COD = "contre remboursement, payé en le retirant du courrier",
 		M_preparing = "En préparation", M_sent = "Envoyé", M_awaiting = "En attente de réception", M_paid = "Reçu (payé)",
@@ -905,9 +905,18 @@ function W.Build()
 	f.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	f.search:SetScript("OnEnterPressed", function(self)
 		self:ClearFocus()
+		if W.RecipesShown() then return end
 		W.guild.cat.search = strtrim(self:GetText() or "")
 		W.offset = 0
 		W.CatPage(1)
+	end)
+	-- 3.0.1: the recipes are filtered while typing (all of them are already here).
+	f.search:SetScript("OnTextChanged", function(self)
+		if not W.RecipesShown() then return end
+		local text = strtrim(self:GetText() or "")
+		if text == (W.art.search or "") then return end
+		W.art.search, W.offset = text, 0
+		W.Refresh()
 	end)
 	f.search:SetScript("OnEditFocusGained", function() W.Refresh() end)
 	f.search:SetScript("OnEditFocusLost", function() W.Refresh() end)
@@ -918,7 +927,7 @@ function W.Build()
 	f.slotBtn:SetHeight(W.BUTTON_H)
 	f.slotBtn:SetPoint("LEFT", f.search, "RIGHT", 12, 0)
 	W.StyleButton(f.slotBtn, W.ICONS.filter)
-	f.slotBtn:SetScript("OnClick", function() W.SlotMenu() end)
+	f.slotBtn:SetScript("OnClick", function() if W.RecipesShown() then W.SortMenu() else W.SlotMenu() end end)
 	f.usable = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
 	f.usable:SetWidth(22)
 	f.usable:SetHeight(22)
@@ -1230,6 +1239,20 @@ function W.CatPage(page)
 	W.Ask("GCAT\t" .. c.search .. "\t" .. c.page, "cat")
 end
 
+function W.RecipesShown()
+	return W.tab == "art" and W.art.mode == "recipes"
+end
+
+-- 3.0.1: the recipes' order: best first (the server's), by name, or the lowest rank first.
+function W.SortMenu()
+	local items = {}
+	for _, key in ipairs({ "best", "name", "low" }) do
+		table.insert(items, { text = T("A_SORT_" .. key), checked = (W.art.sort or "best") == key,
+			func = function() W.art.sort, W.offset = key, 0; W.Refresh() end })
+	end
+	EasyMenu(items, W.frame.menu, "cursor", 0, 0, "MENU")
+end
+
 function W.SlotMenu()
 	local seen, slots = {}, {}
 	for _, x in ipairs(W.guild.cat.list) do
@@ -1386,14 +1409,24 @@ function W.Rows()
 			end
 		elseif W.art.mode == "recipes" then
 			local list = {}
-			for _, r in ipairs(W.art.recipes) do table.insert(list, r) end
+			local find = W.art.search and W.art.search ~= "" and W.art.search:lower()
+			for _, r in ipairs(W.art.recipes) do
+				if not find or (W.ItemName(r.item) or ""):lower():find(find, 1, true) then table.insert(list, r) end
+			end
+			local sort = W.art.sort or "best"
 			table.sort(list, function(a, b)
 				if a.skill ~= b.skill then return W.SkillName(a.skill or 0) < W.SkillName(b.skill or 0) end
+				local na, nb = W.ItemName(a.item) or "", W.ItemName(b.item) or ""
+				local ra, rb = a.rank or 0, b.rank or 0
+				if sort == "name" then
+					if na ~= nb then return na < nb end
+				elseif sort == "low" then
+					if ra ~= rb then return ra < rb end
+				end
 				-- The server's order (best first): quality, then the rank the recipe needs.
 				if (a.quality or 0) ~= (b.quality or 0) then return (a.quality or 0) > (b.quality or 0) end
-				local ra, rb = a.rank or 0, b.rank or 0
 				if ra ~= rb then return ra > rb end
-				return (W.ItemName(a.item)) < (W.ItemName(b.item))
+				return na < nb
 			end)
 			local lastSkill
 			for _, r in ipairs(list) do
@@ -1534,6 +1567,21 @@ function W.Refresh()
 	end
 	local catControls = { f.search, f.slotBtn, f.usable, f.usableText, f.prev, f.next, f.pageText }
 	for _, c in ipairs(catControls) do if cat then c:Show() else c:Hide() end end
+	-- The box keeps each view's own text (the catalogue's search, the recipes' search).
+	local searchFor = recipes and "recipes" or cat and "cat" or nil
+	if searchFor and f.searchFor ~= searchFor then
+		f.searchFor = searchFor
+		f.search:SetText(recipes and (W.art.search or "") or (W.guild.cat.search or ""))
+	end
+	f.search:ClearAllPoints()
+	f.search:SetPoint("TOPLEFT", 24, recipes and -68 or -142)
+	if recipes then
+		f.search:Show()
+		f.slotBtn:Show()
+		f.searchHint:SetText((f.search:GetText() == "" and not f.search:HasFocus()) and T("A_SEARCH") or "")
+		f.slotBtn:SetText(string.format(T("A_SORT"), T("A_SORT_" .. (W.art.sort or "best"))))
+		W.PlaceText(f.slotBtn)
+	end
 	if cat then
 		local c = W.guild.cat
 		f.searchHint:SetText((f.search:GetText() == "" and not f.search:HasFocus()) and T("GC_SEARCH") or "")
@@ -1787,7 +1835,8 @@ function W.Refresh()
 	elseif W.error then status = "|cffff6060" .. W.error .. "|r"
 	elseif W.busy and W.busy.feature == feature then status = "|cffaaaaaa" .. T("WAITING") .. "|r"
 	elseif #rows == 0 then
-		status = guild and "" or ("|cffaaaaaa" .. T(art and (W.art.mode == "bots" and "A_NONE" or "") or "E_NONE") .. "|r")
+		status = guild and "" or ("|cffaaaaaa" .. T(art and (W.art.mode == "bots" and "A_NONE"
+			or (W.art.mode == "recipes" and W.art.search and W.art.search ~= "" and "A_NOMATCH") or "") or "E_NONE") .. "|r")
 	end
 	f.status:SetText(status)
 end
