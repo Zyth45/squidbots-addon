@@ -798,7 +798,7 @@ function dc.InDungeon()
 	return inside and (kind == "party" or kind == "raid")
 end
 
--- 3.0.1: the probe again when the module is not known to be there (entering a dungeon, the group changing, the
+-- 3.1: the probe again when the module is not known to be there (entering a dungeon, the group changing, the
 -- Dungeon button). One probe, 8 s after loading, could miss: the module then stayed unknown and the button ran the
 -- old dungeon mode. open: the panel opens on the answer.
 function dc.Reprobe(open)

@@ -910,7 +910,7 @@ function W.Build()
 		W.offset = 0
 		W.CatPage(1)
 	end)
-	-- 3.0.1: the recipes are filtered while typing (all of them are already here).
+	-- 3.1: the recipes are filtered while typing (all of them are already here).
 	f.search:SetScript("OnTextChanged", function(self)
 		if not W.RecipesShown() then return end
 		local text = strtrim(self:GetText() or "")
@@ -1243,7 +1243,7 @@ function W.RecipesShown()
 	return W.tab == "art" and W.art.mode == "recipes"
 end
 
--- 3.0.1: the recipes' order: best first (the server's), by name, or the lowest rank first.
+-- 3.1: the recipes' order: best first (the server's), by name, or the lowest rank first.
 function W.SortMenu()
 	local items = {}
 	for _, key in ipairs({ "best", "name", "low" }) do

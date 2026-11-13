@@ -223,7 +223,7 @@ end
 -- Listings: "c", "quests all", "stats" come back as one whisper per line
 -- ---------------------------------------------------------------------------
 local Render
--- 3.0.1: whether an item is an upgrade for the sheet's alt, by its own answer (the compare block, further down).
+-- 3.1: whether an item is an upgrade for the sheet's alt, by its own answer (the compare block, further down).
 local IconVerdict
 
 -- A request too soon after the same one (the server would drop its lines) waits its turn instead of being lost.
@@ -639,10 +639,10 @@ local function Destroy(item, link)
 	if dialog then dialog.data, dialog.item = link, item end
 end
 
--- 3.0.1: sell or destroy an alt's grey or white items at once, from a list where each one can be unticked first.
+-- 3.1: sell or destroy an alt's grey or white items at once, from a list where each one can be unticked first.
 -- The bot's own commands take several links in one whisper ("s <links>", "destroy <links>"): sent in short
 -- batches, 1.1 s apart.
--- 3.0.1: the alt answers for itself (CoA Bots 3.0.1 with AiPlayerbot.CoaAltBags.Enable, HELLO's 6th field): its own
+-- 3.1: the alt answers for itself (CoA Bots 3.1 with AiPlayerbot.CoaAltBags.Enable, HELLO's 6th field): its own
 -- verdict on an item, and the bag lists it would sell or destroy. Only the account's alts; otherwise the addon alone
 -- of the addon alone (the Gear tab's view, "s"/"destroy" with links).
 local function AltBags(name)
@@ -829,7 +829,7 @@ do
 	end
 end
 
--- 3.0.1: an alt's four bags (CoA Bots 3.0.1, alt bags on): "bagslots" gives each one (BAGSLOT slot <1..4> <id|0>
+-- 3.1: an alt's four bags (CoA Bots 3.1, alt bags on): "bagslots" gives each one (BAGSLOT slot <1..4> <id|0>
 -- <size> <free> <itemString|-> bagslots, then "BAGSLOT - bagslots"); "bagequip <itemString> [<1..4>]" puts one of
 -- its bags on (BAGSLOT done <slot> <id> <req> or BAGSLOT err <reason> <req>, then "BAGSLOT - <req>").
 local BagSlots = { by = {}, ASK_EVERY = 30 }
@@ -958,7 +958,7 @@ local function ItemButton(parent, size)
 	return b
 end
 
--- 3.0.1: a small green arrow in the corner of an item that is an upgrade for the sheet's alt.
+-- 3.1: a small green arrow in the corner of an item that is an upgrade for the sheet's alt.
 local function UpMark(b, on)
 	if not on then
 		if b.sqbUp then b.sqbUp:Hide() end
@@ -1075,7 +1075,7 @@ local function BuildBags(page)
 		b:SetScript("OnReceiveDrag", DropOnBags)
 		page.buttons[i] = b
 	end
-	-- 3.0.1: its four bags, in a column right of the grid.
+	-- 3.1: its four bags, in a column right of the grid.
 	page.slotsTitle = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	page.slotsTitle:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 14, 0)
 	page.slots = {}
@@ -1998,7 +1998,7 @@ end
 
 local function Build()
 	sheet = CreateFrame("Frame", "SquidBotsLiteSheet", UIParent)
-	-- 3.0.1: the arrows on the player's own bags go with the sheet.
+	-- 3.1: the arrows on the player's own bags go with the sheet.
 	sheet:SetScript("OnHide", function() if SquidBotsLite_MarkContainers then SquidBotsLite_MarkContainers() end end)
 	-- 3.0: 520 wide (was 470): seven tabs.
 	sheet:SetWidth(520)
@@ -2303,7 +2303,7 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 	if not (info and info.spec) and SquidBotsLite_AskSpecs then SquidBotsLite_AskSpecs(name) end
 end
 
--- 3.0.1: an item's tooltip, while a bot's sheet is open, also shows what the bot wears in that slot (a tooltip
+-- 3.1: an item's tooltip, while a bot's sheet is open, also shows what the bot wears in that slot (a tooltip
 -- beside it, like the game's own compare) and the item level difference. The bot must be in the group: its gear
 -- is read like the Gear tab's.
 do
@@ -2393,7 +2393,7 @@ do
 		timer:Show()
 		return w
 	end
-	-- 3.0.1: the icons' questions wait here and go ICON_FLIGHT at a time per alt (the server keeps 16 per bot).
+	-- 3.1: the icons' questions wait here and go ICON_FLIGHT at a time per alt (the server keeps 16 per bot).
 	local ICON_FLIGHT = 4
 	local wants = {}
 	local function InFlight(name)
@@ -2501,7 +2501,7 @@ do
 			if w.id == id then return w end
 		end
 	end
-	-- 3.0.1 servers end every worn, err and "-" line with the asked item id; older ones do not.
+	-- 3.1 servers end every worn, err and "-" line with the asked item id; older ones do not.
 	OnCmp = function(name, f)
 		local queue = waiting[name]
 		if not queue then return end
@@ -2601,7 +2601,7 @@ do
 		if not known then tooltip:AddLine(string.format(T("CMP_NONE"), current), 0.6, 0.6, 0.6) end
 		tooltip:Show()
 	end
-	-- 3.0.1: the player's own bags (the game's bag frames) show the arrow too, while an alt's sheet is open.
+	-- 3.1: the player's own bags (the game's bag frames) show the arrow too, while an alt's sheet is open.
 	local function MarkContainer(frame)
 		if not (frame and frame.GetID and frame:GetName()) then return end
 		local bag = frame:GetID()
