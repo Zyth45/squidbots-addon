@@ -17,3 +17,4 @@ Alts.lua
 Dashboard.lua
 MainTank.lua
 World.lua
+KeySpells.lua
