@@ -851,6 +851,17 @@ function BagSlots.Equip(name, str, slot)
 	SquidBotsLite_Alts.Handle.BAGSLOT = BagSlots.OnLine
 	SquidBotsLite_Alts.Send(name, "bagequip " .. str .. (slot and (" " .. slot) or ""))
 end
+-- A bag this client has never seen: loaded now through a hidden tooltip, so that its tooltip is ready when hovered
+-- (else "Retrieving item information"; the 3.3.5 client does not redraw it when the item arrives).
+function BagSlots.Preload(id, str)
+	if id == 0 or GetItemInfo(id) then return end
+	if not BagSlots.scan then
+		BagSlots.scan = CreateFrame("GameTooltip", "SquidBotsLiteBagScan", UIParent, "GameTooltipTemplate")
+	end
+	BagSlots.scan:SetOwner(UIParent, "ANCHOR_NONE")
+	BagSlots.scan:SetHyperlink(str or ("item:" .. id))
+	BagSlots.scan:Hide()
+end
 function BagSlots.OnLine(name, f)
 	if f[2] == "slot" then
 		local d = BagSlots.by[name]
@@ -858,6 +869,7 @@ function BagSlots.OnLine(name, f)
 		if not d or not slot then return end
 		d.new = d.new or {}
 		d.new[slot] = { id = tonumber(f[4]) or 0, size = tonumber(f[5]) or 0, free = tonumber(f[6]) or 0, str = f[7] ~= "-" and f[7] or nil }
+		BagSlots.Preload(d.new[slot].id, d.new[slot].str)
 	elseif f[2] == "done" or f[2] == "err" then
 		local req = tonumber(f[2] == "done" and f[5] or f[4] or "")
 		local p = BagSlots.pending and BagSlots.pending[req or 0]
@@ -1088,6 +1100,16 @@ local function BuildBags(page)
 		b:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			if self.bag and self.bag.str then
+				-- Still unknown to this client: drawn once more half a second later, if still hovered.
+				if not GetItemInfo(self.bag.id) and not self.redrawAt then
+					self.redrawAt = GetTime() + 0.5
+					self:SetScript("OnUpdate", function(me)
+						if GetTime() < me.redrawAt then return end
+						me:SetScript("OnUpdate", nil)
+						if GameTooltip:IsOwned(me) then me:GetScript("OnEnter")(me) end
+						me.redrawAt = nil
+					end)
+				end
 				GameTooltip:SetHyperlink(self.bag.str)
 				GameTooltip:AddLine(string.format(T("BS_FREE"), self.bag.free, self.bag.size), 0.6, 0.8, 1)
 			else
