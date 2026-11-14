@@ -20,7 +20,7 @@ local STRINGS = {
 		BULK_ASKING = "Asking %s for its list...", BULK_SOLD = "%s sold %d items for %s.", BULK_DESTROYED = "%s destroyed %d items.",
 		BULK_ERR = "%s: %s.", BULK_R_changed = "its bags changed, open the list again", BULK_R_novendor = "no vendor next to it",
 		BULK_R_combat = "in combat", BULK_R_dead = "dead", BULK_R_quality = "quality too high", BULK_R_off = "off on this realm",
-		BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
+		BAG_TYPES = "%d item types (stacks merged)", BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
 		BS_NONE = "No bag in its bags to put here.", BS_DONE = "%s put on %s.", BS_ERR = "%s: %s.", BS_R_notfound = "that bag is not in its bags",
 		BS_R_notbag = "not a bag", BS_R_nospace = "no room for what the old bag holds", BS_R_combat = "in combat", BS_R_dead = "dead",
 		BS_R_off = "off on this realm", BS_HINT = "Click a bag slot to put one of its bags there.",
@@ -95,7 +95,7 @@ local STRINGS = {
 		BULK_ASKING = "Demande de sa liste à %s...", BULK_SOLD = "%s a vendu %d objets pour %s.", BULK_DESTROYED = "%s a détruit %d objets.",
 		BULK_ERR = "%s : %s.", BULK_R_changed = "ses sacs ont changé, rouvrez la liste", BULK_R_novendor = "aucun marchand à côté de lui",
 		BULK_R_combat = "en combat", BULK_R_dead = "mort", BULK_R_quality = "qualité trop haute", BULK_R_off = "coupé sur ce royaume",
-		BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
+		BAG_TYPES = "%d types d'objets (piles regroupées)", BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
 		BS_NONE = "Aucun sac dans ses sacs à mettre ici.", BS_DONE = "%s a mis %s.", BS_ERR = "%s : %s.", BS_R_notfound = "ce sac n'est pas dans ses sacs",
 		BS_R_notbag = "ce n'est pas un sac", BS_R_nospace = "pas de place pour ce que contient l'ancien sac", BS_R_combat = "en combat", BS_R_dead = "mort",
 		BS_R_off = "coupé sur ce royaume", BS_HINT = "Cliquez sur un emplacement de sac pour y mettre un de ses sacs.",
@@ -192,6 +192,8 @@ local strats = { co = {}, nc = {} }
 local bagMode = "bags"
 local queue = {}
 local mountOffset = 0
+-- 3.1: the Bags tab scrolls by rows of BAG_COLS (the server lists one line per item type: more than 48 happen).
+local bagOffset = 0
 -- 3.0: the Mounts tab's filter: "all", "ground" or "flying" (the loot pet moved to the Pets tab).
 local mountKind = "all"
 
@@ -1085,8 +1087,27 @@ local function BuildBags(page)
 			if IsShiftKeyDown() then InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
 		end)
 		b:SetScript("OnReceiveDrag", DropOnBags)
+		b:EnableMouseWheel(true)
+		b:SetScript("OnMouseWheel", function(_, delta) page.Scroll(-delta * BAG_COLS) end)
 		page.buttons[i] = b
 	end
+	-- 3.1: scrolling, one row (wheel) or one page (arrows) at a time.
+	function page.Scroll(by)
+		local list = bagMode == "bank" and bank or bags
+		local last = math.max(0, math.ceil(#list / BAG_COLS) * BAG_COLS - BAG_COLS * BAG_ROWS)
+		bagOffset = math.max(0, math.min(last, bagOffset + by))
+		Render()
+	end
+	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
+	page.up:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 58, 0)
+	page.up:SetScript("OnClick", function() page.Scroll(-BAG_COLS * BAG_ROWS) end)
+	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
+	page.down:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 58, -(BAG_ROWS * 46 - 16))
+	page.down:SetScript("OnClick", function() page.Scroll(BAG_COLS * BAG_ROWS) end)
+	page.types = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	page.types:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 10, -246)
+	page.types:SetWidth(100)
+	page.types:SetJustifyH("LEFT")
 	-- 3.1: its four bags, in a column right of the grid.
 	page.slotsTitle = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	page.slotsTitle:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 14, 0)
@@ -1164,6 +1185,7 @@ local function BuildBags(page)
 	page.bank:SetPoint("LEFT", page.grey, "RIGHT", 8, 0)
 	page.bank:SetScript("OnClick", function()
 		bagMode = bagMode == "bank" and "bags" or "bank"
+		bagOffset = 0
 		Ask(bagMode, bagMode == "bank" and "bank" or "c")
 		Render()
 	end)
@@ -1900,8 +1922,14 @@ local function RenderBags(page)
 			b:Hide()
 		end
 	end
+	local perPage = BAG_COLS * BAG_ROWS
+	bagOffset = math.max(0, math.min(bagOffset, math.max(0, math.ceil(#list / BAG_COLS) * BAG_COLS - perPage)))
+	if bagOffset > 0 then page.up:Enable() else page.up:Disable() end
+	if bagOffset + perPage < #list then page.down:Enable() else page.down:Disable() end
+	if #list > perPage then page.up:Show(); page.down:Show() else page.up:Hide(); page.down:Hide() end
+	page.types:SetText(#list > 0 and string.format(T("BAG_TYPES"), #list) or "")
 	for i, b in ipairs(page.buttons) do
-		local item = list[i]
+		local item = list[bagOffset + i]
 		b.item = item
 		if item then
 			b.icon:SetTexture((GetItemIcon and GetItemIcon(item.id)) or select(10, GetItemInfo(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -2302,7 +2330,7 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 		if SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Reset() end
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
-		bagMode = "bags"
+		bagMode, bagOffset = "bags", 0
 		if sheet then sheet.gold = nil end
 	end
 	current = name
