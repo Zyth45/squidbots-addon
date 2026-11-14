@@ -20,7 +20,10 @@ local STRINGS = {
 		BULK_ASKING = "Asking %s for its list...", BULK_SOLD = "%s sold %d items for %s.", BULK_DESTROYED = "%s destroyed %d items.",
 		BULK_ERR = "%s: %s.", BULK_R_changed = "its bags changed, open the list again", BULK_R_novendor = "no vendor next to it",
 		BULK_R_combat = "in combat", BULK_R_dead = "dead", BULK_R_quality = "quality too high", BULK_R_off = "off on this realm",
-		BAG_TYPES = "%d item types (stacks merged)", BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
+		BAG_TYPES = "%d item types (stacks merged)", BULK_SEL_SELL = "Sell the selection (%d)", BULK_SEL_DESTROY = "Destroy the selection (%d)",
+		Q_SEL = "selected", SEL_HINT = "Ctrl+click: select it.", BULK_W_quest = "quest item", BULK_W_tool = "profession tool", BULK_W_wear = "it would wear it",
+		BULK_W_use = "has a use", BULK_W_kept = "it keeps it", BULK_W_outfit = "in an outfit", BULK_W_container = "a bag", BULK_W_ammo = "ammo",
+		BULK_W_conjured = "conjured", BULK_W_noprice = "no sell price", BULK_W_notfound = "no longer in its bags", BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
 		BS_NONE = "No bag in its bags to put here.", BS_DONE = "%s put on %s.", BS_ERR = "%s: %s.", BS_R_notfound = "that bag is not in its bags",
 		BS_R_notbag = "not a bag", BS_R_nospace = "no room for what the old bag holds", BS_R_combat = "in combat", BS_R_dead = "dead",
 		BS_R_off = "off on this realm", BS_HINT = "Click a bag slot to put one of its bags there.",
@@ -95,7 +98,10 @@ local STRINGS = {
 		BULK_ASKING = "Demande de sa liste à %s...", BULK_SOLD = "%s a vendu %d objets pour %s.", BULK_DESTROYED = "%s a détruit %d objets.",
 		BULK_ERR = "%s : %s.", BULK_R_changed = "ses sacs ont changé, rouvrez la liste", BULK_R_novendor = "aucun marchand à côté de lui",
 		BULK_R_combat = "en combat", BULK_R_dead = "mort", BULK_R_quality = "qualité trop haute", BULK_R_off = "coupé sur ce royaume",
-		BAG_TYPES = "%d types d'objets (piles regroupées)", BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
+		BAG_TYPES = "%d types d'objets (piles regroupées)", BULK_SEL_SELL = "Vendre la sélection (%d)", BULK_SEL_DESTROY = "Détruire la sélection (%d)",
+		Q_SEL = "sélectionnés", SEL_HINT = "Ctrl+clic : le sélectionner.", BULK_W_quest = "objet de quête", BULK_W_tool = "outil de métier", BULK_W_wear = "il le porterait",
+		BULK_W_use = "il s'en sert", BULK_W_kept = "il le garde", BULK_W_outfit = "dans une tenue", BULK_W_container = "un sac", BULK_W_ammo = "munitions",
+		BULK_W_conjured = "invoqué", BULK_W_noprice = "sans prix de vente", BULK_W_notfound = "plus dans ses sacs", BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
 		BS_NONE = "Aucun sac dans ses sacs à mettre ici.", BS_DONE = "%s a mis %s.", BS_ERR = "%s : %s.", BS_R_notfound = "ce sac n'est pas dans ses sacs",
 		BS_R_notbag = "ce n'est pas un sac", BS_R_nospace = "pas de place pour ce que contient l'ancien sac", BS_R_combat = "en combat", BS_R_dead = "mort",
 		BS_R_off = "coupé sur ce royaume", BS_HINT = "Cliquez sur un emplacement de sac pour y mettre un de ses sacs.",
@@ -652,7 +658,22 @@ local function AltBags(name)
 	return name and A and A.hello and A.hello.bags and A.IsAlt and A.IsAlt(name) and A.Send and true or false
 end
 
-local Bulk
+-- 3.1: the Bags tab's selection (Ctrl+click), by item id, for the sheet's bot only.
+local selection = { name = nil, ids = {} }
+local function Selected(id)
+	return selection.name == current and id and selection.ids[id] or false
+end
+local function SelectedCount()
+	if selection.name ~= current then return 0 end
+	local n = 0
+	for _, item in ipairs(bags) do if selection.ids[item.id] then n = n + 1 end end
+	return n
+end
+local function ToggleSelected(item)
+	if selection.name ~= current then selection.name, selection.ids = current, {} end
+	selection.ids[item.id] = not selection.ids[item.id] or nil
+end
+local Bulk, BulkSelection
 do
 	local QUALITY = { grey = "^|cff9d9d9d", white = "^|cffffffff" }
 	local COLS, PER_COL = 3, 16
@@ -742,10 +763,11 @@ do
 			for _, row in ipairs(f.rows) do
 				if row:IsShown() and row:GetChecked() and row.item then
 					table.insert(links, SendableLink(row.item))
-					TakeOut(bags, row.item)
+					TakeOut(bags, row.item.orig or row.item)
 				end
 			end
 			Batches(f.action == "sell" and "s" or "destroy", links)
+			if f.selection then selection.ids = {} end
 			f:Hide()
 			AfterChange()
 		end)
@@ -756,17 +778,19 @@ do
 		f.cancel:SetText(CANCEL or "Cancel")
 		f.cancel:SetScript("OnClick", function() f:Hide() end)
 	end
-	local function Fill(action, word, list, server, name)
+	local function Fill(action, word, list, server, name, fromSelection)
 		if not f then Build() end
-		f.action, f.server = action, server
+		f.action, f.server, f.selection = action, server, fromSelection
 		f.title:SetText(string.format(T(action == "sell" and "BULK_T_SELL" or "BULK_T_DESTROY"), name or "?", word))
 		f.hint:SetText(T(action == "sell" and "BULK_H_SELL" or "BULK_H_DESTROY") .. (server and (" " .. T("BULK_H_SERVER")) or ""))
 		for i, row in ipairs(f.rows) do
 			local item = list[i]
 			row.item = item
 			if item then
-				row.label:SetText(item.link .. (item.count and item.count > 1 and (" x" .. item.count) or ""))
-				row:SetChecked(true)
+				row.label:SetText(item.link .. (item.count and item.count > 1 and (" x" .. item.count) or "")
+					.. (item.why and (" |cffff6060(" .. T("BULK_W_" .. item.why) .. ")|r") or ""))
+				row:SetChecked(not item.why)
+				if item.why then row:Disable() else row:Enable() end
 				row:Show()
 			else
 				row:Hide()
@@ -810,6 +834,84 @@ do
 			if #p.items == 0 then Print(string.format(T("BULK_NONE"), p.word)) return end
 			Fill(p.action, p.word, p.items, p, name)
 		end
+	end
+	-- 3.1: what may not go. The alt's own answer to "bagcheck <sell|destroy> <id> ..." (BAGCHK it <id> <ok|reason>,
+	-- then BAGCHK -) when it has the command; else the client's own checks: quest items (their tooltip), the known
+	-- profession tools, what the alt said it would wear, and no sell price for a sale.
+	local TOOLS = { [2901] = 1, [5956] = 1, [7005] = 1, [6219] = 1, [10498] = 1, [20815] = 1, [39505] = 1, [40772] = 1,
+		[40892] = 1, [40893] = 1, [6218] = 1, [6339] = 1, [11130] = 1, [11145] = 1, [16207] = 1, [22461] = 1, [22462] = 1,
+		[22463] = 1, [44452] = 1, [6256] = 1, [6365] = 1, [6366] = 1, [6367] = 1, [12225] = 1, [19022] = 1, [19970] = 1,
+		[25978] = 1, [44050] = 1, [45858] = 1, [45991] = 1, [45992] = 1 }
+	local scan
+	local function IsQuestItem(link)
+		if not scan then
+			scan = CreateFrame("GameTooltip", "SquidBotsLiteBulkScan", UIParent, "GameTooltipTemplate")
+		end
+		scan:SetOwner(UIParent, "ANCHOR_NONE")
+		scan:SetHyperlink(link:match("|H(item:[^|]+)|h") or link)
+		for i = 2, math.min(scan:NumLines() or 0, 6) do
+			local fs = _G["SquidBotsLiteBulkScanTextLeft" .. i]
+			local text = fs and fs:GetText()
+			if text and (text == ITEM_BIND_QUEST or text == ITEM_STARTS_QUEST) then scan:Hide() return true end
+		end
+		scan:Hide()
+		return false
+	end
+	local function ClientWhy(action, item)
+		if TOOLS[item.id] then return "tool" end
+		if IsQuestItem(item.link) then return "quest" end
+		if IconVerdict and IconVerdict(item.link) then return "wear" end
+		if action == "sell" and select(11, GetItemInfo(item.link)) == 0 then return "noprice" end
+	end
+	local check
+	local function ShowSelection(c)
+		check = nil
+		for _, item in ipairs(c.items) do
+			local answer = c.answers and c.answers[item.id]
+			if answer then
+				item.why = answer ~= "ok" and answer or nil
+			else
+				item.why = ClientWhy(c.action, item)
+			end
+		end
+		Fill(c.action, T("Q_SEL"), c.items, nil, c.name, true)
+	end
+	local function Check_OnLine(name, f)
+		if not check or check.name ~= name then return end
+		if f[2] == "it" then
+			check.answers = check.answers or {}
+			check.answers[tonumber(f[3]) or 0] = f[4]
+		elseif f[2] == "err" then
+			check.answers = nil
+		elseif f[2] == "-" then
+			ShowSelection(check)
+		end
+	end
+	local waitCheck = CreateFrame("Frame")
+	waitCheck:SetScript("OnUpdate", function(self)
+		if not check then self:Hide() return end
+		-- No answer in time (an older server): the client's own checks.
+		if GetTime() > check.deadline then check.answers = nil; ShowSelection(check); self:Hide() end
+	end)
+	waitCheck:Hide()
+	BulkSelection = function(action)
+		local items = {}
+		for _, item in ipairs(bags) do
+			if Selected(item.id) then table.insert(items, { link = item.link, id = item.id, count = item.count, soulbound = item.soulbound, orig = item }) end
+		end
+		if #items == 0 then return end
+		local c = { name = current, action = action, items = items }
+		if AltBags(current) then
+			local ids = {}
+			for i = 1, math.min(#items, 40) do table.insert(ids, items[i].id) end
+			check = c
+			c.deadline = GetTime() + 3
+			SquidBotsLite_Alts.Handle.BAGCHK = Check_OnLine
+			SquidBotsLite_Alts.Send(current, "bagcheck " .. action .. " " .. table.concat(ids, " "))
+			waitCheck:Show()
+			return
+		end
+		ShowSelection(c)
 	end
 	-- action: "sell" or "destroy"; quality: "grey" or "white".
 	Bulk = function(action, quality)
@@ -990,6 +1092,21 @@ local function UpMark(b, on)
 	b.sqbUp:Show()
 end
 
+-- 3.1: a gold frame on a selected item (Ctrl+click in the Bags tab).
+local function SelMark(b, on)
+	if not on then
+		if b.sqbSel then b.sqbSel:Hide() end
+		return
+	end
+	if not b.sqbSel then
+		b.sqbSel = b:CreateTexture(nil, "OVERLAY")
+		b.sqbSel:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+		b.sqbSel:SetBlendMode("ADD")
+		b.sqbSel:SetAllPoints()
+	end
+	b.sqbSel:Show()
+end
+
 -- Green and better get their colour on the border; white, grey and an empty slot stay black.
 local function SetQuality(b, quality)
 	local color = quality and quality >= 2 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
@@ -1084,7 +1201,10 @@ local function BuildBags(page)
 		b:SetScript("OnClick", function(self)
 			if CursorHasItem() then DropOnBags() return end
 			if not self.item then return end
-			if IsShiftKeyDown() then InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
+			if IsControlKeyDown() and bagMode ~= "bank" then
+				ToggleSelected(self.item)
+				Render()
+			elseif IsShiftKeyDown() then InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
 		end)
 		b:SetScript("OnReceiveDrag", DropOnBags)
 		b:EnableMouseWheel(true)
@@ -1176,6 +1296,10 @@ local function BuildBags(page)
 			{ text = string.format(T("BULK_SELL"), white), notCheckable = true, func = function() Bulk("sell", "white") end },
 			{ text = string.format(T("BULK_DESTROY"), grey), notCheckable = true, func = function() Bulk("destroy", "grey") end },
 			{ text = string.format(T("BULK_DESTROY"), white), notCheckable = true, func = function() Bulk("destroy", "white") end },
+			{ text = string.format(T("BULK_SEL_SELL"), SelectedCount()), notCheckable = true, disabled = SelectedCount() == 0,
+				func = function() BulkSelection("sell") end },
+			{ text = string.format(T("BULK_SEL_DESTROY"), SelectedCount()), notCheckable = true, disabled = SelectedCount() == 0,
+				func = function() BulkSelection("destroy") end },
 		}, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 		if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 	end)
@@ -1893,7 +2017,7 @@ end
 local function RenderBags(page)
 	local list = bagMode == "bank" and bank or bags
 	page.note:SetText(#list == 0 and capture == nil and T("EMPTY_BAGS") or "")
-	page.hint:SetText(T("ITEM_HINT") .. " " .. T("DROP_HINT"))
+	page.hint:SetText(T("ITEM_HINT") .. " " .. T("SEL_HINT") .. " " .. T("DROP_HINT"))
 	page.trade:SetText(T("TRADE"))
 	page.bank:SetText(bagMode == "bank" and T("BAGS_BTN") or T("BANK"))
 	page.grey:SetText(T("BULK_BTN"))
@@ -1937,9 +2061,11 @@ local function RenderBags(page)
 			SetQuality(b, select(3, GetItemInfo(item.id)))
 			b.count:SetText(item.count > 1 and item.count or "")
 			UpMark(b, bagMode ~= "bank" and IconVerdict and IconVerdict(item.link))
+			SelMark(b, bagMode ~= "bank" and Selected(item.id))
 			b:Show()
 		else
 			UpMark(b, false)
+			SelMark(b, false)
 			b:Hide()
 		end
 	end
