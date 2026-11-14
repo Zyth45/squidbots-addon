@@ -1091,7 +1091,7 @@ local function BuildBags(page)
 		b:SetScript("OnMouseWheel", function(_, delta) page.Scroll(-delta * BAG_COLS) end)
 		page.buttons[i] = b
 	end
-	-- 3.1: scrolling, one row (wheel) or one page (arrows) at a time.
+	-- 3.1: scrolling, one row (wheel) or one page (arrows) at a time; the arrows between the grid and its bags.
 	function page.Scroll(by)
 		local list = bagMode == "bank" and bank or bags
 		local last = math.max(0, math.ceil(#list / BAG_COLS) * BAG_COLS - BAG_COLS * BAG_ROWS)
@@ -1099,22 +1099,22 @@ local function BuildBags(page)
 		Render()
 	end
 	page.up = CreateFrame("Button", nil, page, "UIPanelScrollUpButtonTemplate")
-	page.up:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 58, 0)
+	page.up:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 - 2, 0)
 	page.up:SetScript("OnClick", function() page.Scroll(-BAG_COLS * BAG_ROWS) end)
 	page.down = CreateFrame("Button", nil, page, "UIPanelScrollDownButtonTemplate")
-	page.down:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 58, -(BAG_ROWS * 46 - 16))
+	page.down:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 - 2, -(BAG_ROWS * 46 - 16))
 	page.down:SetScript("OnClick", function() page.Scroll(BAG_COLS * BAG_ROWS) end)
 	page.types = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-	page.types:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 10, -246)
+	page.types:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 22, -246)
 	page.types:SetWidth(100)
 	page.types:SetJustifyH("LEFT")
 	-- 3.1: its four bags, in a column right of the grid.
 	page.slotsTitle = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	page.slotsTitle:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 14, 0)
+	page.slotsTitle:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 22, 0)
 	page.slots = {}
 	for i = 1, 4 do
 		local b = ItemButton(page, 36)
-		b:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 14, -16 - (i - 1) * 56)
+		b:SetPoint("TOPLEFT", 14 + BAG_COLS * 46 + 22, -16 - (i - 1) * 56)
 		b.slot = i
 		b.free = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 		b.free:SetPoint("TOPLEFT", b, "BOTTOMLEFT", -4, -2)
