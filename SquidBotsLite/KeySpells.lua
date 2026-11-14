@@ -70,6 +70,16 @@ local KEYS = {
 	{ 57934, 30, "ally", "ROGUE", 75 },               -- Tricks of the Trade
 }
 
+-- Never on the bar: utilities with a long cooldown that the realm lists too (CoA client ids, from its Spell.dbc),
+-- by id, else by their exact English name: Stuck, Summon Friend and the other Refer-A-Friend spells, Hearthstone.
+local EXCLUDED_IDS = { [7355] = true, [45927] = true, [48955] = true, [976240] = true, [8690] = true, [54318] = true,
+	[304285] = true, [2117125] = true, [2136150] = true }
+local EXCLUDED_NAMES = { ["Stuck"] = true, ["Summon Friend"] = true, ["Refer A Friend Summon Effect"] = true,
+	["Incantation of Friendship"] = true, ["Hearthstone"] = true }
+local function Excluded(id, name)
+	return (id and EXCLUDED_IDS[id]) or (name and EXCLUDED_NAMES[name]) or false
+end
+
 -- ks.bots[name] = { server = { [spellName] = entry } or nil, seen = { [spellName] = entry }, asked, pending }
 -- entry = { id, name, icon, aim, total, readyAt, kept, order, guess }
 local ks = { bots = {}, byName = nil, status = nil, lastCast = {} }
@@ -149,6 +159,9 @@ function ks.Spells(name, unit)
 			if have[spell] or not e.guess then table.insert(list, e) end
 		end
 	end
+	for i = #list, 1, -1 do
+		if Excluded(list[i].id, list[i].name) then table.remove(list, i) end
+	end
 	table.sort(list, function(x, y) return (x.order or 99) < (y.order or 99) or ((x.order or 99) == (y.order or 99) and x.name < y.name) end)
 	while #list > MAX_ICONS do table.remove(list) end
 	return list
@@ -179,7 +192,7 @@ function ks.OnAddon(sender, message)
 		if f[2] == "it" then
 			local id = tonumber(f[3])
 			local name, _, icon = GetSpellInfo(id or 0)
-			if not name then return end
+			if not name or Excluded(id, name) then return end
 			local key = KeyByName()[name]
 			local total = (tonumber(f[5]) or 0) / 1000
 			-- Not a key spell: shown only when it is a big cooldown (a CoA class's own).
