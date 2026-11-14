@@ -22,7 +22,7 @@ local STRINGS = {
 		BULK_R_combat = "in combat", BULK_R_dead = "dead", BULK_R_quality = "quality too high", BULK_R_off = "off on this realm",
 		BAG_TYPES = "%d item types (stacks merged)", BULK_SEL_SELL = "Sell all selected (%d)", BULK_SEL_DESTROY = "Destroy all selected (%d)", SEL_GIVE = "Give me all selected (%d)",
 		SEL_GIVE_MAX = "Give me: 6 at most, one trade (%d selected)", SEL_GIVE_BOUND = "%d soulbound left out (cannot be traded).", SEL_GIVE_ASK = "Opening a trade with %s for %d items...",
-		Q_SEL = "selected", SEL_HINT = "Ctrl+click: select it.", SEL_CLEAR = "Clear the selection", SEL_THIS = "This item only:", BULK_W_quest = "quest item", BULK_W_tool = "profession tool", BULK_W_wear = "it would wear it",
+		Q_SEL = "selected", SEL_HINT = "Ctrl+click: select it.", SEL_CLEAR = "Clear the selection", SEL_SUMMARY = "%s: %d of %d selected can go; the others stay, their reason beside them.", SEL_THIS = "This item only:", BULK_W_quest = "quest item", BULK_W_tool = "profession tool", BULK_W_wear = "it would wear it",
 		BULK_W_use = "has a use", BULK_W_kept = "it keeps it", BULK_W_outfit = "in an outfit", BULK_W_container = "a bag", BULK_W_ammo = "ammo",
 		BULK_W_conjured = "conjured", BULK_W_noprice = "no sell price", BULK_W_notfound = "no longer in its bags", BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
 		BS_NONE = "No bag in its bags to put here.", BS_DONE = "%s put on %s.", BS_ERR = "%s: %s.", BS_R_notfound = "that bag is not in its bags",
@@ -101,7 +101,7 @@ local STRINGS = {
 		BULK_R_combat = "en combat", BULK_R_dead = "mort", BULK_R_quality = "qualité trop haute", BULK_R_off = "coupé sur ce royaume",
 		BAG_TYPES = "%d types d'objets (piles regroupées)", BULK_SEL_SELL = "Vendre tous les sélectionnés (%d)", BULK_SEL_DESTROY = "Détruire tous les sélectionnés (%d)", SEL_GIVE = "Me donner tous les sélectionnés (%d)",
 		SEL_GIVE_MAX = "Me donner : 6 au plus, un échange (%d sélectionnés)", SEL_GIVE_BOUND = "%d objets liés laissés de côté (non échangeables).", SEL_GIVE_ASK = "Échange avec %s pour %d objets...",
-		Q_SEL = "sélectionnés", SEL_HINT = "Ctrl+clic : le sélectionner.", SEL_CLEAR = "Vider la sélection", SEL_THIS = "Cet objet seulement :", BULK_W_quest = "objet de quête", BULK_W_tool = "outil de métier", BULK_W_wear = "il le porterait",
+		Q_SEL = "sélectionnés", SEL_HINT = "Ctrl+clic : le sélectionner.", SEL_CLEAR = "Vider la sélection", SEL_SUMMARY = "%s : %d sur %d sélectionnés peuvent partir ; les autres restent, leur raison à côté.", SEL_THIS = "Cet objet seulement :", BULK_W_quest = "objet de quête", BULK_W_tool = "outil de métier", BULK_W_wear = "il le porterait",
 		BULK_W_use = "il s'en sert", BULK_W_kept = "il le garde", BULK_W_outfit = "dans une tenue", BULK_W_container = "un sac", BULK_W_ammo = "munitions",
 		BULK_W_conjured = "invoqué", BULK_W_noprice = "sans prix de vente", BULK_W_notfound = "plus dans ses sacs", BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
 		BS_NONE = "Aucun sac dans ses sacs à mettre ici.", BS_DONE = "%s a mis %s.", BS_ERR = "%s : %s.", BS_R_notfound = "ce sac n'est pas dans ses sacs",
@@ -906,6 +906,10 @@ do
 				item.why = ClientWhy(c.action, item)
 			end
 		end
+		-- Said in the chat too: a list where everything stays locked (an item the alt would wear...) is no silent no-op.
+		local free = 0
+		for _, item in ipairs(c.items) do if not item.why then free = free + 1 end end
+		if free < #c.items then Print(string.format(T("SEL_SUMMARY"), c.name, free, #c.items)) end
 		Fill(c.action, T("Q_SEL"), c.items, nil, c.name, true)
 	end
 	local function Check_OnLine(name, f)
