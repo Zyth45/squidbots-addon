@@ -20,8 +20,9 @@ local STRINGS = {
 		BULK_ASKING = "Asking %s for its list...", BULK_SOLD = "%s sold %d items for %s.", BULK_DESTROYED = "%s destroyed %d items.",
 		BULK_ERR = "%s: %s.", BULK_R_changed = "its bags changed, open the list again", BULK_R_novendor = "no vendor next to it",
 		BULK_R_combat = "in combat", BULK_R_dead = "dead", BULK_R_quality = "quality too high", BULK_R_off = "off on this realm",
-		BAG_TYPES = "%d item types (stacks merged)", BULK_SEL_SELL = "Sell the selection (%d)", BULK_SEL_DESTROY = "Destroy the selection (%d)",
-		Q_SEL = "selected", SEL_HINT = "Ctrl+click: select it.", BULK_W_quest = "quest item", BULK_W_tool = "profession tool", BULK_W_wear = "it would wear it",
+		BAG_TYPES = "%d item types (stacks merged)", BULK_SEL_SELL = "Sell all selected (%d)", BULK_SEL_DESTROY = "Destroy all selected (%d)", SEL_GIVE = "Give me all selected (%d)",
+		SEL_GIVE_MAX = "Give me: 6 at most, one trade (%d selected)", SEL_GIVE_BOUND = "%d soulbound left out (cannot be traded).", SEL_GIVE_ASK = "Opening a trade with %s for %d items...",
+		Q_SEL = "selected", SEL_HINT = "Ctrl+click: select it.", SEL_CLEAR = "Clear the selection", SEL_THIS = "This item only:", BULK_W_quest = "quest item", BULK_W_tool = "profession tool", BULK_W_wear = "it would wear it",
 		BULK_W_use = "has a use", BULK_W_kept = "it keeps it", BULK_W_outfit = "in an outfit", BULK_W_container = "a bag", BULK_W_ammo = "ammo",
 		BULK_W_conjured = "conjured", BULK_W_noprice = "no sell price", BULK_W_notfound = "no longer in its bags", BS_TITLE = "Its bags", BS_FREE = "%d free of %d", BS_EMPTY = "Empty bag slot", BS_PUT = "Put on as a bag", BS_PUT_HERE = "Put %s here",
 		BS_NONE = "No bag in its bags to put here.", BS_DONE = "%s put on %s.", BS_ERR = "%s: %s.", BS_R_notfound = "that bag is not in its bags",
@@ -98,8 +99,9 @@ local STRINGS = {
 		BULK_ASKING = "Demande de sa liste à %s...", BULK_SOLD = "%s a vendu %d objets pour %s.", BULK_DESTROYED = "%s a détruit %d objets.",
 		BULK_ERR = "%s : %s.", BULK_R_changed = "ses sacs ont changé, rouvrez la liste", BULK_R_novendor = "aucun marchand à côté de lui",
 		BULK_R_combat = "en combat", BULK_R_dead = "mort", BULK_R_quality = "qualité trop haute", BULK_R_off = "coupé sur ce royaume",
-		BAG_TYPES = "%d types d'objets (piles regroupées)", BULK_SEL_SELL = "Vendre la sélection (%d)", BULK_SEL_DESTROY = "Détruire la sélection (%d)",
-		Q_SEL = "sélectionnés", SEL_HINT = "Ctrl+clic : le sélectionner.", BULK_W_quest = "objet de quête", BULK_W_tool = "outil de métier", BULK_W_wear = "il le porterait",
+		BAG_TYPES = "%d types d'objets (piles regroupées)", BULK_SEL_SELL = "Vendre tous les sélectionnés (%d)", BULK_SEL_DESTROY = "Détruire tous les sélectionnés (%d)", SEL_GIVE = "Me donner tous les sélectionnés (%d)",
+		SEL_GIVE_MAX = "Me donner : 6 au plus, un échange (%d sélectionnés)", SEL_GIVE_BOUND = "%d objets liés laissés de côté (non échangeables).", SEL_GIVE_ASK = "Échange avec %s pour %d objets...",
+		Q_SEL = "sélectionnés", SEL_HINT = "Ctrl+clic : le sélectionner.", SEL_CLEAR = "Vider la sélection", SEL_THIS = "Cet objet seulement :", BULK_W_quest = "objet de quête", BULK_W_tool = "outil de métier", BULK_W_wear = "il le porterait",
 		BULK_W_use = "il s'en sert", BULK_W_kept = "il le garde", BULK_W_outfit = "dans une tenue", BULK_W_container = "un sac", BULK_W_ammo = "munitions",
 		BULK_W_conjured = "invoqué", BULK_W_noprice = "sans prix de vente", BULK_W_notfound = "plus dans ses sacs", BS_TITLE = "Ses sacs", BS_FREE = "%d libres sur %d", BS_EMPTY = "Emplacement de sac vide", BS_PUT = "Mettre comme sac", BS_PUT_HERE = "Mettre %s ici",
 		BS_NONE = "Aucun sac dans ses sacs à mettre ici.", BS_DONE = "%s a mis %s.", BS_ERR = "%s : %s.", BS_R_notfound = "ce sac n'est pas dans ses sacs",
@@ -506,6 +508,36 @@ local function Give(link)
 	Whisper("t " .. link)
 	giveAt = { link = link, at = GetTime() + 1.5 }
 end
+-- 3.1: the selection in one trade (6 items at most): the first "t" opens the trade, then one "t <link>" per item,
+-- 1.1 s apart, until all six are in it.
+local giveAll
+local function GiveSelected(links)
+	local unit = UnitOf(current)
+	if not unit or not CheckInteractDistance(unit, 2) then
+		Print(T("TRADE_RANGE"))
+		return
+	end
+	giveAll = { name = current, links = links, next = GetTime(), stop = GetTime() + 25, opened = TradeFrame:IsShown() }
+	Print(string.format(T("SEL_GIVE_ASK"), current, #links))
+end
+local giveAllWatch = CreateFrame("Frame")
+giveAllWatch:SetScript("OnUpdate", function()
+	local g = giveAll
+	if not g or GetTime() < g.next then return end
+	if GetTime() > g.stop or g.name ~= current then giveAll = nil return end
+	g.next = GetTime() + 1.1
+	if not TradeFrame:IsShown() then
+		-- The trade closed after it was open (accepted or cancelled): done.
+		if g.opened then giveAll = nil return end
+		if not g.asked then g.asked = true; Whisper("t " .. g.links[1]) end
+		return
+	end
+	g.opened = true
+	for _, link in ipairs(g.links) do
+		if not InTrade(link) then Whisper("t " .. link) return end
+	end
+	giveAll = nil
+end)
 local giveWatch = CreateFrame("Frame")
 giveWatch:SetScript("OnUpdate", function()
 	if giveAt and GetTime() >= giveAt.at then
@@ -887,6 +919,21 @@ do
 			ShowSelection(check)
 		end
 	end
+	-- A server without bagcheck answers with its "Usage: alt ..." whisper: kept out of the chat, and the client's
+	-- own checks at once instead of after the wait.
+	local usageHiddenAt
+	local function UsageFilter(_, _, msg, sender)
+		if not (msg and msg:find("^Usage: alt ")) then return false end
+		if check and sender == check.name then
+			check.answers = nil
+			usageHiddenAt = GetTime()
+			ShowSelection(check)
+			return true
+		end
+		-- The same whisper reaches each chat frame: hidden in all of them.
+		return usageHiddenAt and GetTime() - usageHiddenAt < 1 or false
+	end
+	if ChatFrame_AddMessageEventFilter then ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", UsageFilter) end
 	local waitCheck = CreateFrame("Frame")
 	waitCheck:SetScript("OnUpdate", function(self)
 		if not check then self:Hide() return end
@@ -1045,6 +1092,33 @@ local function ItemMenu(item)
 	if AltBags(current) and select(9, GetItemInfo(item.link)) == "INVTYPE_BAG" then
 		table.insert(menu, 5, { text = T("BS_PUT"), notCheckable = true,
 			func = function() BagSlots.Equip(current, item.link:match("|H(item:[^|]+)|h"), nil) end })
+	end
+	-- 3.1: with a selection (Ctrl+click), the selection's actions come first: the item's own Sell or Destroy would
+	-- act on this one item only.
+	local n = SelectedCount()
+	if n > 0 then
+		local tradable, bound = {}, 0
+		for _, it in ipairs(bags) do
+			if Selected(it.id) then
+				if it.soulbound then bound = bound + 1 else table.insert(tradable, SendableLink(it)) end
+			end
+		end
+		local give
+		if #tradable > 6 then
+			give = { text = string.format(T("SEL_GIVE_MAX"), #tradable), notCheckable = true, disabled = true }
+		else
+			give = { text = string.format(T("SEL_GIVE"), #tradable), notCheckable = true, disabled = #tradable == 0, func = function()
+				if bound > 0 then Print(string.format(T("SEL_GIVE_BOUND"), bound)) end
+				GiveSelected(tradable)
+				selection.ids = {}
+				Render()
+			end }
+		end
+		table.insert(menu, 2, give)
+		table.insert(menu, 3, { text = string.format(T("BULK_SEL_SELL"), n), notCheckable = true, func = function() BulkSelection("sell") end })
+		table.insert(menu, 4, { text = string.format(T("BULK_SEL_DESTROY"), n), notCheckable = true, func = function() BulkSelection("destroy") end })
+		table.insert(menu, 5, { text = T("SEL_CLEAR"), notCheckable = true, func = function() selection.ids = {}; Render() end })
+		table.insert(menu, 6, { text = T("SEL_THIS"), isTitle = true, notCheckable = true })
 	end
 	EasyMenu(menu, menuFrame, "cursor", 0, 0, "MENU", MENU_HIDE_DELAY)
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
@@ -1207,6 +1281,24 @@ local function BuildBags(page)
 			elseif IsShiftKeyDown() then InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
 		end)
 		b:SetScript("OnReceiveDrag", DropOnBags)
+		-- 3.1: a small tick box in the corner, the same as Ctrl+click.
+		b.box = CreateFrame("CheckButton", nil, b, "UICheckButtonTemplate")
+		b.box:SetWidth(16)
+		b.box:SetHeight(16)
+		b.box:SetPoint("BOTTOMLEFT", -3, -3)
+		b.box:SetScript("OnClick", function(self)
+			local parent = self:GetParent()
+			if parent.item and bagMode ~= "bank" then ToggleSelected(parent.item) end
+			Render()
+		end)
+		b.box:SetScript("OnLeave", function(self)
+			if not self:GetParent():IsMouseOver() and SelectedCount() == 0 then self:Hide() end
+		end)
+		b.box:Hide()
+		b:HookScript("OnEnter", function(self) if self.item and bagMode ~= "bank" then self.box:Show() end end)
+		b:HookScript("OnLeave", function(self)
+			if not self.box:IsMouseOver() and SelectedCount() == 0 then self.box:Hide() end
+		end)
 		b:EnableMouseWheel(true)
 		b:SetScript("OnMouseWheel", function(_, delta) page.Scroll(-delta * BAG_COLS) end)
 		page.buttons[i] = b
@@ -2062,10 +2154,13 @@ local function RenderBags(page)
 			b.count:SetText(item.count > 1 and item.count or "")
 			UpMark(b, bagMode ~= "bank" and IconVerdict and IconVerdict(item.link))
 			SelMark(b, bagMode ~= "bank" and Selected(item.id))
+			b.box:SetChecked(Selected(item.id))
+			if bagMode ~= "bank" and SelectedCount() > 0 then b.box:Show() else b.box:Hide() end
 			b:Show()
 		else
 			UpMark(b, false)
 			SelMark(b, false)
+			b.box:Hide()
 			b:Hide()
 		end
 	end
