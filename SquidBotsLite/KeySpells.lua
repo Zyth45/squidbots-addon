@@ -239,10 +239,12 @@ function ks.OnAddon(sender, message)
 			b.server = b.pending or {}
 			b.pending = nil
 			-- The keeps saved for this bot, sent again (the realm forgets them at logout).
+			-- Saved by spell id (a client in another language keeps them); a name is a 3.1.1 save.
 			local saved = SquidBotsLiteDB and SquidBotsLiteDB.keepcd and SquidBotsLiteDB.keepcd[sender]
-			for spell in pairs(saved or {}) do
-				local e = b.server[spell]
-				if e and not e.kept then SendAddonMessage(PREFIX, "keepcd " .. e.id .. " on", "WHISPER", sender) end
+			for _, e in pairs(b.server) do
+				if saved and (saved[e.id] or saved[e.name]) and not e.kept then
+					SendAddonMessage(PREFIX, "keepcd " .. e.id .. " on", "WHISPER", sender)
+				end
 			end
 			Changed()
 		elseif f[2] == "err" then
@@ -258,7 +260,8 @@ function ks.OnAddon(sender, message)
 			if e then e.kept = on end
 			SquidBotsLiteDB.keepcd = SquidBotsLiteDB.keepcd or {}
 			SquidBotsLiteDB.keepcd[sender] = SquidBotsLiteDB.keepcd[sender] or {}
-			SquidBotsLiteDB.keepcd[sender][name] = on or nil
+			SquidBotsLiteDB.keepcd[sender][id] = on or nil
+			SquidBotsLiteDB.keepcd[sender][name] = nil
 			ks.Say(string.format(T(on and "KEPT" or "FREED"), sender, name))
 		elseif f[2] == "err" then
 			ks.Say(string.format(T("KEEP_ERR"), sender, name or id, T("R_" .. (f[4] or "unknown"))))
@@ -269,7 +272,8 @@ end
 
 -- The combat log: a bot of the group casts a key spell (its click or its own choice): cooldown starts.
 function ks.OnCast(sourceName, spellId, spellName)
-	if not sourceName or not ks.bots[sourceName] and not IsBot(sourceName) then return end
+	-- The group's bots only: not every bot casting within reach of the combat log.
+	if not sourceName or not IsBot(sourceName) or not (SquidBotsLite_InGroup and SquidBotsLite_InGroup(sourceName)) then return end
 	local key = KeyByName()[spellName]
 	local b = Bot(sourceName)
 	local e = b.server and b.server[spellName] or b.seen[spellName]
@@ -734,6 +738,11 @@ function ks.Apply()
 	if shown and full and not frame then Build() end
 	if shown and not full and not small then BuildSmall() end
 	if frame then if shown and full then frame:Show() else frame:Hide() end end
+	-- The combat log (cooldowns seen cast) is read only while the full bar is up.
+	if ks.events then
+		if shown and full then ks.events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		else ks.events:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED") end
+	end
 	if small then if shown and not full then small:Show() else small:Hide() end end
 	Changed()
 end
@@ -760,10 +769,10 @@ end
 BindingNames()
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_LOGIN", "CHAT_MSG_ADDON", "CHAT_MSG_WHISPER", "COMBAT_LOG_EVENT_UNFILTERED",
-	"PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE" }) do
+for _, event in ipairs({ "PLAYER_LOGIN", "CHAT_MSG_ADDON", "CHAT_MSG_WHISPER", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE" }) do
 	events:RegisterEvent(event)
 end
+ks.events = events
 -- The quick actions' answers are awaited even with the bars hidden (a key binding).
 local since = 0
 events:SetScript("OnUpdate", function(_, elapsed)
