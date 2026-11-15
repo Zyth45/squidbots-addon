@@ -1085,7 +1085,9 @@ local insertLink = ChatEdit_InsertLink
 ChatEdit_InsertLink = function(link, ...)
 	local box = W.frame and W.frame.item
 	local id = link and tonumber(link:match("|Hitem:(%d+)"))
-	if id and W.frame and W.frame:IsShown() and W.tab == "guild" and W.guild.mode == "orders" then
+	-- Not while the player writes in the chat: the link goes in the sentence then.
+	local typing = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()
+	if id and not typing and W.frame and W.frame:IsShown() and W.tab == "guild" and W.guild.mode == "orders" then
 		W.askItem = id
 		box:SetText("")
 		box:ClearFocus()

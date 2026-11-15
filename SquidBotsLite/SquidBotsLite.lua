@@ -531,7 +531,8 @@ local function FindChannel()
 	end
 	for _, want in ipairs(wanted) do
 		for _, channel in ipairs(joined) do
-			if string.lower(channel.name):find("^" .. string.lower(want)) then
+			-- A plain prefix: a channel name may hold "-", "." or "(", which a pattern would read.
+			if string.lower(channel.name):find(string.lower(want), 1, true) == 1 then
 				return channel.id, channel.name
 			end
 		end
@@ -3932,6 +3933,7 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		SpecsTexts()
 		Print(L.LANG_SET)
 	elseif command == "channel" then
+		rest = strtrim(rest or "")
 		SquidBotsLiteDB.channel = rest
 		Print(string.format(L.CHANNEL_SET, rest ~= "" and rest or table.concat(CHANNELS, ", ")))
 	elseif command == "missions" then

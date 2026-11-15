@@ -953,8 +953,13 @@ do
 		if #items == 0 then return end
 		local c = { name = current, action = action, items = items }
 		if AltBags(current) then
-			local ids = {}
-			for i = 1, math.min(#items, 40) do table.insert(ids, items[i].id) end
+			-- As many ids as one addon message holds (255 bytes): the realm drops a longer one.
+			local ids, size = {}, #("bagcheck " .. action)
+			for i = 1, math.min(#items, 40) do
+				size = size + 1 + #tostring(items[i].id)
+				if size > 240 then break end
+				table.insert(ids, items[i].id)
+			end
 			check = c
 			c.deadline = GetTime() + 3
 			SquidBotsLite_Alts.Handle.BAGCHK = Check_OnLine
