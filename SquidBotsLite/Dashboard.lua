@@ -1,4 +1,4 @@
--- SquidBots Lite, the alts dashboard (CoA Bots 2.8.4): the whole team in one window. On top, a band: alts logged
+-- SquidBots Manager, the alts dashboard (CoA Bots 2.8.4): the whole team in one window. On top, a band: alts logged
 -- in, alts out on a mission, the team's gold, what needs doing. Then a card per alt of the account: class, level,
 -- xp, gold, state, its mission (Recall) or Send, its professions with the next rank a trainer teaches, its alerts.
 -- Contract: release/v2.8.4/CONTRAT-ALTS-2.8.4.md, section 11. Each logged-in alt sends (prefix "SQBA"):

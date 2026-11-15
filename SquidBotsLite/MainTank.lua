@@ -1,4 +1,4 @@
--- SquidBots Lite, the Main Tank bar (CoA Bots 2.9.4). In a raid the player tanks the boss and leads one or two
+-- SquidBots Manager, the Main Tank bar (CoA Bots 2.9.4). In a raid the player tanks the boss and leads one or two
 -- off-tank bots: take my target (the server marks it), taunt, swap, hold a place, clear, and a tank / damage
 -- switch per bot. Opened from the Dungeon clear panel (Main Tank) or a key binding.
 -- Contract with the module (ETUDE-MAIN-TANK-2.9.4, frozen with the Builder): addon messages "SQBA" whispered to

@@ -1,4 +1,4 @@
--- SquidBots Lite: the minimal take. No window: a thin bar of orders (a Release button joins it while
+-- SquidBots Manager: the minimal take. No window: a thin bar of orders (a Release button joins it while
 -- a bot lies dead) and "Bots" to recruit, the bots' roles and alerts drawn on the game's own party
 -- frames, and the offers bots whisper as small toasts above the bar, each with an Invite button.
 

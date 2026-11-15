@@ -1,4 +1,4 @@
--- SquidBots Lite 3.0: the World panel (guild orders, artisans, world events) and the bots' soul.
+-- SquidBots Manager 3.0: the World panel (guild orders, artisans, world events) and the bots' soul.
 -- Protocol: docs/WORLD-PROTOCOLE-3.0.md. Addon messages, prefix "SQBW", tab-separated:
 --   guild, artisans, events: whispered to oneself, the server answers by addon whispers from oneself;
 --   soul: "SOUL?" whispered to the bot, which answers.

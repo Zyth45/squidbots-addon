@@ -1,4 +1,4 @@
--- SquidBots Lite, the group's quests (3.1.2): one row per quest, one column for you and one for each alt of
+-- SquidBots Manager, the group's quests (3.1.2): one row per quest, one column for you and one for each alt of
 -- your group (5 at most, a dropdown swaps them), grouped by zone, with filters, counts and actions.
 -- From the realm (addon messages, prefix SQBA, whispered to each alt, answers whispered back by the alt):
 --   qlog -> QL it <questId> <inprog|done|failed> <cur/need;...> <zone|sort:<id>|> <title> (25 at most), then QL -

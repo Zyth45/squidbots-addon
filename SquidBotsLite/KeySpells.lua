@@ -1,4 +1,4 @@
--- SquidBots Lite, the key spells bar (CoA Bots 3.1.1). One row per bot of the group: its big cooldowns
+-- SquidBots Manager, the key spells bar (CoA Bots 3.1.1). One row per bot of the group: its big cooldowns
 -- (Bloodlust or Heroism, Innervate, Power Infusion, a battle res, the big heals and the external saves). A click
 -- whispers the bot "cast <spellId> on <name>": the server casts its best rank, on your target or on you (helpful
 -- spells), on itself (group spells), on your dead target (a res). A right-click keeps the spell: the bot no longer

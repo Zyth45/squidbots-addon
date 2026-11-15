@@ -1,4 +1,4 @@
--- SquidBots Lite, missions: send a logged-in alt gathering on its own (mining or herbalism) while you play,
+-- SquidBots Manager, missions: send a logged-in alt gathering on its own (mining or herbalism) while you play,
 -- follow it, call it back; what it gathers comes by mail. Everything goes through what a player can whisper to
 -- their own alt: "mission gather [minutes] [mining|herbalism]", "mission status", "mission stop" (CoA Bots 2.8.2).
 -- An alt in High Risk refuses "Mission refused: I am in High Risk (add "risk" to accept)."; "mission gather <minutes>

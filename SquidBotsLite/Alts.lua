@@ -1,4 +1,4 @@
--- SquidBots Lite, the alts as a team (CoA Bots 2.8.3): what each logged-in alt can do with the quest open at a
+-- SquidBots Manager, the alts as a team (CoA Bots 2.8.3): what each logged-in alt can do with the quest open at a
 -- quest giver, what it can learn at the trainer open, the lines it sends back, and a small team bar.
 -- Contract with the server: release/v2.8.3/CONTRAT-ALTS-2.8.3.md. Addon messages, prefix "SQBA", tab-separated
 -- fields, the first one the type; the alt whispers them to its player (CHAT_MSG_ADDON, "WHISPER", sender = the alt):

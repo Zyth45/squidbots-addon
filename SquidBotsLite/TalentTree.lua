@@ -1,4 +1,4 @@
--- SquidBots Lite 3.0: the talent tree of a bot, on the sheet's Talents tab (a Tree / List switch).
+-- SquidBots Manager 3.0: the talent tree of a bot, on the sheet's Talents tab (a Tree / List switch).
 -- The layout of the 21 CoA classes comes with the addon (TalentLayouts.lua, from CoA Spec); the bot sends its ranks
 -- on the addon channel (SQBA), asked with "talents tree" (SquidBot):
 --   TT n <treeId> <entryId> <spellId> <rank> <max> <learnable 1|0>   one per node it has data for

@@ -1,4 +1,4 @@
--- SquidBots Lite, bot sheet (beta): the gear, bags, quests and stats of one bot of the group, for players who
+-- SquidBots Manager, bot sheet (beta): the gear, bags, quests and stats of one bot of the group, for players who
 -- keep a long-term party of alts. Everything goes through chat commands a player can whisper to their own
 -- bots ("c", "quests all", "stats", "e", "ue", "u", "s", "t", "mount", "bank", "drop", "co ?", "nc ?", "talents ?"); the gear is read
 -- by the client's own inspect.
