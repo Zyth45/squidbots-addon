@@ -477,7 +477,13 @@ end
 -- player clicked a button, the "To [Alt]: ..." echo only adds noise. Typed whispers are never hidden.
 local quietSent = {}
 function SquidBotsLite_QuietWhisper(text, name)
-	quietSent[string.lower(name) .. "" .. text] = GetTime() + 10
+	-- The echo comes back at once: 3 s is plenty, and a whisper typed by hand later is not hidden. Old keys go
+	-- (a bot gone offline never echoes).
+	local now = GetTime()
+	for key, until_ in pairs(quietSent) do
+		if until_ < now then quietSent[key] = nil end
+	end
+	quietSent[string.lower(name) .. "" .. text] = now + 3
 	SendChatMessage(text, "WHISPER", nil, name)
 end
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message, target)
