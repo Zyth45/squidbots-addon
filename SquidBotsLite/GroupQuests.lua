@@ -28,6 +28,7 @@ local STRINGS = {
 		TIP_TURNIN = "At the quest's ender (10 yd): each alt that has finished it turns it in.",
 		TIP_NOW = "Your group's quest now: a star, first in the plan, in your tracker if you have it. A reminder for you only.",
 		UP = "Up", DOWN = "Down", IGNORE = "Ignore", ALLOW = "Allow", LINK = "Link in chat",
+		TIP_ROW = "Right-click: share, turn in, drop, plan. Shift-click: link it.",
 		TIP_PLAN = "A reminder kept in this addon: your alts' AI does not follow it.",
 		DROP_ASK = "%s abandons %s?", NO_SEL = "Select a quest first.", NONE_DONE = "No alt has finished %s.",
 		SHARED = "%s shared from your log.", TAKE_SENT = "%s: asked of %s.", NONE_MISSING = "Every alt has %s.",
@@ -51,6 +52,7 @@ local STRINGS = {
 		TIP_TURNIN = "Chez le PNJ de fin (10 m) : chaque alt qui l'a finie la rend.",
 		TIP_NOW = "La quête du groupe maintenant : une étoile, en tête du plan, dans votre suivi si vous l'avez. Un aide-mémoire pour vous seul.",
 		UP = "Monter", DOWN = "Descendre", IGNORE = "Ignorer", ALLOW = "Autoriser", LINK = "Lien dans le chat",
+		TIP_ROW = "Clic droit : partager, rendre, abandonner, plan. Maj-clic : la lier.",
 		TIP_PLAN = "Un aide-mémoire gardé par l'addon : l'IA de vos alts ne le suit pas.",
 		DROP_ASK = "%s abandonne %s ?", NO_SEL = "Sélectionnez d'abord une quête.", NONE_DONE = "Aucun alt n'a fini %s.",
 		SHARED = "%s partagée depuis votre journal.", TAKE_SENT = "%s : demandée à %s.", NONE_MISSING = "Tous les alts ont %s.",
@@ -334,7 +336,8 @@ function GQ.Cell(id, name)
 		local obj = need == 0 and A.obj[id] and A.obj[id][name]
 		if obj and obj.needed > 0 then cur, need = obj.done, obj.needed end
 		if need > 0 then return "have", string.format("%d/%d", cur, need), cur / need end
-		return "have", "|cff66b3ff...|r", 0
+		-- No count to show (win a battleground, talk to someone): the state in words.
+		return "have", "|cff66b3ff" .. T("ST_inprog") .. "|r", 0
 	end
 	if name == Me() then return "none", "|cff808080-|r" end
 	local q = A.quests[id] and A.quests[id][name]
@@ -629,6 +632,7 @@ local function Button(parent, width, key, onClick, tip)
 	b:SetWidth(width)
 	b:SetHeight(20)
 	b.key = key
+	b:SetText(T(key))
 	b:SetScript("OnClick", onClick)
 	if tip then Tip(b, function() return T(key) end, T(tip)) end
 	UI.Flatten(b)
@@ -692,12 +696,31 @@ local function RowClick(self, button)
 	GQ.Draw()
 end
 
+-- Where column j starts in a row, n columns shown: the columns end at the plan buttons, the title takes the rest.
+local function ColX(n, j)
+	local start = X_COLS - 16 + W_ME + MAX_ALTS * W_ALT - (W_ME + (n - 1) * W_ALT)
+	return start + (j == 1 and 0 or W_ME + (j - 2) * W_ALT)
+end
+
+local function RowTip(self)
+	local line = self.line
+	if not line or line.header then return end
+	GameTooltip:SetOwner(self, "ANCHOR_TOP")
+	GameTooltip:SetText(line.title or "?", 1, 0.82, 0, true)
+	if line.zone then GameTooltip:AddLine(line.zone, 0.8, 0.8, 0.8) end
+	GameTooltip:AddLine(T("TIP_ROW"), 0.6, 0.6, 0.6, true)
+	GameTooltip:Show()
+end
+
 local function SmallButton(row, x, icon, tipKey, onClick)
 	local b = UI.IconButton(row, 14, icon, function() return T(tipKey), T("TIP_PLAN") end, function(self)
 		local line = self:GetParent().line
 		if line and not line.header then onClick(line.id) end
 	end)
 	b:SetPoint("LEFT", x, 0)
+	-- Small art, not a spell icon: no black frame around it, nothing cropped.
+	b.border:Hide()
+	b.icon:SetTexCoord(0, 1, 0, 1)
 	return b
 end
 
@@ -709,8 +732,9 @@ function GQ.Build()
 	f:SetHeight(108 + ROWS * ROW_H + 132)
 	f:SetPoint("CENTER")
 	f:SetBackdrop(UI.PANEL_BACKDROP)
-	f:SetBackdropColor(0.04, 0.04, 0.05, 0.96)
-	f:SetFrameStrata("DIALOG")
+	f:SetBackdropColor(0.04, 0.04, 0.05, 1)
+	-- HIGH: opaque, above the game's panels, under the popups (its own Drop confirmation, other addons' questions).
+	f:SetFrameStrata("HIGH")
 	f:SetToplevel(true)
 	f:SetMovable(true)
 	f:EnableMouse(true)
@@ -767,6 +791,8 @@ function GQ.Build()
 		row:SetPoint("TOPLEFT", 16, -90 - (i - 1) * ROW_H)
 		row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 		row:SetScript("OnClick", RowClick)
+		row:SetScript("OnEnter", RowTip)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
 		row:EnableMouseWheel(true)
 		row:SetScript("OnMouseWheel", function(_, delta) GQ.Scroll(delta) end)
@@ -801,10 +827,11 @@ function GQ.Build()
 			row.cells[j] = cell
 		end
 		local bx = X_COLS - 16 + W_ME + MAX_ALTS * W_ALT + 4
-		row.up = SmallButton(row, bx, "Interface\\Buttons\\Arrow-Up-Up", "UP", function(id) GQ.Move(id, -1) end)
-		row.down = SmallButton(row, bx + 16, "Interface\\Buttons\\Arrow-Down-Up", "DOWN", function(id) GQ.Move(id, 1) end)
+		row.up = SmallButton(row, bx, "Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Up", "UP", function(id) GQ.Move(id, -1) end)
+		row.down = SmallButton(row, bx + 16, "Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up", "DOWN", function(id) GQ.Move(id, 1) end)
 		row.ignore = SmallButton(row, bx + 32, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", "IGNORE", GQ.Ignore)
-		for _, b in ipairs({ row.up, row.down }) do b.icon:SetTexCoord(0.2, 0.8, 0.1, 0.7) end
+		-- The scroll bar arrows sit in the middle of their art.
+		for _, b in ipairs({ row.up, row.down }) do b.icon:SetTexCoord(0.2, 0.8, 0.25, 0.75) end
 		f.rows[i] = row
 	end
 	f.scroll = CreateFrame("ScrollFrame", "SquidBotsLiteGroupQuestsScroll", f, "FauxScrollFrameTemplate")
@@ -815,7 +842,7 @@ function GQ.Build()
 	local y = -96 - ROWS * ROW_H
 	UI.Rule(f, y)
 	-- The counts under each column: its log, to turn in, blocked.
-	f.counts = {}
+	f.counts, f.countsY = {}, y
 	for k, key in ipairs({ "C_LOG", "C_TURNIN", "C_BLOCKED" }) do
 		local label = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		label:SetPoint("TOPLEFT", 34, y - 6 - (k - 1) * 14)
@@ -840,6 +867,7 @@ function GQ.Build()
 			def[2](GQ.selected)
 		end, def[3])
 		b:SetPoint("TOPLEFT", x, y - 70)
+		table.insert(f.actions, b)
 		x = x + 114
 	end
 	local drop = Button(f, 110, "DROP", function()
@@ -847,8 +875,10 @@ function GQ.Build()
 		for _, line in ipairs((GQ.Lines(GQ.Columns()))) do if line.id == GQ.selected then RowMenu(line) end end
 	end, "TIP_DROP")
 	drop:SetPoint("TOPLEFT", x, y - 70)
+	table.insert(f.actions, drop)
 	local refresh = Button(f, 110, "REFRESH", function() GQ.AskAll(); GQ.Draw() end)
 	refresh:SetPoint("TOPLEFT", x + 114, y - 70)
+	table.insert(f.actions, refresh)
 	f.status = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	f.status:SetPoint("TOPLEFT", 20, y - 98)
 	f.status:SetWidth(width - 40)
@@ -930,6 +960,7 @@ function GQ.Draw()
 		if GQ.filter == key then b:LockHighlight() else b:UnlockHighlight() end
 	end
 	f.ignoredText:SetText(T("IGNORED"))
+	for _, b in ipairs(f.actions) do b:SetText(T(b.key)) end
 	f.sortButton:SetText(T("S_" .. GQ.sort))
 	f.head:SetText(T("QUEST"))
 	for i, h in ipairs(f.heads) do
@@ -937,6 +968,28 @@ function GQ.Draw()
 	end
 	if #alts > MAX_ALTS then f.pick:Show() else f.pick:Hide() end
 	f.pick:SetText(T("PICK"))
+	-- Fewer columns than the most: they move right, the titles get the room.
+	local n = math.max(#cols, 1)
+	if f.layout ~= n then
+		f.layout = n
+		for i, h in ipairs(f.heads) do
+			h:ClearAllPoints()
+			h:SetPoint("TOPLEFT", ColX(n, i) + 16, -68)
+		end
+		for k, set in ipairs(f.counts) do
+			for i = 1, MAX_ALTS + 1 do
+				set[i]:ClearAllPoints()
+				set[i]:SetPoint("TOPLEFT", ColX(n, i) + 16, f.countsY - 6 - (k - 1) * 14)
+			end
+		end
+		for _, row in ipairs(f.rows) do
+			row.text:SetWidth(ColX(n, 1) - 22)
+			for j, cell in ipairs(row.cells) do
+				cell:ClearAllPoints()
+				cell:SetPoint("LEFT", ColX(n, j), 0)
+			end
+		end
+	end
 	FauxScrollFrame_Update(f.scroll, #lines, ROWS, ROW_H)
 	local offset = FauxScrollFrame_GetOffset(f.scroll)
 	local now = Plan().now
