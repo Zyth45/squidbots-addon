@@ -21,7 +21,10 @@ local STRINGS = {
 		G_GIFT = "gift", G_NONE = "No order in the last 7 days.", G_NO_GIFT = "No gift in the last 30 days.",
 		G_ORDERS = "My orders to the guild", G_GIFTS = "Gifts from my guild",
 		G_GIFT_LINE = "given by %s, %s", G_BY = "%s, %s", AGO = "%s ago",
-		S_open = "waiting", S_shared = "sent from its bags (free)", S_crafted = "crafted (cash on delivery)",
+		S_open = "waiting", S_bank = "from the guild bank (free)", G_OF = "%d of %d: %s",
+		P_bank = "guild bank", P_shared = "bags", P_crafted = "crafted", P_bought = "AH",
+		GC_SHOW = "%s", GC_CAT_all = "All", GC_CAT_trade = "Trade goods", GC_CAT_consumable = "Consumables",
+		GC_CAT_equipment = "Equipment", GC_CAT_other = "Other", GC_ALL_EQUIP = "All equipment", S_shared = "sent from its bags (free)", S_crafted = "crafted (cash on delivery)",
 		S_bought = "bought at the AH (cash on delivery)", S_none = "nobody could", S_refused = "refused",
 		A_BACK = "< Artisans list", A_MAILS = "My orders", A_QUOTE = "Quote", A_ORDER = "Order", A_NONE = "No artisan bot online.",
 		A_PICK = "Click an artisan, then a recipe.", A_TITLE = "Online artisans of your faction (not only your guild): click one for its recipes.",
@@ -87,7 +90,10 @@ local STRINGS = {
 		G_GIFT = "don", G_NONE = "Aucune commande ces 7 derniers jours.", G_NO_GIFT = "Aucun cadeau ces 30 derniers jours.",
 		G_ORDERS = "Mes commandes à la guilde", G_GIFTS = "Cadeaux reçus de ma guilde",
 		G_GIFT_LINE = "offert par %s, %s", G_BY = "%s, %s", AGO = "il y a %s",
-		S_open = "en attente", S_shared = "envoyé de ses sacs (gratuit)", S_crafted = "fabriqué (contre remboursement)",
+		S_open = "en attente", S_bank = "de la banque de guilde (gratuit)", G_OF = "%d sur %d : %s",
+		P_bank = "banque de guilde", P_shared = "sacs", P_crafted = "fabriqué", P_bought = "HV",
+		GC_SHOW = "%s", GC_CAT_all = "Tout", GC_CAT_trade = "Composants d'artisanat", GC_CAT_consumable = "Consommables",
+		GC_CAT_equipment = "Équipement", GC_CAT_other = "Autre", GC_ALL_EQUIP = "Tout l'équipement", S_shared = "envoyé de ses sacs (gratuit)", S_crafted = "fabriqué (contre remboursement)",
 		S_bought = "acheté à l'HV (contre remboursement)", S_none = "personne n'a pu", S_refused = "refusé",
 		A_BACK = "< Liste des artisans", A_MAILS = "Mes commandes", A_QUOTE = "Devis", A_ORDER = "Commander", A_NONE = "Aucun bot artisan en ligne.",
 		A_PICK = "Cliquez un artisan, puis une recette.", A_TITLE = "Artisans de votre faction en ligne (pas seulement votre guilde) : cliquez-en un pour ses recettes.",
@@ -365,7 +371,8 @@ function W.Line(f)
 		W.error = W.Reason(f[3])
 	elseif k == "GO" then
 		table.insert(W.guild.orders, { id = f[2], item = tonumber(f[3]), qty = tonumber(f[4]) or 1, state = f[5],
-			bot = f[6] ~= "-" and f[6] or nil, at = tonumber(f[7]) or 0, cod = tonumber(f[8]) or 0, reason = f[9] ~= "-" and f[9] or nil })
+			bot = f[6] ~= "-" and f[6] or nil, at = tonumber(f[7]) or 0, cod = tonumber(f[8]) or 0, reason = f[9] ~= "-" and f[9] or nil,
+			asked = tonumber(f[10] or "") or 0 })
 	elseif k == "GG" then
 		table.insert(W.guild.gifts, { item = tonumber(f[2]), bot = f[3], at = tonumber(f[4]) or 0 })
 	elseif k == "AB" then
@@ -430,7 +437,9 @@ function W.Line(f)
 		if item and f[12] and f[12] ~= "" then W.names[item] = f[12] end
 		table.insert(W.guild.cat.list, { item = item, source = f[3], bot = f[4], qty = tonumber(f[5]) or 0,
 			price = tonumber(f[6]) or 0, quality = tonumber(f[7]), ilvl = tonumber(f[8]) or 0, req = tonumber(f[9]) or 0,
-			slot = tonumber(f[10]) or 0, skill = tonumber(f[11]) or 0 })
+			slot = tonumber(f[10]) or 0, skill = tonumber(f[11]) or 0, class = tonumber(f[13] or "") })
+		-- 3.1.4: a server that sends the class filters the catalogue by category (GCAT's 4th field).
+		if f[13] then W.guild.cat.hasClass = true end
 	elseif k == "GCN" then
 		W.guild.cat.total, W.guild.cat.page = tonumber(f[2]) or 0, tonumber(f[3]) or 1
 	elseif k == "GA" then
@@ -949,7 +958,7 @@ function W.Build()
 	f.catRefresh:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	f.slotBtn:SetPoint("LEFT", f.catRefresh, "RIGHT", 6, 0)
 	W.StyleButton(f.slotBtn, W.ICONS.filter)
-	f.slotBtn:SetScript("OnClick", function() if W.RecipesShown() then W.SortMenu() else W.SlotMenu() end end)
+	f.slotBtn:SetScript("OnClick", function() if W.RecipesShown() then W.SortMenu() else W.FilterMenu() end end)
 	f.usable = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
 	f.usable:SetWidth(22)
 	f.usable:SetHeight(22)
@@ -1168,7 +1177,7 @@ function W.Load()
 		if GuildRoster then GuildRoster() end
 		if mode ~= "act" then W.Ask("GACT?", "act") end
 		if mode == "gifts" then W.Ask("GOFF", "gifts"); W.Ask("GLIST", "guild")
-		elseif mode == "cat" then W.Ask("GCAT\t" .. W.guild.cat.search .. "\t" .. W.guild.cat.page, "cat")
+		elseif mode == "cat" then W.Ask(W.CatRequest(), "cat")
 		elseif mode == "act" then W.Ask("GACT?", "act")
 		else W.Ask("GLIST", "guild") end
 	elseif W.tab == "art" then
@@ -1259,8 +1268,54 @@ W.ACTS = { "gather", "party5", "raid10", "raid15", "raid25" }
 function W.CatPage(page)
 	local c = W.guild.cat
 	c.page = math.max(1, page or 1)
-	W.at["GCAT\t" .. c.search .. "\t" .. c.page] = nil
-	W.Ask("GCAT\t" .. c.search .. "\t" .. c.page, "cat")
+	W.at[W.CatRequest()] = nil
+	W.Ask(W.CatRequest(), "cat")
+end
+
+-- 3.1.4: the category, remembered (trade, consumable, equipment, other; nil: all), filtered by the server before
+-- its pages. An older server ignores the 4th field and sends no class: the button then offers the slots only.
+W.CATEGORIES = { "trade", "consumable", "equipment", "other" }
+W.CLASS_CAT = { [7] = "trade", [5] = "trade", [3] = "trade", [9] = "trade", [0] = "consumable", [2] = "equipment", [4] = "equipment" }
+
+function W.CatCategory()
+	return SquidBotsLiteDB and SquidBotsLiteDB.gcatCategory or nil
+end
+
+function W.CatRequest()
+	local c, cat = W.guild.cat, W.CatCategory()
+	return "GCAT\t" .. c.search .. "\t" .. c.page .. (cat and ("\t" .. cat) or "")
+end
+
+function W.SetCategory(cat)
+	if SquidBotsLiteDB then SquidBotsLiteDB.gcatCategory = cat end
+	W.guild.cat.slot, W.offset = nil, 0
+	W.CatPage(1)
+	W.Refresh()
+end
+
+-- The item's category from its class (the server's own split); nil when the server sent none.
+function W.InCategory(x, cat)
+	if not cat or not x.class then return true end
+	return (W.CLASS_CAT[x.class] or "other") == cat
+end
+
+function W.FilterMenu()
+	if not W.guild.cat.hasClass then return W.SlotMenu() end
+	local cat, items = W.CatCategory(), {}
+	table.insert(items, { text = T("GC_CAT_all"), checked = cat == nil, func = function() W.SetCategory(nil) end })
+	for _, key in ipairs(W.CATEGORIES) do
+		local item = { text = T("GC_CAT_" .. key), checked = cat == key, func = function() W.SetCategory(key) end }
+		if key == "equipment" then
+			-- Its slots (of the page shown), one level down.
+			item.hasArrow, item.menuList = true, W.SlotItems(function(name)
+				if W.CatCategory() ~= "equipment" then W.SetCategory("equipment") end
+				W.guild.cat.slot, W.offset = name, 0
+				W.Refresh()
+			end, T("GC_ALL_EQUIP"))
+		end
+		table.insert(items, item)
+	end
+	EasyMenu(items, W.frame.menu, "cursor", 0, 0, "MENU")
 end
 
 function W.CatRefresh()
@@ -1283,18 +1338,25 @@ function W.SortMenu()
 	EasyMenu(items, W.frame.menu, "cursor", 0, 0, "MENU")
 end
 
-function W.SlotMenu()
+-- The slots of the page shown, "All" first; pick(name) gets the slot's name, nil for all.
+function W.SlotItems(pick, allText)
 	local seen, slots = {}, {}
 	for _, x in ipairs(W.guild.cat.list) do
 		local name = W.SlotName(x.slot)
-		if not seen[name] then seen[name] = true; table.insert(slots, { name = name, slot = x.slot }) end
+		if not seen[name] and (not x.class or W.CLASS_CAT[x.class] == "equipment") then
+			seen[name] = true; table.insert(slots, { name = name, slot = x.slot })
+		end
 	end
 	table.sort(slots, function(a, b) return a.name < b.name end)
-	local items = { { text = T("A_ALL"), checked = W.guild.cat.slot == nil, func = function() W.guild.cat.slot = nil; W.offset = 0; W.Refresh() end } }
+	local items = { { text = allText or T("A_ALL"), checked = W.guild.cat.slot == nil, func = function() pick(nil) end } }
 	for _, x in ipairs(slots) do
-		table.insert(items, { text = x.name, checked = W.guild.cat.slot == x.name,
-			func = function() W.guild.cat.slot = x.name; W.offset = 0; W.Refresh() end })
+		table.insert(items, { text = x.name, checked = W.guild.cat.slot == x.name, func = function() pick(x.name) end })
 	end
+	return items
+end
+
+function W.SlotMenu()
+	local items = W.SlotItems(function(name) W.guild.cat.slot = name; W.offset = 0; W.Refresh() end)
 	EasyMenu(items, W.frame.menu, "cursor", 0, 0, "MENU")
 end
 
@@ -1337,7 +1399,8 @@ function W.Rows()
 	elseif W.tab == "guild" and W.guild.mode == "cat" then
 		local c, level = W.guild.cat, UnitLevel and UnitLevel("player") or 80
 		for _, x in ipairs(c.list) do
-			if (not c.slot or W.SlotName(x.slot) == c.slot) and (not c.usable or x.req <= level) then
+			if (not c.slot or W.SlotName(x.slot) == c.slot) and (not c.usable or x.req <= level)
+				and (not c.hasClass or W.InCategory(x, W.CatCategory())) then
 				local source = x.source == "stock" and string.format(T("GC_STOCK"), x.bot or "?", x.qty)
 					or string.format(T("GC_CRAFT"), x.bot or "?")
 				local req = x.req > 0 and ("  " .. (x.req > level and "|cffff6060" or "|cffaaaaaa") .. string.format(T("GC_REQ"), x.req) .. "|r") or ""
@@ -1393,29 +1456,60 @@ function W.Rows()
 	elseif W.tab == "guild" then
 		-- Two parts, each with its title: my orders (and how each went), the gifts the guild sent me.
 		local cleared = SquidBotsLiteDB and SquidBotsLiteDB.guildClearedAt or 0
-		local recent = {}
+		local recent, byKey = {}, {}
 		for _, o in ipairs(W.guild.orders) do
-			if o.at > now - 86400 and o.at > cleared and #recent < 5 then table.insert(recent, o) end
+			if o.at > now - 86400 and o.at > cleared then
+				-- 3.1.4: a combined order is one line per way (bank, bags, craft, AH), all with the count asked.
+				local key = (o.asked or 0) > 0 and (tostring(o.item) .. ":" .. o.at .. ":" .. o.asked) or ("id" .. tostring(o.id))
+				local group = byKey[key]
+				if not group and #recent < 5 then
+					group = { parts = {} }
+					byKey[key] = group
+					table.insert(recent, group)
+				end
+				if group then table.insert(group.parts, o) end
+			end
 		end
 		table.insert(rows, { header = true, left = "|cffffd100" .. T("G_ORDERS") .. "|r", right = "",
 			go = #recent > 0 and { icon = W.ICONS.cancel, title = T("G_CLEAR"), line = T("G_CLEAR_TIP"), click = function()
 				SquidBotsLiteDB.guildClearedAt = time()
 				W.Refresh()
 			end } or nil })
-		for _, o in ipairs(recent) do
-			local state = T("S_" .. (o.state or "open"))
-			local known = o.reason and T("R_" .. o.reason) ~= "R_" .. o.reason
-			if o.state == "none" then
-				-- 3.1.3 (Monde a0a15db5): why nobody could, in its place; an unknown reason keeps "nobody could" alone.
-				if known then state = T("R_" .. o.reason) end
-			elseif o.reason then
-				state = state .. " : " .. W.Reason(o.reason)
+		for _, group in ipairs(recent) do
+			local o, parts = group.parts[1], group.parts
+			local served, cod, bots, seen, ways = 0, 0, {}, {}, {}
+			for _, part in ipairs(parts) do
+				local sent = part.state == "bank" or part.state == "shared" or part.state == "crafted" or part.state == "bought"
+				if sent then
+					served = served + part.qty
+					table.insert(ways, T("P_" .. part.state) .. " " .. part.qty)
+				end
+				cod = cod + (part.cod or 0)
+				if part.bot and not seen[part.bot] then seen[part.bot] = true; table.insert(bots, part.bot) end
 			end
-			if o.cod > 0 then state = state .. "  " .. W.Money(o.cod) end
-			local color = (o.state == "refused" or o.state == "none") and "|cffff6060" or (o.state == "open") and "|cffaaaaaa" or "|cff40ff40"
-			local by = o.bot and string.format(T("G_BY"), o.bot, W.Ago(o.at)) or W.Ago(o.at)
+			local state
+			if #parts > 1 then
+				state = table.concat(ways, ", ")
+			else
+				state = T("S_" .. (o.state or "open"))
+				local known = o.reason and T("R_" .. o.reason) ~= "R_" .. o.reason
+				if o.state == "none" then
+					-- 3.1.3 (Monde a0a15db5): why nobody could, in its place; an unknown reason keeps "nobody could" alone.
+					if known then state = T("R_" .. o.reason) end
+				elseif o.reason then
+					state = state .. " : " .. W.Reason(o.reason)
+				end
+			end
+			if cod > 0 then state = state .. "  " .. W.Money(cod) end
+			local asked = o.asked or 0
+			-- 3.1.4: how many of the count asked came, when the server says it ("5 of 20").
+			if asked > 0 and served > 0 then state = string.format(T("G_OF"), served, asked, state) end
+			local color = served == 0 and (o.state == "open" and "|cffaaaaaa" or (o.state == "refused" or o.state == "none") and "|cffff6060" or "|cff40ff40")
+				or (asked > 0 and served < asked) and "|cffffd100" or "|cff40ff40"
+			local by = #bots > 0 and string.format(T("G_BY"), table.concat(bots, ", "), W.Ago(o.at)) or W.Ago(o.at)
+			local count = asked > 0 and asked or o.qty
 			-- The item and who / when on the left, the status alone in its column.
-			table.insert(rows, { item = o.item, left = W.Colored(o.item) .. (o.qty > 1 and (" x" .. o.qty) or ""), sub = by,
+			table.insert(rows, { item = o.item, left = W.Colored(o.item) .. (count > 1 and (" x" .. count) or ""), sub = by,
 				right = color .. state .. "|r" })
 		end
 		if #recent == 0 then table.insert(rows, { left = "|cffaaaaaa" .. T("G_NONE") .. "|r", right = "" }) end
@@ -1621,7 +1715,14 @@ function W.Refresh()
 	if cat then
 		local c = W.guild.cat
 		f.searchHint:SetText((f.search:GetText() == "" and not f.search:HasFocus()) and T("GC_SEARCH") or "")
-		f.slotBtn:SetText(string.format(T("GC_SLOT"), c.slot or T("A_ALL")))
+		if c.hasClass then
+			local cat = W.CatCategory()
+			local shown = T("GC_CAT_" .. (cat or "all")) .. (c.slot and (", " .. c.slot) or "")
+			-- The category alone (the filter icon says what the button is): "Trade goods" fits its 170 px.
+			f.slotBtn:SetText(string.format(T("GC_SHOW"), shown))
+		else
+			f.slotBtn:SetText(string.format(T("GC_SLOT"), c.slot or T("A_ALL")))
+		end
 		W.PlaceText(f.slotBtn)
 		f.usable:SetChecked(c.usable)
 		f.usableText:SetText(T("GC_USABLE"))
