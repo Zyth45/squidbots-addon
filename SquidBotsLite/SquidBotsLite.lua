@@ -548,6 +548,7 @@ local function SendLfg(message, after)
 	local id, name = FindChannel()
 	if id then
 		SendChatMessage(message, "CHANNEL", nil, id)
+		K.askedAt = GetTime()
 		Print(string.format(L.ASKED, name, message))
 		if after then after() end
 		return
@@ -571,6 +572,7 @@ joinWait:SetScript("OnUpdate", function(self)
 	if id then
 		self:Hide()
 		SendChatMessage(self.message, "CHANNEL", nil, id)
+		K.askedAt = GetTime()
 		Print(string.format(L.ASKED, name, self.message))
 		if self.after then self.after() end
 	elseif GetTime() > self.untilAt then
@@ -3235,13 +3237,16 @@ local function OnWhisper(message, sender)
 		end
 	end
 	-- A Wildcard Hero offers itself as "Hero" (class 10), in no class list above.
-	if not class and message:find("Hero", 1, true) then
+	if not class and message:find("%f[%a]Hero%f[%A]") then
 		class = SquidBotsLiteDB.lang == "fr" and "Héros" or "Hero"
 	end
 	local lower = string.lower(message)
 	if not class or not (lower:find("invite") or lower:find("service") or lower:find("ready") or lower:find("available") or lower:find("looking")) then
 		return
 	end
+	-- An offer answers the player's ask (within 10 minutes), or comes from a bot already known: any other
+	-- whisper with a level and a class is a player talking.
+	if not ((K.askedAt and GetTime() - K.askedAt < 600) or who.Kind(sender) ~= nil or knownBot[sender]) then return end
 	-- "I'll keep your tank alive" is a healer talking: the healer words win.
 	local role = (lower:find("heal") or lower:find("keep your tank alive")) and "heal"
 		or (lower:find("tank") and "tank")
@@ -3270,7 +3275,8 @@ local function OnWhisper(message, sender)
 			if offer.role == drop then table.remove(toasts, i) break end
 		end
 	end
-	if not bar:IsShown() then SetBarShown(true) end
+	-- Shown for the offer, without changing the player's /sbl hide choice.
+	if not bar:IsShown() then bar:Show() end
 	RefreshToasts()
 end
 
