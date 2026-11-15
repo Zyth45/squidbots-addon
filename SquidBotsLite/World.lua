@@ -165,6 +165,11 @@ local function T(key)
 	return (STRINGS[lang] or STRINGS.en)[key] or STRINGS.en[key] or key
 end
 W.T = T
+-- A server word in words: its text when known, else the word itself (never "S_xxx").
+function W.Word(prefix, word)
+	local text = T(prefix .. word)
+	return text ~= prefix .. word and text or word
+end
 
 local SKILL_ICON = { [171] = "Trade_Alchemy", [164] = "Trade_BlackSmithing", [333] = "Trade_Engraving",
 	[202] = "Trade_Engineering", [773] = "INV_Inscription_Tradeskill01", [755] = "INV_Misc_Gem_01",
@@ -1479,10 +1484,13 @@ function W.Rows()
 			local o, parts = group.parts[1], group.parts
 			local served, cod, bots, seen, ways = 0, 0, {}, {}, {}
 			for _, part in ipairs(parts) do
-				local sent = part.state == "bank" or part.state == "shared" or part.state == "crafted" or part.state == "bought"
+				-- A state this addon does not know yet (a newer server), with items sent: counted, shown by its word.
+				local state = part.state or "open"
+				local sent = state == "bank" or state == "shared" or state == "crafted" or state == "bought"
+					or (part.qty > 0 and state ~= "open" and state ~= "none" and state ~= "refused")
 				if sent then
 					served = served + part.qty
-					table.insert(ways, T("P_" .. part.state) .. " " .. part.qty)
+					table.insert(ways, W.Word("P_", state) .. " " .. part.qty)
 				end
 				cod = cod + (part.cod or 0)
 				if part.bot and not seen[part.bot] then seen[part.bot] = true; table.insert(bots, part.bot) end
@@ -1491,7 +1499,7 @@ function W.Rows()
 			if #parts > 1 then
 				state = table.concat(ways, ", ")
 			else
-				state = T("S_" .. (o.state or "open"))
+				state = W.Word("S_", o.state or "open")
 				local known = o.reason and T("R_" .. o.reason) ~= "R_" .. o.reason
 				if o.state == "none" then
 					-- 3.1.3 (Monde a0a15db5): why nobody could, in its place; an unknown reason keeps "nobody could" alone.
