@@ -1716,7 +1716,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	elseif event == "QUEST_LOG_UPDATE" then
 		A.WatchDots()
 	elseif event == "UNIT_HEALTH" then
-		if arg1 and (arg1:find("^party%d") or arg1:find("^raid%d")) then A.RefreshTeam() end
+		-- An alt's health only, and drawn at most five times a second (a raid in combat sends hundreds).
+		if arg1 and (arg1:find("^party%d") or arg1:find("^raid%d")) and IsAlt(UnitName(arg1)) then A.teamDirty = true end
 	else
 		-- An alt that joins the group opens the team bar again, even after the player closed it.
 		if event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
@@ -1744,6 +1745,13 @@ if hooksecurefunc and WatchFrame_Update then hooksecurefunc("WatchFrame_Update",
 
 local elapsed, teamTick = 0, 0
 frame:SetScript("OnUpdate", function(_, delta)
+	if A.teamDirty then
+		A.teamWait = (A.teamWait or 0) - delta
+		if A.teamWait <= 0 then
+			A.teamDirty, A.teamWait = nil, 0.2
+			A.RefreshTeam()
+		end
+	end
 	elapsed = elapsed + delta
 	if elapsed < 1 then return end
 	elapsed = 0
