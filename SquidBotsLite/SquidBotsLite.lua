@@ -1060,7 +1060,17 @@ function who.Store()
 	SquidBotsLiteDB.botKind = SquidBotsLiteDB.botKind or {}
 	local realm = GetRealmName() or "?"
 	SquidBotsLiteDB.botKind[realm] = SquidBotsLiteDB.botKind[realm] or {}
-	return SquidBotsLiteDB.botKind[realm]
+	local store = SquidBotsLiteDB.botKind[realm]
+	-- Once a session: past 400 random bots met, they are forgotten (asked again when met); the alts stay.
+	if not who.pruned then
+		who.pruned = true
+		local randoms = 0
+		for _, kind in pairs(store) do if kind == "random" then randoms = randoms + 1 end end
+		if randoms > 400 then
+			for name, kind in pairs(store) do if kind == "random" then store[name] = nil end end
+		end
+	end
+	return store
 end
 
 function who.Supported()
