@@ -122,7 +122,7 @@ local STRINGS = {
 		BALANCE_DONE = "Group: %s.", BALANCE_MISSING = "No bot in the group can play %s.",
 		BALANCE_WAIT = "Asking the bots for their specializations...", BALANCE_RAID = "In a raid, the raid command already sets the roles: pick specializations bot by bot.",
 		SPECS_NOT_BOT = "not a bot", SPEC_ASK = "Ask the bot", TIP_ROLE = "Switch to %s.", TIP_NO_ROLE = "No specialization of this role.",
-		HELP = "SquidBots Manager: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl dashboard, /sbl spec, /sbl keys, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Manager.",
+		HELP = "SquidBots Manager: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl dashboard, /sbl spec, /sbl keys, /sbl missions, /sbl world, /sbl dc, /sbl bot <name>, /sbl icons, /sbl raidframes on|off, /sbl questask, /sbl sheettrade on|off, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Manager.",
 		SCALE_SET = "SquidBots Manager bar size: %s (this character).", SCALE_BAD = "Bar size: a number from 0.5 to 2, for example /sbl scale 1.2",
 		LANG_SET = "SquidBots Manager language: English.", CHANNEL_SET = "SquidBots Manager asks in: %s",
 	},
@@ -243,7 +243,7 @@ local STRINGS = {
 		BALANCE_DONE = "Groupe : %s.", BALANCE_MISSING = "Aucun bot du groupe ne peut jouer %s.",
 		BALANCE_WAIT = "Demande de leurs spécialisations aux bots...", BALANCE_RAID = "En raid, la commande de raid répartit déjà les rôles : choisissez les spécialisations bot par bot.",
 		SPECS_NOT_BOT = "pas un bot", SPEC_ASK = "Demander au bot", TIP_ROLE = "Passer en %s.", TIP_NO_ROLE = "Aucune spécialisation de ce rôle.",
-		HELP = "SquidBots Manager : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl dashboard, /sbl spec, /sbl keys, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Manager.",
+		HELP = "SquidBots Manager : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl dashboard, /sbl spec, /sbl keys, /sbl missions, /sbl world, /sbl dc, /sbl bot <name>, /sbl icons, /sbl raidframes on|off, /sbl questask, /sbl sheettrade on|off, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Manager.",
 		SCALE_SET = "Taille de la barre SquidBots Manager : %s (ce personnage).", SCALE_BAD = "Taille de la barre : un nombre de 0,5 à 2, par exemple /sbl scale 1.2",
 		LANG_SET = "Langue de SquidBots Manager : français.", CHANNEL_SET = "SquidBots Manager demande dans : %s",
 	},
@@ -2650,9 +2650,9 @@ local function RefreshAlts()
 		row.alt = alt
 		if alt then
 			-- Logging in or out (2.9.4): shown at once as it will be, the toggle off until the server says so.
-			local online = alt.online
-			if alt.pending then online = alt.pending == "in" end
-			local name = online and ui.ClassName(alt.name) or ("|cff9d9d9d" .. alt.name .. "|r")
+			local isOn = alt.online
+			if alt.pending then isOn = alt.pending == "in" end
+			local name = isOn and ui.ClassName(alt.name) or ("|cff9d9d9d" .. alt.name .. "|r")
 			row.name:SetText(alt.linked and (name .. " |cff8888aa(" .. L.ALTS_LINKED .. ")|r") or name)
 			-- Level, class, spec; its gathering skill as an icon, and a gold word while it is out on a mission.
 			local line = AltLine(alt.name)
@@ -2666,12 +2666,12 @@ local function RefreshAlts()
 			row.info:SetText(line)
 			ShowXP(row.xp, alt.name)
 			ui.ClassIcon(row.icon, alt.name)
-			row.icon:SetDesaturated(not online)
-			row.icon:SetAlpha(online and 1 or 0.55)
+			row.icon:SetDesaturated(not isOn)
+			row.icon:SetAlpha(isOn and 1 or 0.55)
 			row.dot:SetTexture(alt.pending and "Interface\\FriendsFrame\\StatusIcon-Away"
-				or online and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
-			row:SetBackdropColor(online and 0.10 or 0.07, online and 0.10 or 0.07, online and 0.12 or 0.08, 0.95)
-			ui.SetIcon(row.toggle, online and "Interface\\Icons\\Spell_ChargeNegative" or "Interface\\Icons\\Spell_ChargePositive",
+				or isOn and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
+			row:SetBackdropColor(isOn and 0.10 or 0.07, isOn and 0.10 or 0.07, isOn and 0.12 or 0.08, 0.95)
+			ui.SetIcon(row.toggle, isOn and "Interface\\Icons\\Spell_ChargeNegative" or "Interface\\Icons\\Spell_ChargePositive",
 				not alt.pending)
 			if alt.online and not alt.pending then row.summon:Show() else row.summon:Hide() end
 			if alt.online and not alt.pending and SquidBotsLite_OpenSheet then row.sheet:Show() else row.sheet:Hide() end
@@ -3400,14 +3400,14 @@ function dc.OnAddon(message)
 		dc.line:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 2, -2)
 		dc.line:SetJustifyH("LEFT")
 	end
-	local state, detail, stall = parts[7] or "", parts[8] or "", parts[5] or ""
+	local runState, detail, stall = parts[7] or "", parts[8] or "", parts[5] or ""
 	local text
 	if parts[2] ~= "1" then
 		text = L.DC_STOPPED
 		dc.hideAt = GetTime() + dc.LINE_KEEP
 	else
-		text = detail ~= "" and detail or state
-		if state == "paused" then text = L.DC_PAUSED .. (detail ~= "" and (" - " .. detail) or "") end
+		text = detail ~= "" and detail or runState
+		if runState == "paused" then text = L.DC_PAUSED .. (detail ~= "" and (" - " .. detail) or "") end
 		if stall ~= "" then text = text .. " |cffff5555(" .. stall .. ")|r" end
 		dc.hideAt = nil
 	end
@@ -4011,7 +4011,10 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		end
 	elseif command == "help" or command == "?" then
 		Print(L.HELP)
-	else
+	elseif command == "" then
 		SetBarShown(not bar:IsShown())
+	else
+		-- A command mistyped: the help, not a bar shown or hidden without a word.
+		Print(L.HELP)
 	end
 end
