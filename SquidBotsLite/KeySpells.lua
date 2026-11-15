@@ -767,6 +767,7 @@ local function BindingNames()
 	BINDING_NAME_SQUIDBOTSLITE_QTAUNT = T("B_taunt")
 end
 BindingNames()
+ks.BindingNames = BindingNames
 
 local events = CreateFrame("Frame")
 for _, event in ipairs({ "PLAYER_LOGIN", "CHAT_MSG_ADDON", "CHAT_MSG_WHISPER", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE" }) do

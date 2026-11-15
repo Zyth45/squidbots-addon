@@ -807,6 +807,7 @@ local function BindingNames()
 	end
 end
 BindingNames()
+SquidBotsLite_MainTankBindingNames = BindingNames
 
 local frame = CreateFrame("Frame")
 for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "CHAT_MSG_ADDON", "PARTY_MEMBERS_CHANGED", "RAID_ROSTER_UPDATE",

@@ -3931,6 +3931,9 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		AltsTexts()
 		RefreshAlts()
 		SpecsTexts()
+		-- The key binding names of the other bars, in the new language without a reload.
+		if SquidBotsLite_MainTankBindingNames then SquidBotsLite_MainTankBindingNames() end
+		if SquidBotsLite_KeySpells and SquidBotsLite_KeySpells.BindingNames then SquidBotsLite_KeySpells.BindingNames() end
 		Print(L.LANG_SET)
 	elseif command == "channel" then
 		rest = strtrim(rest or "")
