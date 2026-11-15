@@ -745,6 +745,8 @@ function ks.Apply()
 	end
 	if small then if shown and not full then small:Show() else small:Hide() end end
 	Changed()
+	-- The Keys button of the main bar lights while a bar is up.
+	if SquidBotsLite_RefreshBar then SquidBotsLite_RefreshBar() end
 end
 
 function ks.SetMode(mode)

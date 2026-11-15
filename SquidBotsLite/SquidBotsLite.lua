@@ -26,6 +26,8 @@ local STRINGS = {
 		MAINTANK_BAR = "Main Tank", TIP_MAINTANK = "You tank: the off-tank bar opens, Main tank on (a running Dungeon clear stops). Your bots keep their boss strategies. Click again: Leave Tank.",
 		TIP_MAINTANK_SOLO = "Join a group first.",
 		TIP_RECRUIT = "Ask for a tank, a healer or damage. Offers pop up above this bar.",
+		KEYS_BAR = "Keys", TIP_KEYS = "Shows or hides the key spells bar: Heal please, CC please, Taunt please, and in full size each bot's big cooldowns.",
+		TIP_KEYS_MODE = "Right-click: small or full size.",
 		TIP_ALTS = "Your other characters: log them in as bots, summon them, open their sheet (gear, bags, quests, mounts).",
 		TIP_MOVE = "Shift-drag to move the bar, Ctrl + mouse wheel to resize it.",
 		TIP_PROFILES = "Right click: profiles (farm, strict follow, dungeon).",
@@ -147,6 +149,8 @@ local STRINGS = {
 		MAINTANK_BAR = "Main Tank", TIP_MAINTANK = "Vous tankez : la barre des off-tanks s'ouvre, Main tank actif (un Dungeon clear en cours s'arrête). Vos bots gardent leurs stratégies de boss. Nouveau clic : Quitter tank.",
 		TIP_MAINTANK_SOLO = "Rejoignez d'abord un groupe.",
 		TIP_RECRUIT = "Demandez un tank, un soigneur ou des DPS. Les offres s'affichent au-dessus de la barre.",
+		KEYS_BAR = "Clés", TIP_KEYS = "Affiche ou cache la barre des sorts clés : soin, contrôle, provocation, et en grand les gros temps de recharge de chaque bot.",
+		TIP_KEYS_MODE = "Clic droit : petite ou grande taille.",
 		TIP_ALTS = "Vos autres personnages : connectez-les en bots, appelez-les, ouvrez leur fiche (équipement, sacs, quêtes, montures).",
 		TIP_MOVE = "Maj + glisser pour déplacer la barre, Ctrl + molette pour la redimensionner.",
 		TIP_PROFILES = "Clic droit : les profils (farm, suivi strict, donjon).",
@@ -274,7 +278,7 @@ K.MAX_TOASTS = 8
 -- Captions in a smaller font than the game's small text, and buttons spaced by the widest caption of the
 -- current language (measured in game): English "Dungeon" needs more room than French "Donjon".
 K.CAPTION_SIZE, K.CAPTION_GAP, K.MIN_STEP, K.FALLBACK_STEP = 8, 3, 37, 52
-local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "world", "recruit", "maintank", "release" }
+local BAR_ORDER = { "follow", "stay", "attack", "passive", "pull", "dungeon", "summon", "alts", "world", "recruit", "keys", "maintank", "release" }
 -- A member of unknown role is asked "co ?" this long after it shows up (a lfg recruit announces
 -- its role on its own first), and the "Strategies: ..." answer is hidden for K.PROBE_WINDOW seconds.
 K.PROBE_DELAY, K.PROBE_WINDOW, K.PROBE_RETRY = 3, 10, 30
@@ -1817,7 +1821,7 @@ Highlight = function()
 	local tanking = SquidBotsLite_MainTankShown and SquidBotsLite_MainTankShown()
 	for key, button in pairs(buttons) do
 		local active = key == state.order or (key == "passive" and state.passive) or (key == "pull" and not state.autoPull)
-			or (key == "maintank" and tanking)
+			or (key == "maintank" and tanking) or (key == "keys" and SquidBotsLiteDB and SquidBotsLiteDB.keyBarShown)
 		button.ring:SetVertexColor(active and 1 or 0.35, active and 0.82 or 0.35, active and 0 or 0.35)
 	end
 	local passive = buttons.passive
@@ -1908,7 +1912,7 @@ local function BarButton(key, icon, label, tip, onClick)
 	end)
 	button:SetScript("OnClick", function(self, mouse)
 		-- Right click anywhere on the bar: the profiles (farm, strict follow, dungeon...).
-		if mouse == "RightButton" then
+		if mouse == "RightButton" and key ~= "keys" then
 			ShowMenu(ProfileMenu())
 		else
 			onClick(self, mouse)
@@ -1919,7 +1923,7 @@ local function BarButton(key, icon, label, tip, onClick)
 		GameTooltip:SetText(L[self.label])
 		GameTooltip:AddLine(L[self.tip], 1, 1, 1, true)
 		-- Its key binding, when it has one in the game's Key Bindings window.
-		if key == "follow" or key == "stay" or key == "attack" or key == "pull" or key == "summon" then
+		if key == "follow" or key == "stay" or key == "attack" or key == "pull" or key == "summon" or key == "keys" then
 			local bound = GetBindingKey("SQUIDBOTSLITE_" .. string.upper(key))
 			if bound then
 				GameTooltip:AddLine(string.format(L.KEY, bound), 0.4, 0.8, 1)
@@ -1927,7 +1931,7 @@ local function BarButton(key, icon, label, tip, onClick)
 				GameTooltip:AddLine(L.NO_KEY, 0.4, 0.8, 1, true)
 			end
 		end
-		GameTooltip:AddLine(L.TIP_PROFILES, 0.6, 0.6, 0.6, true)
+		GameTooltip:AddLine(key == "keys" and L.TIP_KEYS_MODE or L.TIP_PROFILES, 0.6, 0.6, 0.6, true)
 		GameTooltip:AddLine(L.TIP_MOVE, 0.6, 0.6, 0.6, true)
 		GameTooltip:Show()
 	end)
@@ -2061,6 +2065,17 @@ local function BuildBar()
 		end },
 		{ "recruit", "Interface\\Icons\\Spell_Frost_SummonWaterElemental", "RECRUIT", "TIP_RECRUIT", function()
 			ShowMenu(RecruitMenu())
+		end },
+		-- 3.1.3: the key spells bar (KeySpells.lua), as /sbl keys; it comes back where and as it was left.
+		-- Right click: small or full size, shown.
+		{ "keys", "Interface\\Icons\\Spell_Holy_PowerWordShield", "KEYS_BAR", "TIP_KEYS", function(_, mouse)
+			local ks = SquidBotsLite_KeySpells
+			if not ks then return end
+			if mouse == "RightButton" then
+				ks.SetMode(ks.Mode() == "full" and "small" or "full")
+			else
+				SquidBotsLite_ToggleKeySpells()
+			end
 		end },
 		-- Whispered to the dead only: "release" tells a living bot to stop following and wait.
 		-- 2.9.4: the off-tank bar (MainTank.lua), the same as the Dungeon clear panel's Main Tank button.
