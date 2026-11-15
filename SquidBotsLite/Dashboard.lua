@@ -820,6 +820,20 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_LOGOUT")
 frame:RegisterEvent("PLAYER_MONEY")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
-frame:SetScript("OnEvent", function()
-	if SquidBotsLiteDB then D.NoteSelf() end
+-- Money comes a coin at a time (loot, vendor): the card is noted again 2 s after the last change, not each time.
+frame:SetScript("OnEvent", function(self, event)
+	if not SquidBotsLiteDB then return end
+	if event == "PLAYER_MONEY" then
+		self.noteIn = 2
+		return
+	end
+	D.NoteSelf()
+end)
+frame:SetScript("OnUpdate", function(self, elapsed)
+	if not self.noteIn then return end
+	self.noteIn = self.noteIn - elapsed
+	if self.noteIn <= 0 then
+		self.noteIn = nil
+		if SquidBotsLiteDB then D.NoteSelf() end
+	end
 end)

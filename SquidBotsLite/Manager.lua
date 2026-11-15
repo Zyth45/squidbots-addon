@@ -2825,6 +2825,11 @@ do
 			for i, x in ipairs(queue) do
 				if x == w then table.remove(queue, i) break end
 			end
+			-- Answers older than 5 minutes go: the cache stays small over a long session.
+			local now = GetTime()
+			for key, old in pairs(cache) do
+				if now - (old.at or 0) > 300 then cache[key] = nil end
+			end
 			if w.err == "busy" then
 				-- Too many questions at once: the addon's own comparison for a few seconds, then asked again.
 				cache[w.key] = { at = GetTime(), busy = true }

@@ -1714,7 +1714,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		A.trainerOpen, A.trainAsk = nil, nil
 		if A.trainPanel and A.trainPanel:IsShown() and not A.manualTrainer then A.trainPanel:Hide() end
 	elseif event == "QUEST_LOG_UPDATE" then
-		A.WatchDots()
+		A.dotsDirty = true
 	elseif event == "UNIT_HEALTH" then
 		-- An alt's health only, and drawn at most five times a second (a raid in combat sends hundreds).
 		if arg1 and (arg1:find("^party%d") or arg1:find("^raid%d")) and IsAlt(UnitName(arg1)) then A.teamDirty = true end
@@ -1741,7 +1741,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	end
 end)
 
-if hooksecurefunc and WatchFrame_Update then hooksecurefunc("WatchFrame_Update", function() A.WatchDots() end) end
+-- The tracker redraws often: its dots follow at most five times a second.
+if hooksecurefunc and WatchFrame_Update then hooksecurefunc("WatchFrame_Update", function() A.dotsDirty = true end) end
 
 local elapsed, teamTick = 0, 0
 frame:SetScript("OnUpdate", function(_, delta)
@@ -1750,6 +1751,13 @@ frame:SetScript("OnUpdate", function(_, delta)
 		if A.teamWait <= 0 then
 			A.teamDirty, A.teamWait = nil, 0.2
 			A.RefreshTeam()
+		end
+	end
+	if A.dotsDirty then
+		A.dotsWait = (A.dotsWait or 0) - delta
+		if A.dotsWait <= 0 then
+			A.dotsDirty, A.dotsWait = nil, 0.2
+			A.WatchDots()
 		end
 	end
 	elapsed = elapsed + delta
