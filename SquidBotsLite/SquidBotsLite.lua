@@ -2359,9 +2359,11 @@ end
 
 local function RefreshToasts()
 	local now = GetTime()
+	-- In a raid too: a bot already invited to any subgroup has its offer gone.
 	local members = {}
-	for i = 1, 4 do
-		local name = UnitName("party" .. i)
+	local raid = GetNumRaidMembers()
+	for i = 1, raid > 0 and raid or 4 do
+		local name = UnitName((raid > 0 and "raid" or "party") .. i)
 		if name then members[name] = true end
 	end
 	for i = #toasts, 1, -1 do
@@ -3155,10 +3157,12 @@ end
 local function ProbeRoles()
 	if SquidBotsLiteDB.autoRoles == false then return end
 	local now = GetTime()
-	for i = 1, 4 do
-		local unit = "party" .. i
+	-- Every subgroup of a raid (the raid frames show a "?" for a role not known).
+	local raid = GetNumRaidMembers()
+	for i = 1, raid > 0 and raid or 4 do
+		local unit = (raid > 0 and "raid" or "party") .. i
 		local name = UnitName(unit)
-		if name and name ~= UNKNOWNOBJECT and not roleByName[name] and UnitIsConnected(unit)
+		if name and name ~= UNKNOWNOBJECT and name ~= UnitName("player") and not roleByName[name] and UnitIsConnected(unit)
 			and (not probedAt[name] or now - probedAt[name] >= K.PROBE_RETRY)
 			and LooksLikeBot(name) then
 			firstSeen[name] = firstSeen[name] or now
