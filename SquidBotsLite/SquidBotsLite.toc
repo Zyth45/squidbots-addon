@@ -15,6 +15,7 @@ TalentTree.lua
 Missions.lua
 Alts.lua
 Dashboard.lua
+GroupQuests.lua
 MainTank.lua
 World.lua
 KeySpells.lua

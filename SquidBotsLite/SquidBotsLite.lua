@@ -74,7 +74,7 @@ local STRINGS = {
 		ALTS = "My alts", ALTS_REFRESH = "Refresh", ALTS_ADD = "Log in", ALTS_REMOVE = "Log out", ALTS_SUMMON = "Summon", ALTS_SHEET = "Sheet",
 		ALTS_LEVEL = "Level %d %s", ALTS_UNKNOWN = "Level ?", ALTS_NO_SPEC = "no spec",
 		TIP_SHEET = "Bot sheet: the gear, bags, quests and mounts of this alt.",
-		MISSIONS = "Missions", TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
+		MISSIONS = "Missions", GQUESTS = "Quests", TEAMS = "Teams", T_LOGIN = "Log in (%d)", T_LOGOUT = "Log out", T_DELETE = "Delete", T_SAVE_GROUP = "Save my group as a team...",
 		T_SAVE_ONLINE = "Save the logged-in alts as a team...", T_NAME = "Name of the team:", T_NONE = "No team yet.",
 		T_SAVED = "Team %s saved: %d characters.", T_STARTED = "Team %s: logging in %d characters, one a second.",
 		T_EMPTY = "Nobody to save: invite or log in your alts first.",
@@ -122,7 +122,7 @@ local STRINGS = {
 		BALANCE_DONE = "Group: %s.", BALANCE_MISSING = "No bot in the group can play %s.",
 		BALANCE_WAIT = "Asking the bots for their specializations...", BALANCE_RAID = "In a raid, the raid command already sets the roles: pick specializations bot by bot.",
 		SPECS_NOT_BOT = "not a bot", SPEC_ASK = "Ask the bot", TIP_ROLE = "Switch to %s.", TIP_NO_ROLE = "No specialization of this role.",
-		HELP = "SquidBots Manager: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl dashboard, /sbl spec, /sbl keys, /sbl missions, /sbl world, /sbl dc, /sbl bot <name>, /sbl icons, /sbl raidframes on|off, /sbl questask, /sbl sheettrade on|off, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Manager.",
+		HELP = "SquidBots Manager: /sbl (show/hide), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <name>, /sbl alts, /sbl dashboard, /sbl quests, /sbl spec, /sbl keys, /sbl missions, /sbl world, /sbl dc, /sbl bot <name>, /sbl icons, /sbl raidframes on|off, /sbl questask, /sbl sheettrade on|off, /sbl roles on|off, /sbl gm (GM only), /sbl reset. Key bindings: Esc > Key Bindings > SquidBots Manager.",
 		SCALE_SET = "SquidBots Manager bar size: %s (this character).", SCALE_BAD = "Bar size: a number from 0.5 to 2, for example /sbl scale 1.2",
 		LANG_SET = "SquidBots Manager language: English.", CHANNEL_SET = "SquidBots Manager asks in: %s",
 	},
@@ -195,7 +195,7 @@ local STRINGS = {
 		ALTS = "Mes alts", ALTS_REFRESH = "Actualiser", ALTS_ADD = "Connecter", ALTS_REMOVE = "Déconnecter", ALTS_SUMMON = "Appeler", ALTS_SHEET = "Fiche",
 		ALTS_LEVEL = "Niveau %d %s", ALTS_UNKNOWN = "Niveau ?", ALTS_NO_SPEC = "sans spé",
 		TIP_SHEET = "Fiche du bot : l'équipement, les sacs, les quêtes et les montures de cet alt.",
-		MISSIONS = "Missions", TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
+		MISSIONS = "Missions", GQUESTS = "Quêtes", TEAMS = "Équipes", T_LOGIN = "Connecter (%d)", T_LOGOUT = "Déconnecter", T_DELETE = "Supprimer", T_SAVE_GROUP = "Enregistrer mon groupe comme équipe...",
 		T_SAVE_ONLINE = "Enregistrer les alts connectés comme équipe...", T_NAME = "Nom de l'équipe :", T_NONE = "Aucune équipe pour l'instant.",
 		T_SAVED = "Équipe %s enregistrée : %d personnages.", T_STARTED = "Équipe %s : connexion de %d personnages, un par seconde.",
 		T_EMPTY = "Personne à enregistrer : invitez ou connectez d'abord vos alts.",
@@ -243,7 +243,7 @@ local STRINGS = {
 		BALANCE_DONE = "Groupe : %s.", BALANCE_MISSING = "Aucun bot du groupe ne peut jouer %s.",
 		BALANCE_WAIT = "Demande de leurs spécialisations aux bots...", BALANCE_RAID = "En raid, la commande de raid répartit déjà les rôles : choisissez les spécialisations bot par bot.",
 		SPECS_NOT_BOT = "pas un bot", SPEC_ASK = "Demander au bot", TIP_ROLE = "Passer en %s.", TIP_NO_ROLE = "Aucune spécialisation de ce rôle.",
-		HELP = "SquidBots Manager : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl dashboard, /sbl spec, /sbl keys, /sbl missions, /sbl world, /sbl dc, /sbl bot <name>, /sbl icons, /sbl raidframes on|off, /sbl questask, /sbl sheettrade on|off, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Manager.",
+		HELP = "SquidBots Manager : /sbl (afficher/cacher), /sbl show, /sbl hide, /sbl scale 0.5-2, /sbl lang fr|en, /sbl channel <nom>, /sbl alts, /sbl dashboard, /sbl quests, /sbl spec, /sbl keys, /sbl missions, /sbl world, /sbl dc, /sbl bot <name>, /sbl icons, /sbl raidframes on|off, /sbl questask, /sbl sheettrade on|off, /sbl roles on|off, /sbl gm (MJ), /sbl reset. Raccourcis : Échap > Raccourcis > SquidBots Manager.",
 		SCALE_SET = "Taille de la barre SquidBots Manager : %s (ce personnage).", SCALE_BAD = "Taille de la barre : un nombre de 0,5 à 2, par exemple /sbl scale 1.2",
 		LANG_SET = "Langue de SquidBots Manager : français.", CHANNEL_SET = "SquidBots Manager demande dans : %s",
 	},
@@ -2723,6 +2723,7 @@ local function AltsTexts()
 	altsFrame.teams:SetText(L.TEAMS)
 	altsFrame.dashboard:SetText(L.DASHBOARD)
 	altsFrame.missions:SetText(L.MISSIONS)
+	altsFrame.gquests:SetText(L.GQUESTS)
 	altsFrame.help:SetText(L.ALTS_HELP)
 end
 
@@ -2926,14 +2927,16 @@ local function BuildAlts()
 	for _, def in ipairs({ { "dashboard", function() if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end end },
 		-- Missions.lua: send a logged-in alt gathering on its own.
 		{ "missions", function() if SquidBotsLite_ShowMissions then SquidBotsLite_ShowMissions() end end },
+		-- GroupQuests.lua: the group's quests, one column per alt (3.1.2). Four buttons now: narrower.
+		{ "gquests", function() if SquidBotsLite_ShowGroupQuests then SquidBotsLite_ShowGroupQuests() end end },
 		{ "teams", TeamsMenu } }) do
 		local button = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
-		button:SetWidth(84)
+		button:SetWidth(72)
 		button:SetHeight(22)
 		button:SetPoint("TOPLEFT", x, -36)
 		button:SetScript("OnClick", def[2])
 		altsFrame[def[1]] = button
-		x = x + 88
+		x = x + 75
 	end
 	-- Alts.lua: the alts' quests and trainers panel and their log, two icons after the menus.
 	if SquidBotsLite_AltsButtons then SquidBotsLite_AltsButtons(altsFrame, x) end
@@ -3990,6 +3993,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		ShowAlts()
 	elseif command == "dashboard" or command == "dash" then
 		if SquidBotsLite_ShowDashboard then SquidBotsLite_ShowDashboard() end
+	elseif command == "quests" then
+		if SquidBotsLite_ShowGroupQuests then SquidBotsLite_ShowGroupQuests() end
 	elseif command == "dc" then
 		dc.ShowPanel()
 	elseif command == "raidframes" then
