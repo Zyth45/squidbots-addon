@@ -1934,15 +1934,17 @@ local function RefreshTexts()
 end
 
 -- Party members lying dead, spirit not yet released (a ghost is already on its way back).
+-- Bots only (a player is never whispered "release"), in any subgroup of a raid.
 local function DeadMembers()
 	local dead = {}
-	for i = 1, 4 do
-		local unit = "party" .. i
+	local raid = GetNumRaidMembers()
+	for i = 1, raid > 0 and raid or 4 do
+		local unit = (raid > 0 and "raid" or "party") .. i
 		if UnitExists(unit) and UnitIsDead(unit) and not UnitIsGhost(unit) then
 			-- The name only: UnitName also returns the realm, "" for a member out of range or on a flight
 			-- path, and table.insert took it for a position (jealous-sound/azerothcore-wotlk-coa#5441).
 			local name = UnitName(unit)
-			table.insert(dead, name)
+			if name and name ~= UnitName("player") and IsCoaBot(name) then table.insert(dead, name) end
 		end
 	end
 	return dead
@@ -2030,7 +2032,8 @@ end
 -- ---------------------------------------------------------------------------
 local function OverlayClick(self)
 	local name = self.unit and UnitName(self.unit)
-	if name then ShowMenu(BotMenu(name)) end
+	-- A player of the group gets no bot menu: its orders would be whispered to them.
+	if name and IsCoaBot(name) then ShowMenu(BotMenu(name)) end
 end
 
 -- Nothing told that the icon opens the bot's menu.

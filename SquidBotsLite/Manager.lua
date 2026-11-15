@@ -2547,6 +2547,11 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 		name = UnitName("target")
 		if not name or not UnitOf(name) then Print(T("USAGE")) return end
 	end
+	-- Orders are whispered to the bot: a player's name (a typo, someone of the group) gets none.
+	if not ro and SquidBotsLite_IsBot and not SquidBotsLite_IsBot(name) then
+		Print(string.format(T("NOT_A_MEMBER"), name))
+		return
+	end
 	if not sheet then Build() end
 	if current ~= name then
 		bags, quests, stats, mounts, bank, strats, queue = {}, {}, {}, {}, {}, { co = {}, nc = {} }, {}
