@@ -822,7 +822,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, ...)
 		-- state is asked ("tank main"), and an "on" is turned off (OnAddon).
 		mt.syncAt = GetTime() + 3
 	elseif event == "CHAT_MSG_ADDON" then
-		if arg1 == PREFIX and arg3 == "WHISPER" and arg4 and arg2 and (arg2:find("^TK\t") or arg2:find("^TS\t")) then
+		-- From the group only: anyone on the realm can whisper an addon message.
+		if arg1 == PREFIX and arg3 == "WHISPER" and arg4 and arg2 and (arg2:find("^TK\t") or arg2:find("^TS\t"))
+			and SquidBotsLite_InGroup and SquidBotsLite_InGroup(arg4) then
 			mt.OnAddon(arg4, arg2)
 		end
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then

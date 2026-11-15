@@ -1046,6 +1046,9 @@ end
 
 function who.OnAddon(prefix, message, channel, sender)
 	if prefix ~= "SQBA" or channel ~= "WHISPER" or not sender then return end
+	-- Only a group member that "WHO?" was just asked about: anyone on the realm can whisper an addon message.
+	local asked = who.askedName[sender]
+	if not (asked and GetTime() - asked < 60 and SquidBotsLite_InGroup(sender)) then return end
 	local kind = message and message:match("^IAM\t(%a+)")
 	if kind ~= "random" and kind ~= "alt" then return end
 	who.Store()[sender] = kind
@@ -1106,6 +1109,10 @@ local function IsCoaBot(name)
 	return knownBot[name] or who.Kind(name) ~= nil or (SquidBotsLiteDB.alts and SquidBotsLiteDB.alts[name]) == true
 end
 function SquidBotsLite_IsBot(name) return name and IsCoaBot(name) end
+-- The player, or a member of the player's party or raid (any subgroup).
+function SquidBotsLite_InGroup(name)
+	return name ~= nil and (name == UnitName("player") or UnitOf(name) ~= nil)
+end
 function SquidBotsLite_BotKind(name) return who.Kind(name) end
 
 -- The three trees of a WotLK class bot, named in the addon's language: no list to wait for.
@@ -3843,7 +3850,8 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
 			dc.TickLine()
 		end)
 	elseif event == "CHAT_MSG_ADDON" then
-		if arg1 == "DC" and arg2 then dc.OnAddon(arg2) end
+		-- The tank's lines: from the group (or the realm to the player) only, never from anyone else.
+		if arg1 == "DC" and arg2 and SquidBotsLite_InGroup(arg4) then dc.OnAddon(arg2) end
 	elseif event == "CHAT_MSG_WHISPER" then
 		dc.OnWhisperBack(arg1, arg2)
 		OnWhisper(arg1, arg2)

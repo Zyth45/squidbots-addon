@@ -1653,7 +1653,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		-- Only the account's alts make the team. A random bot that knows the addon (the Main Tank bar said HELLO
 		-- or gave it an order) sends TEAM and the like too: its HELLO is answered, the rest is not ours.
 		if not IsAlt(arg4) then
-			if f[1] == "HELLO" then Handle.HELLO(arg4, f) end
+			-- From the group only: anyone on the realm can whisper an addon message.
+			if f[1] == "HELLO" and SquidBotsLite_InGroup and SquidBotsLite_InGroup(arg4) then Handle.HELLO(arg4, f) end
 			return
 		end
 		A.seen[arg4], A.gone[arg4] = GetTime(), nil
