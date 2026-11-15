@@ -1484,7 +1484,7 @@ local function BuildInfo(page)
 		{ "STAY", function() Whisper("stay") end },
 		{ "SUMMON", function() Whisper("summon") end },
 		{ "TRADE", function() local u = current and UnitOf(current); if u then InitiateTrade(u) end end },
-		{ "LOGOUT", function() if current then SendChatMessage(".playerbots bot remove " .. current, "SAY"); sheet:Hide() end end },
+		{ "LOGOUT", function() if current then SquidBotsLite_Command(".playerbots bot remove " .. current); sheet:Hide() end end },
 	}
 	for i, def in ipairs(defs) do
 		local b = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")

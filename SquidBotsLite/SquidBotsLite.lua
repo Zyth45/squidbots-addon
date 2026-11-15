@@ -47,6 +47,7 @@ local STRINGS = {
 		GATHER = "Gathering (whole group)",
 		DC_DISABLED = "Dungeon clear is disabled on this realm.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
+		CMD_UNKNOWN = "This realm does not know the command %s.",
 		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.", DC_ABSENT = "No dungeon clear on this realm: click Dungeon again for the SquidBots dungeon mode.", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
 		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
@@ -167,6 +168,7 @@ local STRINGS = {
 		GATHER = "Récolte (tout le groupe)",
 		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
+		CMD_UNKNOWN = "Ce royaume ne connaît pas la commande %s.",
 		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.", DC_ABSENT = "Pas de dungeon clear sur ce royaume : recliquez sur Donjon pour le mode donjon SquidBots.", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
 		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
@@ -579,7 +581,7 @@ end)
 local function Ask(roles)
 	if SquidBotsLiteDB.gm then
 		for role in roles:gmatch("%a+") do
-			SendChatMessage(".playerbots coa " .. role, "SAY")
+			SquidBotsLite_Command(".playerbots coa " .. role)
 		end
 		return
 	end
@@ -748,8 +750,29 @@ local ShowAlts, ShowSpecs
 local dc = { module = nil, probeAt = nil, waitUntil = nil, pull = nil, PROBE_DELAY = 8, PROBE_WAIT = 5, LINE_KEEP = 6,
 	REPROBE_GAP = 10, ABSENT_KEEP = 60 }
 
+-- The player's dot commands (.dc, .playerbots, .coaworld) are whispered to oneself, never said: the server runs a
+-- command whatever the chat type, and one it lacks comes back as a whisper instead of being said in /say (an
+-- account key said aloud). The echo (sent and, without the command, received) is kept out of the chat.
+dc.sent = {}
+function SquidBotsLite_Command(text)
+	dc.sent[text] = GetTime()
+	SendChatMessage(text, "WHISPER", nil, UnitName("player"))
+end
+for _, event in ipairs({ "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM" }) do
+	ChatFrame_AddMessageEventFilter(event, function(frame, kind, message, sender)
+		local at = message and dc.sent[message]
+		if not (at and sender == UnitName("player") and GetTime() - at < 10) then return end
+		-- Come back as a whisper: the realm does not have it. Said once, in the addon's words.
+		if kind == "CHAT_MSG_WHISPER" and frame == DEFAULT_CHAT_FRAME then
+			dc.sent[message] = nil
+			Print(string.format(L.CMD_UNKNOWN, message:match("^(%S+)") or message))
+		end
+		return true
+	end)
+end
+
 function dc.Send(args)
-	SendChatMessage(".dc " .. args, "SAY")
+	SquidBotsLite_Command(".dc " .. args)
 end
 
 -- ".dc on" needs to be inside a dungeon; the tank bot leads (a player tanking has no tank bot to lead).
@@ -853,9 +876,9 @@ local function RecruitMenu()
 			end)
 		end },
 		-- The server answers with a system message: raid built, or how long to wait (players: 30 min).
-		{ text = L.RAID_10, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 10", "SAY") end },
-		{ text = L.RAID_15, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 15", "SAY") end },
-		{ text = L.RAID_25, notCheckable = true, func = function() SendChatMessage(".playerbots coa raid 25", "SAY") end },
+		{ text = L.RAID_10, notCheckable = true, func = function() SquidBotsLite_Command(".playerbots coa raid 10") end },
+		{ text = L.RAID_15, notCheckable = true, func = function() SquidBotsLite_Command(".playerbots coa raid 15") end },
+		{ text = L.RAID_25, notCheckable = true, func = function() SquidBotsLite_Command(".playerbots coa raid 25") end },
 		{ text = L.ALTS, notCheckable = true, func = function() ShowAlts() end },
 		{ text = L.SPECS, notCheckable = true, func = function() ShowSpecs() end },
 		{ text = L.GEAR, notCheckable = true, func = function()
@@ -871,7 +894,7 @@ local function RecruitMenu()
 		} },
 	}
 	if SquidBotsLiteDB.gm then
-		table.insert(items, { text = L.REGEAR, notCheckable = true, func = function() SendChatMessage(".playerbots coa regear", "SAY") end })
+		table.insert(items, { text = L.REGEAR, notCheckable = true, func = function() SquidBotsLite_Command(".playerbots coa regear") end })
 	end
 	return items
 end
@@ -2376,7 +2399,7 @@ local altsFrame, altRows, roster = nil, {}, {}
 local rosterAskedAt, refreshAt, hideRosterUntil
 
 local function BotCommand(text)
-	SendChatMessage(".playerbots bot " .. text, "SAY")
+	SquidBotsLite_Command(".playerbots bot " .. text)
 end
 
 local function AskRoster()
@@ -2759,7 +2782,7 @@ local function SafeName(text)
 end
 
 local function AccountCommand(text)
-	SendChatMessage(".playerbots account " .. text, "SAY")
+	SquidBotsLite_Command(".playerbots account " .. text)
 end
 
 local linkStep = {}

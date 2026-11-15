@@ -465,7 +465,7 @@ end
 function W.GM(command)
 	-- What was sent shows at once; the server's lines replace it; none in 3 s: said so, with the command to type.
 	W.gmOut, W.gmUntil, W.gmCmd, W.gmAnswered = { "|cffaaaaaa" .. string.format(T("GM_SENT"), command) .. "|r" }, GetTime() + 3, command, false
-	SendChatMessage(".coaworld " .. command, "SAY")
+	SquidBotsLite_Command(".coaworld " .. command)
 	W.Refresh()
 end
 
