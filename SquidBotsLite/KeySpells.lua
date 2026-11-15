@@ -39,7 +39,7 @@ local STRINGS = {
 		TIP_Q_OLD = "This realm has no quick actions: the click says \"%s\" in group chat.",
 		Q_DONE = "%s: %s", Q_NONE = "%s: %s.", Q_SAID = "Said in group chat: %s", NO_GROUP_BOT = "No bot in your group.",
 		N_notank = "no tank bot", N_nocc = "no crowd control ready", N_noheal = "no healer bot", N_cd = "all on cooldown",
-		N_notarget = "no target", N_range = "out of range", N_off = "option off", N_unknown = "no bot could do it", N_busy = "the bot could not cast", N_notgroup = "your target is not in your group",
+		N_notarget = "no target", N_range = "out of range", N_off = "option off", N_unknown = "no bot could do it", N_busy = "the bot could not cast", N_notgroup = "your target is not in your group", N_immune = "the target is immune", N_held = "the tank already holds it", N_full = "the target has full health",
 		TIP_FULL = "Show every key spell of your bots.", TIP_SMALL = "Only the three quick actions.",
 	},
 	fr = {
@@ -58,7 +58,7 @@ local STRINGS = {
 		TIP_Q_OLD = "Ce royaume n'a pas les actions rapides : le clic dit « %s » au groupe.",
 		Q_DONE = "%s : %s", Q_NONE = "%s : %s.", Q_SAID = "Dit au groupe : %s", NO_GROUP_BOT = "Aucun bot dans votre groupe.",
 		N_notank = "aucun bot tank", N_nocc = "aucun contrôle prêt", N_noheal = "aucun bot soigneur", N_cd = "tous en recharge",
-		N_notarget = "aucune cible", N_range = "hors de portée", N_off = "option désactivée", N_unknown = "aucun bot n'a pu", N_busy = "le bot n'a pas pu lancer", N_notgroup = "votre cible n'est pas dans votre groupe",
+		N_notarget = "aucune cible", N_range = "hors de portée", N_off = "option désactivée", N_unknown = "aucun bot n'a pu", N_busy = "le bot n'a pas pu lancer", N_notgroup = "votre cible n'est pas dans votre groupe", N_immune = "la cible est insensible", N_held = "le tank la tient déjà", N_full = "la cible a toute sa vie",
 		TIP_FULL = "Afficher tous les sorts clés de vos bots.", TIP_SMALL = "Seulement les trois actions rapides.",
 	},
 }
@@ -452,6 +452,11 @@ function ks.OnQuick(sender, f)
 		local cd = (tonumber(f[6]) or 0) / 1000
 		local q = Quick(action)
 		if cd > 0 then q.readyAt, q.total = GetTime() + cd, cd end
+	elseif f[2] == "err" then
+		-- An action the module does not know (a newer addon on an older module): said in group chat instead.
+		local p = ks.qaPending
+		ks.qaPending = nil
+		if p then ks.QuickSay(p.action) end
 	elseif f[2] == "none" and QUICK_PHRASE[action] then
 		local p = ks.qaPending
 		if p and p.action == action then ks.qaPending = nil end
