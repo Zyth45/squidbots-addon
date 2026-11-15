@@ -61,7 +61,8 @@ local STRINGS = {
 		GF_ACCEPT = "Accept", GF_DECLINE = "Decline", GF_EMPTY = "empty slot", GF_CHAT = "%s offers you %s (%s): open World > Guild > Gifts to accept.",
 		GC_HINT = "What your guild's online bots have in stock or can craft. Search by English name; click an item to order it.",
 		GC_SEARCH = "Search (English name)...", GC_NONE = "Nothing found.", GC_STOCK = "in stock: %s x%d", GC_CRAFT = "crafted by %s",
-		GC_REQ = "level %d", GC_PAGE = "Page %d / %d", GC_SLOT = "Slot: %s", GC_USABLE = "Usable now", C_OTHER = "Other",
+		GC_REQ = "level %d", GC_PAGE = "Page %d / %d", GC_SLOT = "Slot: %s", GC_USABLE = "Usable now", GC_REFRESH = "Refresh",
+		GC_REFRESH_TIP = "Asks the guild's catalogue again. The server renews it every 5 minutes.", C_OTHER = "Other",
 		GA_HINT = "Your guild's bots with you: rally them where you are, make a dungeon party, or a guild raid.",
 		GA_gather = "Rally the guild", GA_party5 = "Dungeon party (5)", GA_raid10 = "Guild raid (10)", GA_raid15 = "Guild raid (15)",
 		GA_raid25 = "Guild raid (25)", GS_ready = "ready", GS_busy = "under way", GS_cooldown = "again in %s", GS_nobots = "not enough bots",
@@ -124,7 +125,8 @@ local STRINGS = {
 		GF_ACCEPT = "Accepter", GF_DECLINE = "Refuser", GF_EMPTY = "emplacement vide", GF_CHAT = "%s vous offre %s (%s) : Monde > Guilde > Dons pour l'accepter.",
 		GC_HINT = "Ce que les bots de votre guilde en ligne ont en stock ou savent fabriquer. Cherchez par nom anglais ; cliquez un objet pour le commander.",
 		GC_SEARCH = "Chercher (nom anglais)...", GC_NONE = "Rien trouvé.", GC_STOCK = "en stock : %s x%d", GC_CRAFT = "fabriqué par %s",
-		GC_REQ = "niveau %d", GC_PAGE = "Page %d / %d", GC_SLOT = "Emplacement : %s", GC_USABLE = "Utilisable", C_OTHER = "Autre",
+		GC_REQ = "niveau %d", GC_PAGE = "Page %d / %d", GC_SLOT = "Emplacement : %s", GC_USABLE = "Utilisable", GC_REFRESH = "Actualiser",
+		GC_REFRESH_TIP = "Redemande le catalogue de la guilde. Le serveur le renouvelle toutes les 5 minutes.", C_OTHER = "Autre",
 		GA_HINT = "Les bots de votre guilde avec vous : rassemblez-les où vous êtes, formez un groupe de donjon ou un raid de guilde.",
 		GA_gather = "Rassembler la guilde", GA_party5 = "Groupe de donjon (5)", GA_raid10 = "Raid de guilde (10)", GA_raid15 = "Raid de guilde (15)",
 		GA_raid25 = "Raid de guilde (25)", GS_ready = "prêt", GS_busy = "en cours", GS_cooldown = "à nouveau dans %s", GS_nobots = "pas assez de bots",
@@ -898,7 +900,7 @@ function W.Build()
 	f.askLine:SetJustifyH("LEFT")
 	-- The catalogue's line: search, slot, usable now, pages.
 	f.search = CreateFrame("EditBox", "SquidBotsLiteWorldSearch", f, "InputBoxTemplate")
-	f.search:SetWidth(200)
+	f.search:SetWidth(172)
 	f.search:SetHeight(20)
 	f.search:SetPoint("TOPLEFT", 24, -142)
 	f.search:SetAutoFocus(false)
@@ -925,7 +927,23 @@ function W.Build()
 	f.slotBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
 	f.slotBtn:SetWidth(170)
 	f.slotBtn:SetHeight(W.BUTTON_H)
-	f.slotBtn:SetPoint("LEFT", f.search, "RIGHT", 12, 0)
+	-- 3.1.3: Refresh, the catalogue's page asked again (at most every 5 s).
+	f.catRefresh = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	f.catRefresh:SetWidth(W.BUTTON_H)
+	f.catRefresh:SetHeight(W.BUTTON_H)
+	f.catRefresh:SetPoint("LEFT", f.search, "RIGHT", 6, 0)
+	W.StyleButton(f.catRefresh, "Interface\\Buttons\\UI-RefreshButton")
+	f.catRefresh.tabIcon:ClearAllPoints()
+	f.catRefresh.tabIcon:SetPoint("CENTER")
+	f.catRefresh:SetScript("OnClick", function() W.CatRefresh() end)
+	f.catRefresh:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+		GameTooltip:SetText(T("GC_REFRESH"))
+		GameTooltip:AddLine(T("GC_REFRESH_TIP"), 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	f.catRefresh:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	f.slotBtn:SetPoint("LEFT", f.catRefresh, "RIGHT", 6, 0)
 	W.StyleButton(f.slotBtn, W.ICONS.filter)
 	f.slotBtn:SetScript("OnClick", function() if W.RecipesShown() then W.SortMenu() else W.SlotMenu() end end)
 	f.usable = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
@@ -1239,6 +1257,12 @@ function W.CatPage(page)
 	c.page = math.max(1, page or 1)
 	W.at["GCAT\t" .. c.search .. "\t" .. c.page] = nil
 	W.Ask("GCAT\t" .. c.search .. "\t" .. c.page, "cat")
+end
+
+function W.CatRefresh()
+	if W.catRefreshAt and GetTime() - W.catRefreshAt < 5 then return end
+	W.catRefreshAt = GetTime()
+	W.CatPage(W.guild.cat.page)
 end
 
 function W.RecipesShown()
@@ -1567,7 +1591,7 @@ function W.Refresh()
 		f.drop:Hide()
 		f.askLine:SetText("")
 	end
-	local catControls = { f.search, f.slotBtn, f.usable, f.usableText, f.prev, f.next, f.pageText }
+	local catControls = { f.search, f.catRefresh, f.slotBtn, f.usable, f.usableText, f.prev, f.next, f.pageText }
 	for _, c in ipairs(catControls) do if cat then c:Show() else c:Hide() end end
 	-- The box keeps each view's own text (the catalogue's search, the recipes' search).
 	local searchFor = recipes and "recipes" or cat and "cat" or nil
