@@ -42,7 +42,9 @@ local STRINGS = {
 		GM_NOANSWER = "No answer from the server in 3 s. Type the same command by hand to check: .coaworld %s",
 		GM_CHOSEN = "Target: %s. Start launches it.", F_level = "level %s", F_boss = "%s",
 		R_quality = "quality too high", R_daily = "daily limit reached", R_noguild = "no guild", R_item = "unknown item",
-		R_qty = "quantity not allowed", R_off = "off on this realm", R_nobot = "no guild bot online", R_cannot = "no such recipe",
+		R_qty = "quantity not allowed", R_off = "off on this realm", R_nobot = "no guild bot online", R_noah = "no stock, no crafter online, none at the auction house",
+		R_ahprice = "no stock, no crafter online, too expensive at the auction house",
+		R_ahgold = "no stock, no crafter online, nobody has the gold for the auction house", R_cannot = "no such recipe",
 		R_busy = "the artisan is busy", R_mats = "no materials", R_expired = "quote too old: ask again",
 		R_faction = "other faction", R_price = "the price went up: ask a new quote", R_offline = "the bot is offline",
 		R_notyours = "not your bot",
@@ -106,7 +108,9 @@ local STRINGS = {
 		GM_NOANSWER = "Pas de réponse du serveur en 3 s. Tapez la même commande à la main pour vérifier : .coaworld %s",
 		GM_CHOSEN = "Cible : %s. Lancer la démarre.", F_level = "niveau %s", F_boss = "%s",
 		R_quality = "qualité trop haute", R_daily = "limite du jour atteinte", R_noguild = "pas de guilde", R_item = "objet inconnu",
-		R_qty = "quantité refusée", R_off = "coupé sur ce royaume", R_nobot = "aucun bot de guilde en ligne", R_cannot = "recette inconnue",
+		R_qty = "quantité refusée", R_off = "coupé sur ce royaume", R_nobot = "aucun bot de guilde en ligne", R_noah = "pas de stock, aucun artisan en ligne, rien à l'HV",
+		R_ahprice = "pas de stock, aucun artisan en ligne, trop cher à l'HV",
+		R_ahgold = "pas de stock, aucun artisan en ligne, personne n'a l'or pour l'HV", R_cannot = "recette inconnue",
 		R_busy = "l'artisan est occupé", R_mats = "pas de composants", R_expired = "devis trop vieux : redemandez",
 		R_faction = "autre faction", R_price = "le prix a monté : redemandez un devis", R_offline = "le bot est hors ligne",
 		R_notyours = "pas votre bot",
@@ -1400,7 +1404,13 @@ function W.Rows()
 			end } or nil })
 		for _, o in ipairs(recent) do
 			local state = T("S_" .. (o.state or "open"))
-			if o.reason then state = state .. " : " .. W.Reason(o.reason) end
+			local known = o.reason and T("R_" .. o.reason) ~= "R_" .. o.reason
+			if o.state == "none" then
+				-- 3.1.3 (Monde a0a15db5): why nobody could, in its place; an unknown reason keeps "nobody could" alone.
+				if known then state = T("R_" .. o.reason) end
+			elseif o.reason then
+				state = state .. " : " .. W.Reason(o.reason)
+			end
 			if o.cod > 0 then state = state .. "  " .. W.Money(o.cod) end
 			local color = (o.state == "refused" or o.state == "none") and "|cffff6060" or (o.state == "open") and "|cffaaaaaa" or "|cff40ff40"
 			local by = o.bot and string.format(T("G_BY"), o.bot, W.Ago(o.at)) or W.Ago(o.at)
