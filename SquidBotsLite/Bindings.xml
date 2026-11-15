@@ -12,6 +12,9 @@
 	<Binding name="SQUIDBOTSLITE_ALTS">SquidBotsLite_Order("alts")</Binding>
 	<Binding name="SQUIDBOTSLITE_SPECS">SquidBotsLite_Specs()</Binding>
 	<Binding name="SQUIDBOTSLITE_KEYS">if SquidBotsLite_ToggleKeySpells then SquidBotsLite_ToggleKeySpells() end</Binding>
+	<Binding name="SQUIDBOTSLITE_QHEAL">if SquidBotsLite_Quick then SquidBotsLite_Quick("heal") end</Binding>
+	<Binding name="SQUIDBOTSLITE_QCC">if SquidBotsLite_Quick then SquidBotsLite_Quick("cc") end</Binding>
+	<Binding name="SQUIDBOTSLITE_QTAUNT">if SquidBotsLite_Quick then SquidBotsLite_Quick("taunt") end</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_BAR" header="SQUIDBOTSLITE_MT">SquidBotsLite_ToggleMainTank()</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_TARGET1">SquidBotsLite_MainTank("target", 1)</Binding>
 	<Binding name="SQUIDBOTSLITE_MT_TAUNT1">SquidBotsLite_MainTank("taunt", 1)</Binding>
