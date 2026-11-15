@@ -249,8 +249,7 @@ function TT.Node(i)
 		if ro or self.ability or not self.learnable or not name or not SquidBotsLite_QuietWhisper then return end
 		SquidBotsLite_QuietWhisper("talents learn " .. self.entry, name)
 		-- The answer changes the ranks: asked again a moment later.
-		local t, wait = 0, CreateFrame("Frame")
-		wait:SetScript("OnUpdate", function(f, d) t = t + d; if t > 1.5 then f:SetScript("OnUpdate", nil); TT.Ask() end end)
+		SquidBotsLite_UI.After(1.5, TT.Ask)
 	end)
 	v.nodes[i] = b
 	return b

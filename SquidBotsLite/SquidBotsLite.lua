@@ -304,6 +304,26 @@ local ui = {
 SquidBotsLite_UI = ui
 ui.PANEL_BACKDROP = PANEL_BACKDROP
 
+-- ui.After(delay, fn): fn runs once, delay seconds later (0: the next frame). One frame runs them all: a frame
+-- made for each delay is never freed in 3.3.5.
+ui.timers, ui.timerFrame = {}, CreateFrame("Frame")
+ui.timerFrame:Hide()
+ui.timerFrame:SetScript("OnUpdate", function(self)
+	local now, due = GetTime(), {}
+	for i = #ui.timers, 1, -1 do
+		if ui.timers[i].at <= now then table.insert(due, 1, table.remove(ui.timers, i)) end
+	end
+	if #ui.timers == 0 then self:Hide() end
+	for _, timer in ipairs(due) do
+		local ok, err = pcall(timer.fn)
+		if not ok then geterrorhandler()(err) end
+	end
+end)
+function ui.After(delay, fn)
+	table.insert(ui.timers, { at = GetTime() + (delay or 0), fn = fn })
+	ui.timerFrame:Show()
+end
+
 -- A card: dark, a thin border that turns gold under the mouse.
 function ui.Card(frame)
 	frame:SetBackdrop(ui.CARD)
@@ -2812,8 +2832,7 @@ StaticPopupDialogs.SQUIDBOTSLITE_ACCOUNT = {
 				StaticPopup_Show("SQUIDBOTSLITE_ACCOUNT")
 			end
 			-- The same dialog cannot show again while it is closing: the next frame asks for the key.
-			local f = CreateFrame("Frame")
-			f:SetScript("OnUpdate", function(frame) frame:SetScript("OnUpdate", nil); nextAsk() end)
+			ui.After(0, nextAsk)
 			return
 		elseif linkStep.kind == "keyfor" then
 			AccountCommand("link " .. linkStep.account .. " " .. value)

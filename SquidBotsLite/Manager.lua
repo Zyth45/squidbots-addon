@@ -595,12 +595,7 @@ function AfterChange()
 	-- The bags changed: ask again once the server lets the same lines through, counted from the last listing
 	-- (Ask queues it otherwise); a short moment first, for the bot to act on the order.
 	local name = current
-	local again = CreateFrame("Frame")
-	local wait = 0
-	again:SetScript("OnUpdate", function(self, delta)
-		wait = wait + delta
-		if wait < 0.4 then return end
-		self:SetScript("OnUpdate", nil)
+	SquidBotsLite_UI.After(0.4, function()
 		if current == name and sheet:IsShown() then
 			if tab == "bags" then Ask(bagMode, bagMode == "bank" and "bank" or "c")
 			elseif tab == "mounts" then Ask("mounts", "mount ?")
@@ -1425,12 +1420,7 @@ StaticPopupDialogs.SQUIDBOTSLITE_ABANDON = {
 		Whisper("drop " .. self.data)
 		AfterChange()
 		local name = current
-		local again = CreateFrame("Frame")
-		local wait = 0
-		again:SetScript("OnUpdate", function(f, delta)
-			wait = wait + delta
-			if wait < REPEAT_DELAY then return end
-			f:SetScript("OnUpdate", nil)
+		SquidBotsLite_UI.After(REPEAT_DELAY, function()
 			if current == name and tab == "quests" then Ask("quests", "quests all") end
 		end)
 	end,
@@ -2396,11 +2386,8 @@ function PT.Send(command)
 	if SquidBotsLite_Alts and SquidBotsLite_Alts.Handle then SquidBotsLite_Alts.Handle.PET = PT.OnLine end
 	PT.askedAt = GetTime()
 	Whisper(command)
-	local name, wait, t = current, CreateFrame("Frame"), 0
-	wait:SetScript("OnUpdate", function(self, delta)
-		t = t + delta
-		if t < PT.WAIT then return end
-		self:SetScript("OnUpdate", nil)
+	local name = current
+	SquidBotsLite_UI.After(PT.WAIT, function()
 		if current == name and sheet and sheet:IsShown() and tab == "pets" then PT.Render(pages.pets) end
 	end)
 end
