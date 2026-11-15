@@ -1617,8 +1617,8 @@ local saving, lastSent, retry, retryMsg, progress = false, nil, {}, {}, false
 
 local function Save()
 	saveQueue = {}
-	-- The spell id of the talent's first rank, not its entry: the server reads a bare number as a spell id
-	-- first (the core's link parser hands it back as is), so "learn <entry>" answered "Unknown talent".
+	-- The talent's entry, as the tree sends it: since CoA Bots 3.1.1 the server reads a bare number as an entry
+	-- first, then as a spell id, so a first rank's spell id could have matched another talent's entry.
 	local placed, ordered = {}, {}
 	local function Place(o)
 		if placed[o.id] then return end
@@ -1631,7 +1631,7 @@ local function Save()
 	end
 	for _, o in ipairs(options) do Place(o) end
 	for _, o in ipairs(ordered) do
-		for _ = 1, Pending(o) do table.insert(saveQueue, o.id) end
+		for _ = 1, Pending(o) do table.insert(saveQueue, o.entry or o.id) end
 	end
 	if #saveQueue == 0 then return end
 	Print(string.format(T("T_SAVING"), #saveQueue))
@@ -2560,6 +2560,8 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 		if SquidBotsLite_TalentTree then SquidBotsLite_TalentTree.Reset() end
 		talents, talentSpent, talentOffset = {}, nil, 0
 		options, pending, points, choosing, saveQueue = {}, {}, nil, false, {}
+		-- A save still running for the last bot stops: its refused ranks are not sent to this one.
+		saving, lastSent, retry, retryMsg, progress = false, nil, {}, {}, false
 		bagMode, bagOffset = "bags", 0
 		if sheet then sheet.gold = nil end
 	end
