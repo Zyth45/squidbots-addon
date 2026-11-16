@@ -9,7 +9,7 @@
 local PREFIX, WAIT, ROWS, GAP = "SQBW", 6, 8, 1.1
 local REQUESTS = { GORD = true, GLIST = true, WEV = true, ["WEV?"] = true, ALIST = true, ARCP = true, AQUOTE = true,
 	AORDER = true, AMAIL = true, ["SOUL?"] = true, GOFF = true, GACC = true, GREF = true, GCAT = true, GACT = true,
-	["GACT?"] = true }
+	["GACT?"] = true, ["CAPS?"] = true }
 
 local STRINGS = {
 	en = {
@@ -445,6 +445,15 @@ function W.Line(f)
 			slot = tonumber(f[10]) or 0, skill = tonumber(f[11]) or 0, class = tonumber(f[13] or "") })
 		-- 3.1.4: a server that sends the class filters the catalogue by category (GCAT's 4th field).
 		if f[13] then W.guild.cat.hasClass = true end
+	elseif k == "CAPS" then
+		-- 3.1.4 (SquidBot 3c454edf): what the server has, "key=value" fields (bots, dc, dcver).
+		local caps = {}
+		for i = 2, #f do
+			local key, value = f[i]:match("^([^=]+)=(.*)$")
+			if key then caps[key] = value end
+		end
+		W.caps = caps
+		if SquidBotsLite_OnCaps then SquidBotsLite_OnCaps(caps) end
 	elseif k == "GCN" then
 		W.guild.cat.total, W.guild.cat.page = tonumber(f[2]) or 0, tonumber(f[3]) or 1
 	elseif k == "GA" then

@@ -50,7 +50,8 @@ local STRINGS = {
 		DC_DISABLED = "Dungeon clear is disabled on this realm.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "paused", DC_STOPPED = "stopped",
 		CMD_UNKNOWN = "This realm does not know the command %s.",
-		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.", DC_ABSENT = "No dungeon clear on this realm: click Dungeon again for the SquidBots dungeon mode.", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
+		DC_NOT_IN_DUNGEON = "Dungeon clear starts inside a dungeon, with a tank bot in your group: it leads, you follow.", DC_ABSENT = "No dungeon clear on this realm: click Dungeon again for the SquidBots dungeon mode.", DC_NOT_INSTALLED = "Dungeon Clear not installed on this server: click Dungeon again for the SquidBots dungeon mode.",
+		TIP_DUNGEON_NODC = "Dungeon mode: bots stick to you, avoid ground effects, engage with you. Dungeon Clear is not installed on this server.", DC_ON = "On", DC_OFF = "Off", DC_PAUSE_B = "Pause", DC_SKIP_B = "Skip",
 		DC_P_DYN = "Dynamic", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Advanced",
 		DC_BOSSES_T = "Bosses", DC_REFRESH = "Refresh", DC_GO = "Go", DC_NEXT = "Next boss: %s", DC_NONE = "none",
 		DC_NO_LIST = "No list yet: Refresh, inside a dungeon with a tank bot in your group.",
@@ -173,7 +174,9 @@ local STRINGS = {
 		DC_DISABLED = "Dungeon clear est désactivé sur ce royaume.",
 		DC_LINE = "Dungeon clear", DC_PAUSED = "en pause", DC_STOPPED = "arrêté",
 		CMD_UNKNOWN = "Ce royaume ne connaît pas la commande %s.",
-		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.", DC_ABSENT = "Pas de dungeon clear sur ce royaume : recliquez sur Donjon pour le mode donjon SquidBots.", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
+		DC_NOT_IN_DUNGEON = "Dungeon clear se lance dans un donjon, avec un bot tank dans le groupe : il mène, vous suivez.", DC_NOT_INSTALLED = "Dungeon Clear n'est pas installé sur ce serveur : recliquez sur Donjon pour le mode donjon SquidBots.",
+		TIP_DUNGEON_NODC = "Mode donjon : les bots restent avec vous, évitent les zones au sol, engagent avec vous. Dungeon Clear n'est pas installé sur ce serveur.",
+		DC_ABSENT = "Pas de dungeon clear sur ce royaume : recliquez sur Donjon pour le mode donjon SquidBots.", DC_ON = "Démarrer", DC_OFF = "Arrêter", DC_PAUSE_B = "Pause", DC_SKIP_B = "Passer",
 		DC_P_DYN = "Dynamique", DC_P_LEEROY = "Leeroy", DC_P_ADV = "Avancé",
 		DC_BOSSES_T = "Boss", DC_REFRESH = "Actualiser", DC_GO = "Go", DC_NEXT = "Prochain boss : %s", DC_NONE = "aucun",
 		DC_NO_LIST = "Pas encore de liste : Actualiser, dans un donjon avec un bot tank dans le groupe.",
@@ -822,7 +825,7 @@ end
 
 function dc.Tick()
 	if buttons.dungeon then
-		buttons.dungeon.tip = (dc.module == "on" or dc.module == "off") and "TIP_DUNGEON_DC" or "TIP_DUNGEON"
+		buttons.dungeon.tip = (dc.module == "on" or dc.module == "off") and "TIP_DUNGEON_DC" or dc.noDc and "TIP_DUNGEON_NODC" or "TIP_DUNGEON"
 	end
 	-- The Dungeon button clicked while the answer was not known: the panel as soon as it is.
 	if dc.openOnAnswer and dc.module then
@@ -831,8 +834,13 @@ function dc.Tick()
 			dc.ShowPanel()
 		else
 			dc.absentAt = GetTime()
-			Print(L.DC_ABSENT)
+			Print(dc.noDc and L.DC_NOT_INSTALLED or L.DC_ABSENT)
 		end
+	end
+	-- 3.1.4: the server's capabilities (SQBW CAPS?), asked with the first probe; no answer (older server): as before.
+	if not dc.capsAsked and dc.probeAt and GetTime() >= dc.probeAt and SquidBotsLite_World then
+		dc.capsAsked = true
+		SquidBotsLite_World.Send("CAPS?", "caps")
 	end
 	if dc.module or not dc.probeAt then return end
 	local now = GetTime()
@@ -842,6 +850,19 @@ function dc.Tick()
 		SendChatMessage(".dc status", "WHISPER", nil, UnitName("player"))
 	elseif now > dc.waitUntil then
 		dc.module, dc.waitUntil = "absent", nil
+	end
+end
+
+-- 3.1.4 (SquidBot 3c454edf): SQBW CAPS, "dc=0": no Dungeon Clear on this server, for sure (no probe, no panel,
+-- the Dungeon button says so and offers the SquidBots dungeon mode). "dc=1": the module is there, its ".dc status"
+-- probe tells on or off; a probe that missed it ("absent") is made again.
+function SquidBotsLite_OnCaps(caps)
+	if caps.dc == "0" then
+		dc.noDc, dc.module, dc.waitUntil = true, "absent", nil
+		if dc.panel then dc.panel:Hide() end
+	elseif caps.dc == "1" then
+		dc.noDc = nil
+		if dc.module == "absent" then dc.module, dc.waitUntil, dc.probeAt = nil, nil, GetTime() end
 	end
 end
 
@@ -859,6 +880,8 @@ end
 -- old dungeon mode. open: the panel opens on the answer.
 function dc.Reprobe(open)
 	if open then dc.openOnAnswer = true end
+	-- The server said it has no Dungeon Clear: no probe again (the answer is said by dc.Tick).
+	if dc.noDc then return end
 	if dc.module == "on" or dc.module == "off" or dc.Probing() then return end
 	local now = GetTime()
 	-- Not before the first probe (the chat is not ready right after loading), nor too often on its own.
