@@ -41,7 +41,7 @@ end
 -- The addon's windows (not the bars that keep their own state: key spells, Main Tank, team).
 M.WINDOWS = { "SquidBotsLiteAlts", "SquidBotsLiteSpecs", "SquidBotsLiteDungeonClear", "SquidBotsLiteWorld",
 	"SquidBotsLiteGroupQuests", "SquidBotsLiteDashboard", "SquidBotsLiteMissions", "SquidBotsLiteSheet",
-	"SquidBotsLiteBulk", "SquidBotsLiteAltLog", "SquidBotsLiteTeamSettings" }
+	"SquidBotsLiteBulk", "SquidBotsLiteAltLog", "SquidBotsLiteTeamSettings", "SquidBotsLiteTeamEditor" }
 
 function M.Settings()
 	SquidBotsLiteDB.minimap = SquidBotsLiteDB.minimap or {}

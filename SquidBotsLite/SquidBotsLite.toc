@@ -20,3 +20,4 @@ MainTank.lua
 World.lua
 KeySpells.lua
 Minimap.lua
+AltsList.lua
