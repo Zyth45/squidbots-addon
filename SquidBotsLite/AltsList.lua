@@ -19,7 +19,7 @@ local STRINGS = {
 		ACC_HIDE = "Hide its alts from my list (%d known)", ACC_SHOW = "Show its alts in my list",
 		ACC_UNKNOWN = "Hide its alts: log them in once from here first",
 		AGO_NOW = "now", AGO_MIN = "%d min ago", AGO_H = "%d h ago", AGO_D = "%d d ago", PLAYED = "Last played: %s",
-		NO_TEAM = "no team",
+		NO_TEAM = "no team", TEAMS_TIP = "Teams: %s",
 		EDIT = "Edit...", DUPLICATE = "Duplicate", NEW = "New team...", E_TITLE = "Team", E_NAME = "Name:",
 		E_MEMBERS = "In the team (%d)", E_ALTS = "Your alts", E_SAVE = "Save", E_CANCEL = "Cancel",
 		E_HELP = "Click or drag an alt to move it. Drag a member up or down: the login order.",
@@ -35,7 +35,7 @@ local STRINGS = {
 		ACC_HIDE = "Cacher ses alts de ma liste (%d connus)", ACC_SHOW = "Afficher ses alts dans ma liste",
 		ACC_UNKNOWN = "Cacher ses alts : connectez-les une fois d'ici d'abord",
 		AGO_NOW = "maintenant", AGO_MIN = "il y a %d min", AGO_H = "il y a %d h", AGO_D = "il y a %d j", PLAYED = "Dernier joué : %s",
-		NO_TEAM = "sans équipe",
+		NO_TEAM = "sans équipe", TEAMS_TIP = "Équipes : %s",
 		EDIT = "Modifier...", DUPLICATE = "Dupliquer", NEW = "Nouvelle équipe...", E_TITLE = "Équipe", E_NAME = "Nom :",
 		E_MEMBERS = "Dans l'équipe (%d)", E_ALTS = "Vos alts", E_SAVE = "Enregistrer", E_CANCEL = "Annuler",
 		E_HELP = "Cliquez ou glissez un alt pour le changer de liste. Glissez un membre : l'ordre de connexion.",
@@ -134,15 +134,30 @@ function AL.AccountItem(account, refresh)
 	end }
 end
 
--- The first team (by name) an alt belongs to.
-function AL.TeamOf(name)
-	local found
+-- Every team an alt belongs to, A to Z; the first one is the one the Team sort uses.
+function AL.TeamsOf(name)
+	local list = {}
 	for team, members in pairs(SquidBotsLiteDB.teams or {}) do
 		for _, n in ipairs(members) do
-			if n == name and (not found or team < found) then found = team end
+			if n == name then table.insert(list, team) break end
 		end
 	end
-	return found
+	table.sort(list)
+	return list
+end
+
+function AL.TeamOf(name)
+	return AL.TeamsOf(name)[1]
+end
+
+-- On the card: three teams at most, then "..." (the tooltip names them all; a long line is cut by the game).
+AL.CARD_TEAMS = 3
+function AL.TeamsText(name)
+	local list = AL.TeamsOf(name)
+	if #list == 0 then return nil end
+	local shown = {}
+	for i = 1, math.min(#list, AL.CARD_TEAMS) do shown[i] = list[i] end
+	return table.concat(shown, ", ") .. (#list > AL.CARD_TEAMS and ", ..." or "")
 end
 
 AL.SORTS = { "online", "name", "played", "team", "level" }
@@ -200,8 +215,7 @@ end
 function AL.InfoSuffix(name)
 	local mode = SquidBotsLiteDB.altsSort
 	if mode == "team" then
-		local team = AL.TeamOf(name)
-		return "  |cff88ccff" .. (team or T("NO_TEAM")) .. "|r"
+		return "  |cff88ccff" .. (AL.TeamsText(name) or T("NO_TEAM")) .. "|r"
 	elseif mode == "played" then
 		local info = Info(name)
 		if info and info.seen then return "  |cffaaaaaa" .. AL.Ago(info.seen) .. "|r" end
@@ -212,8 +226,8 @@ end
 function AL.Tooltip(name)
 	local info = Info(name)
 	if info and info.seen then GameTooltip:AddLine(string.format(T("PLAYED"), AL.Ago(info.seen)), 0.7, 0.7, 0.7) end
-	local team = AL.TeamOf(name)
-	if team then GameTooltip:AddLine(T("S_team") .. ": " .. team, 0.53, 0.8, 1) end
+	local teams = AL.TeamsOf(name)
+	if #teams > 0 then GameTooltip:AddLine(string.format(T("TEAMS_TIP"), table.concat(teams, ", ")), 0.53, 0.8, 1, true) end
 end
 
 -- The Sort button's menu.
