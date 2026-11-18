@@ -201,6 +201,8 @@ local STATE = {
 -- train[alt] = { npc, list = { { id, cost, name } }, count, total, money, at }.
 -- members[alt] = the last TEAM; obj[questId][alt] = { state, done, needed } from OBJ.
 -- ench: the team's disenchanter and mode (ENCH); enchSkill[alt] = its Enchanting.
+-- 3.1.6, Mute: retry gap, tries for a silent bot, how long a click outranks the realm's HELLO (A.MuteSync).
+local MUTE_RETRY, MUTE_TRIES, MUTE_HOLD = 10, 3, 15
 local A = { seen = {}, gone = {}, sent = {}, quests = {}, asked = {}, titles = {}, recent = {}, train = {}, journal = {},
 	nextHello = 0, members = {}, obj = {}, enchSkill = {}, left = {}, grouped = {}, muted = {}, muteAsked = {} }
 -- An alt that sent TEAM and has been silent this long is gone (TEAM comes at least once a minute).
@@ -1470,7 +1472,15 @@ function Handle.HELLO(name, f)
 	-- 3.1.6: 7th give to alt, 8th this bot's mute (0|1, so the realm has it), 9th trust.
 	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", bags = f[6] == "1",
 		give = f[7] == "1", mute = f[8] == "0" or f[8] == "1", trust = f[9] == "1", at = GetTime() }
-	if f[8] == "0" or f[8] == "1" then A.muted[name] = f[8] == "1" end
+	if f[8] == "0" or f[8] == "1" then
+		A.muted[name] = f[8] == "1"
+		-- Since 9ae695ff the realm keeps it per master, for all his bots, saved: its word wins (another PC, a /reload),
+		-- unless the player clicked the button these last seconds.
+		if not (A.muteSetAt and GetTime() - A.muteSetAt < MUTE_HOLD) then
+			SquidBotsLiteDB.mute = f[8] == "1" or nil
+			if SquidBotsLite_MuteChanged then SquidBotsLite_MuteChanged() end
+		end
+	end
 	A.RefreshLog()
 	A.MuteSync()
 end
@@ -1486,7 +1496,6 @@ end
 -- 3.1.6: the Mute button (My alts, /sbl mute) cuts the chatter of the player's own bots; their answers to orders
 -- stay. "mute on|off" to every bot of the group (the realm answers MUTE <0|1> only for the bots the player is master
 -- of: three tries, then a silent bot is left alone). Kept in SquidBotsLiteDB.mute, sent again to a bot that joins.
-local MUTE_RETRY, MUTE_TRIES = 10, 3
 function A.MuteSync()
 	if not (A.CanMute() and SquidBotsLiteDB) then return end
 	local want, now = SquidBotsLiteDB.mute and true or false, GetTime()
@@ -1510,7 +1519,7 @@ end
 function A.SetMute(on)
 	if not A.CanMute() then Print(T("MUTE_OLD")) return end
 	SquidBotsLiteDB.mute = on and true or nil
-	A.muteAsked = {}
+	A.muteAsked, A.muteSetAt = {}, GetTime()
 	A.MuteSync()
 	Print(T(on and "MUTE_ON" or "MUTE_OFF"))
 	if SquidBotsLite_MuteChanged then SquidBotsLite_MuteChanged() end
