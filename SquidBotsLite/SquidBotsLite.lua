@@ -89,7 +89,9 @@ local STRINGS = {
 		ALTS_IN = "logging in...", ALTS_OUT = "logging out...",
 		ALTS_WAIT = "Asking the server...", ALTS_EMPTY = "No other character on this account.",
 		ALTS_NO_REPLY = "No answer from the server: does it run the bot module?", ALTS_MORE = "%d more not shown.",
-		ALTS_HELP = "Click a logged-in alt for its sheet, right-click an alt to hide it.",
+		ALTS_HELP = "Click: its sheet. Right-click: hide it.",
+		MUTE_BTN = "Mute bots", MUTE_BTN_ON = "Bots muted", TIP_MUTE = "Cuts the chatter of your own bots; they still answer your orders. Click again to let them chat.",
+		TIP_MUTE_OLD = "Needs the server's update (CoA Bots 3.1.6).",
 		ALTS_COUNT = "%d / %d logged in", ALTS_MISSION = "out: %d min, %d items", TIP_ALTS_REFRESH = "Ask the server for your characters again.",
 		TIP_ALT_ADD = "It joins your group as your bot.", TIP_ALT_REMOVE = "Logs it out of the game.",
 		TIP_ALT_SUMMON = "Brings it to you: an alt logs in where it logged out.",
@@ -214,7 +216,9 @@ local STRINGS = {
 		ALTS_IN = "connexion...", ALTS_OUT = "déconnexion...",
 		ALTS_WAIT = "Demande au serveur...", ALTS_EMPTY = "Aucun autre personnage sur ce compte.",
 		ALTS_NO_REPLY = "Pas de réponse du serveur : a-t-il le module des bots ?", ALTS_MORE = "%d de plus, non affichés.",
-		ALTS_HELP = "Clic : la fiche d'un alt connecté. Clic droit : cacher un alt.",
+		ALTS_HELP = "Clic : sa fiche. Clic droit : le cacher.",
+		MUTE_BTN = "Bots muets", MUTE_BTN_ON = "Bots muets : oui", TIP_MUTE = "Coupe le bavardage de vos propres bots ; ils répondent toujours à vos ordres. Recliquez pour les laisser parler.",
+		TIP_MUTE_OLD = "Demande la mise à jour du serveur (CoA Bots 3.1.6).",
 		ALTS_COUNT = "%d / %d connectés", ALTS_MISSION = "parti : %d min, %d objets", TIP_ALTS_REFRESH = "Redemander vos personnages au serveur.",
 		TIP_ALT_ADD = "Il rejoint votre groupe comme bot.", TIP_ALT_REMOVE = "Le déconnecte du jeu.",
 		TIP_ALT_SUMMON = "L'amène à vous : un alt se connecte là où il s'était déconnecté.",
@@ -2711,6 +2715,7 @@ local function RefreshAlts()
 	local AL = SquidBotsLite_AltsList
 	local view = AL and AL.View(roster) or roster
 	if altsFrame.sort then altsFrame.sort:SetText(AL and AL.SortLabel() or "") end
+	if SquidBotsLite_MuteChanged then SquidBotsLite_MuteChanged() end
 	altsFrame:SetHeight(K.ALT_TOP + math.max(1, math.min(#view, K.ALT_ROWS)) * K.ALT_ROW_H + 44)
 	FauxScrollFrame_Update(altsFrame.scroll, #view, K.ALT_ROWS, K.ALT_ROW_H)
 	local offset = FauxScrollFrame_GetOffset(altsFrame.scroll)
@@ -3166,9 +3171,35 @@ local function BuildAlts()
 	altsFrame.sort:SetPoint("BOTTOMRIGHT", -16, 9)
 	altsFrame.sort:SetScript("OnClick", function() ShowMenu(SquidBotsLite_AltsList.SortItems(roster, RefreshAlts)) end)
 	altsFrame.help:SetJustifyH("LEFT")
+	altsFrame.help:SetWidth(250)
+	-- 3.1.6: Mute bots, left of Sort.
+	altsFrame.mute = CreateFrame("Button", nil, altsFrame, "UIPanelButtonTemplate")
+	altsFrame.mute:SetWidth(112)
+	altsFrame.mute:SetHeight(20)
+	altsFrame.mute:SetPoint("RIGHT", altsFrame.sort, "LEFT", -6, 0)
+	altsFrame.mute:SetScript("OnClick", function()
+		local A = SquidBotsLite_Alts
+		if A and A.SetMute then A.SetMute(not SquidBotsLiteDB.mute) end
+	end)
+	altsFrame.mute:SetScript("OnEnter", function(self)
+		local A = SquidBotsLite_Alts
+		GameTooltip:SetOwner(self, "ANCHOR_TOP")
+		GameTooltip:AddLine(L.TIP_MUTE, 1, 1, 1, true)
+		if not (A and A.CanMute and A.CanMute()) then GameTooltip:AddLine(L.TIP_MUTE_OLD, 1, 0.3, 0.3, true) end
+		GameTooltip:Show()
+	end)
+	altsFrame.mute:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	ui.FlattenAll(altsFrame)
 	altsFrame:Hide()
 	AltsTexts()
+end
+
+-- 3.1.6: the Mute button's label: lit while the player's bots are muted, grey on a realm without it.
+function SquidBotsLite_MuteChanged()
+	if not altsFrame or not altsFrame.mute then return end
+	local A = SquidBotsLite_Alts
+	altsFrame.mute:SetText(SquidBotsLiteDB.mute and ("|cff66ff66" .. L.MUTE_BTN_ON .. "|r") or L.MUTE_BTN)
+	if A and A.CanMute and A.CanMute() then altsFrame.mute:Enable() else altsFrame.mute:Disable() end
 end
 
 ShowAlts = function()
@@ -4097,6 +4128,8 @@ SlashCmdList["SQUIDBOTSLITE"] = function(message)
 		ShowSpecs()
 	elseif command == "questask" and SquidBotsLite_QuestAsk then
 		SquidBotsLite_QuestAsk(rest)
+	elseif command == "mute" and SquidBotsLite_Alts and SquidBotsLite_Alts.SetMute then
+		SquidBotsLite_Alts.SetMute(not SquidBotsLiteDB.mute)
 	elseif command == "keys" and SquidBotsLite_ToggleKeySpells then
 		SquidBotsLite_ToggleKeySpells()
 	elseif command == "mt" and SquidBotsLite_MainTankDebug then

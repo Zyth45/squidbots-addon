@@ -6,6 +6,14 @@
 local STRINGS = {
 	en = {
 		ALTS_COL = "Group alts", ALTS_COL_LEVEL = "Level %d", ALTS_COL_TIP = "Click: its sheet, on the same tab.", ALTS_COL_SHOWN = "Its sheet is the one shown.",
+		ALTS_COL_DROP = "Drop an item of the bags here: it goes to this alt.",
+		GA_MENU = "Give to alt", GA_MENU_OLD = "Give to alt (needs the server's update)", GA_MENU_NONE = "Give to alt (no other alt in the group)",
+		GA_NOTALT = "Give to alt: only between your own alts, never a recruited bot.", GA_BOUND_SHORT = "bound", GA_BOUND = "%s is bound: it cannot go to another alt.", GA_OLD = "Give to alt needs the server's update (CoA Bots 3.1.6).",
+		GA_SENT = "%s: sent to %s...", GA_DONE = "%s gave %s to %s.", GA_ERR = "%s could not give %s: %s.",
+		GA_R_bound = "it is bound", GA_R_notalt = "only to your own alts", GA_R_notgroup = "the alt is not in your group", GA_R_full = "its bags are full",
+		GA_R_missing = "it does not have that many", GA_R_off = "option off on the server",
+		TRUST = "Trust: %s", TRUST_NEXT = "%d / %d - next: %s", TRUST_MAX = "%d - highest rank",
+		TR_stranger = "Stranger", TR_acquaintance = "Acquaintance", TR_companion = "Companion", TR_friend = "Friend", TR_trusted = "Trusted", TR_sworn = "Sworn",
 		TITLE = "Bot sheet", GEAR = "Gear", BAGS = "Bags", QUESTS = "Quests", INFO = "Info", REFRESH = "Refresh",
 		BEST_GEAR = "Best gear", BEST_GEAR_ASK = "%s gets free gear for its level, replacing what it wears. Players who earn their gear may not want this. Sure?",
 		BEST_GEAR_TIP = "Free gear for its level from the server, replacing what it wears (cannot be undone). A server can turn it off for alts (AiPlayerbot.AutoGearCommandAltBots = 0).",
@@ -86,6 +94,14 @@ local STRINGS = {
 	},
 	fr = {
 		ALTS_COL = "Alts du groupe", ALTS_COL_LEVEL = "Niveau %d", ALTS_COL_TIP = "Clic : sa fiche, sur le même onglet.", ALTS_COL_SHOWN = "C'est sa fiche qui est affichée.",
+		ALTS_COL_DROP = "Déposez ici un objet des sacs : il va à cet alt.",
+		GA_MENU = "Donner à un alt", GA_MENU_OLD = "Donner à un alt (mise à jour du serveur requise)", GA_MENU_NONE = "Donner à un alt (aucun autre alt dans le groupe)",
+		GA_NOTALT = "Donner à un alt : seulement entre vos propres alts, jamais un bot recruté.", GA_BOUND_SHORT = "lié", GA_BOUND = "%s est lié : il ne peut pas aller à un autre alt.", GA_OLD = "Donner à un alt demande la mise à jour du serveur (CoA Bots 3.1.6).",
+		GA_SENT = "%s : envoyé à %s...", GA_DONE = "%s a donné %s à %s.", GA_ERR = "%s n'a pas pu donner %s : %s.",
+		GA_R_bound = "il est lié", GA_R_notalt = "seulement à vos propres alts", GA_R_notgroup = "l'alt n'est pas dans votre groupe", GA_R_full = "ses sacs sont pleins",
+		GA_R_missing = "il n'en a pas autant", GA_R_off = "option désactivée sur le serveur",
+		TRUST = "Confiance : %s", TRUST_NEXT = "%d / %d - suivant : %s", TRUST_MAX = "%d - rang le plus haut",
+		TR_stranger = "Inconnu", TR_acquaintance = "Connaissance", TR_companion = "Compagnon", TR_friend = "Ami", TR_trusted = "De confiance", TR_sworn = "Lié par serment",
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
 		BEST_GEAR = "Meilleur équipement", BEST_GEAR_ASK = "%s reçoit un équipement gratuit de son niveau, à la place de ce qu'il porte. Les joueurs qui gagnent leur équipement n'en voudront peut-être pas. Sûr ?",
 		BEST_GEAR_TIP = "Équipement gratuit de son niveau donné par le serveur, à la place de ce qu'il porte (impossible à annuler). Un serveur peut le désactiver pour les alts (AiPlayerbot.AutoGearCommandAltBots = 0).",
@@ -1073,6 +1089,78 @@ function BagSlots.Menu(slot)
 	if SquidBotsLite_WatchMenu then SquidBotsLite_WatchMenu() end
 end
 
+-- 3.1.6: the logged-in alts of the group, in a column left of the sheet (8 at most). A click shows that alt's sheet
+-- on the same tab; the alt shown has a gold frame and an arrow. Recruited bots are not in it: alts only.
+local ALT_COL_W, ALT_COL_ROWS, ALT_ROW_H = 120, 8, 32
+local altCol
+
+local function GroupAlts()
+	local list, me = {}, UnitName("player")
+	local raid = GetNumRaidMembers() > 0
+	for i = 1, raid and GetNumRaidMembers() or GetNumPartyMembers() do
+		local unit = (raid and "raid" or "party") .. i
+		local name = UnitName(unit)
+		local A = SquidBotsLite_Alts
+		if name and name ~= me and ((SquidBotsLite_BotKind and SquidBotsLite_BotKind(name) == "alt") or (A and A.IsAlt and A.IsAlt(name))) then
+			table.insert(list, { name = name, unit = unit })
+			if #list >= ALT_COL_ROWS then break end
+		end
+	end
+	return list
+end
+SquidBotsLite_GroupAlts = GroupAlts
+
+-- 3.1.6: Give to alt (CoA Bots 3.1.6, HELLO's 7th field): an item of this alt's bags goes straight into the bags of
+-- another logged-in alt, both in the group; never to a recruited bot. "give <itemId> <count> <alt>" whispered to the
+-- holder, which takes its unbound copies wherever they are; GIVE done <itemId> <count> <alt>, or
+-- GIVE err <itemId> <bound|notalt|notgroup|full|missing|off> (missing: fewer than asked, nothing given).
+-- From the item's menu, or dragged onto an alt of the column.
+local dragGive
+local function CanGiveToAlt()
+	local A = SquidBotsLite_Alts
+	return A and A.hello and A.hello.give and A.IsAlt and A.IsAlt(current) and A.Send and true or false
+end
+
+local function GiveToAlt(item, to)
+	if not current or not item or not to or to == current then return end
+	if item.soulbound then Print(string.format(T("GA_BOUND"), item.link)) return end
+	local A = SquidBotsLite_Alts
+	if not (A and A.IsAlt and A.IsAlt(current) and A.IsAlt(to)) then Print(T("GA_NOTALT")) return end
+	if not CanGiveToAlt() then Print(T("GA_OLD")) return end
+	local n = item.count or 1
+	SquidBotsLite_Alts.Send(current, "give " .. item.id .. " " .. n .. " " .. to)
+	Print(string.format(T("GA_SENT"), item.link .. (n > 1 and (" x" .. n) or ""), to))
+end
+
+function SquidBotsLite_OnGive(name, f)
+	local id = tonumber(f[3] or "") or 0
+	local link = select(2, GetItemInfo(id)) or ("item:" .. id)
+	if f[2] == "done" then
+		local n = tonumber(f[4] or "") or 1
+		Print(string.format(T("GA_DONE"), name, link .. (n > 1 and (" x" .. n) or ""), f[5] or "?"))
+		if sheet and sheet:IsShown() and tab == "bags" and bagMode == "bags" and (name == current or f[5] == current) then Ask("bags", "c") end
+	elseif f[2] == "err" then
+		Print(string.format(T("GA_ERR"), name, link, T("GA_R_" .. (f[4] or "")) or (f[4] or "?")))
+	end
+end
+
+-- The item's menu line: a sub-menu of the other alts of the group, or why not.
+local function GiveToAltItem(item)
+	local others = {}
+	for _, a in ipairs(GroupAlts()) do
+		if a.name ~= current then
+			local to = a.name
+			table.insert(others, { text = to, notCheckable = true, func = function() CloseDropDownMenus(); GiveToAlt(item, to) end })
+		end
+	end
+	local line = { text = T("GA_MENU"), notCheckable = true }
+	if item.soulbound then line.text, line.disabled = T("GA_MENU") .. " (" .. T("GA_BOUND_SHORT") .. ")", true
+	elseif not CanGiveToAlt() then line.text, line.disabled = T("GA_MENU_OLD"), true
+	elseif #others == 0 then line.text, line.disabled = T("GA_MENU_NONE"), true
+	else line.hasArrow, line.menuList = true, others end
+	return line
+end
+
 local function ItemMenu(item)
 	local link = SendableLink(item)
 	if bagMode == "bank" then
@@ -1095,6 +1183,9 @@ local function ItemMenu(item)
 		{ text = T("DESTROY"), notCheckable = true, func = function() Destroy(item, link) end },
 		{ text = T("LINK"), notCheckable = true, func = function() InsertLink(link) end },
 	}
+	-- 3.1.6: Give to alt, for an alt's sheet only.
+	local A = SquidBotsLite_Alts
+	if A and A.IsAlt and A.IsAlt(current) then table.insert(menu, 3, GiveToAltItem(item)) end
 	if AltBags(current) and select(9, GetItemInfo(item.link)) == "INVTYPE_BAG" then
 		table.insert(menu, 5, { text = T("BS_PUT"), notCheckable = true,
 			func = function() BagSlots.Equip(current, item.link:match("|H(item:[^|]+)|h"), nil) end })
@@ -1287,6 +1378,21 @@ local function BuildBags(page)
 			elseif IsShiftKeyDown() then InsertLink(SendableLink(self.item)) else ItemMenu(self.item) end
 		end)
 		b:SetScript("OnReceiveDrag", DropOnBags)
+		-- 3.1.6: dragged onto an alt of the column, the item goes to that alt (Give to alt).
+		b:RegisterForDrag("LeftButton")
+		b:SetScript("OnDragStart", function(self)
+			if self.item and bagMode == "bags" and CanGiveToAlt() and not self.item.soulbound and not CursorHasItem() then
+				dragGive = self.item
+				SetCursor(GetItemIcon(self.item.id) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			end
+		end)
+		b:SetScript("OnDragStop", function()
+			local item = dragGive
+			dragGive = nil
+			ResetCursor()
+			local focus = GetMouseFocus()
+			if item and focus and focus.altColumn and focus.alt then GiveToAlt(item, focus.alt) end
+		end)
 		-- 3.1: a small tick box in the corner, the same as Ctrl+click.
 		b.box = CreateFrame("CheckButton", nil, b, "UICheckButtonTemplate")
 		b.box:SetWidth(16)
@@ -1492,6 +1598,51 @@ local function BuildInfo(page)
 		b:SetScript("OnClick", def[2])
 		page.buttons[i] = b
 	end
+	-- 3.1.6: trust (CoA Bots 3.1.6, HELLO's 9th field): a named rank and a bar, shown only.
+	page.trustRank = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	page.trustRank:SetPoint("TOPLEFT", 14, -330)
+	local bar = CreateFrame("StatusBar", nil, page)
+	bar:SetWidth(348)
+	bar:SetHeight(16)
+	bar:SetPoint("TOPLEFT", 14, -350)
+	bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+	bar:SetStatusBarColor(0.25, 0.65, 1)
+	bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+	bar.bg:SetAllPoints()
+	bar.bg:SetTexture(0, 0, 0, 0.6)
+	bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	bar.text:SetPoint("CENTER")
+	page.trust = bar
+end
+
+-- 3.1.6: "trust" -> TRUST <rankKey> <value> <low> <high> <nextRankKey|->, per bot (recruited bots answer too).
+local trust = {}
+local function RankName(key)
+	if not key or key == "" or key == "-" then return "" end
+	return T("TR_" .. key) or (key:sub(1, 1):upper() .. key:sub(2))
+end
+function SquidBotsLite_OnTrust(name, f)
+	trust[name] = { rank = f[2], value = tonumber(f[3] or "") or 0, low = tonumber(f[4] or "") or 0,
+		high = tonumber(f[5] or "") or 0, nxt = f[6] }
+	if name == current and Render then Render() end
+end
+local function RenderTrust(page)
+	local t = current and trust[current]
+	if not t then
+		page.trustRank:SetText("")
+		page.trust:Hide()
+		return
+	end
+	page.trustRank:SetText(string.format(T("TRUST"), RankName(t.rank)))
+	local top = t.high > t.low and t.high or t.low + 1
+	page.trust:SetMinMaxValues(t.low, top)
+	page.trust:SetValue(math.min(math.max(t.value, t.low), top))
+	if not t.nxt or t.nxt == "-" or t.nxt == "" then
+		page.trust.text:SetText(string.format(T("TRUST_MAX"), t.value))
+	else
+		page.trust.text:SetText(string.format(T("TRUST_NEXT"), t.value, t.high, RankName(t.nxt)))
+	end
+	page.trust:Show()
 end
 
 local STRAT_ROWS = 13
@@ -2191,27 +2342,9 @@ local function RenderInfo(page)
 	end
 	page.text:SetText(text)
 	for _, b in ipairs(page.buttons) do b:SetText(T(b.label)) end
+	RenderTrust(page)
 end
 
--- 3.1.6: the logged-in alts of the group, in a column left of the sheet (8 at most). A click shows that alt's sheet
--- on the same tab; the alt shown has a gold frame and an arrow. Recruited bots are not in it: alts only.
-local ALT_COL_W, ALT_COL_ROWS, ALT_ROW_H = 120, 8, 32
-local altCol
-
-local function GroupAlts()
-	local list, me = {}, UnitName("player")
-	local raid = GetNumRaidMembers() > 0
-	for i = 1, raid and GetNumRaidMembers() or GetNumPartyMembers() do
-		local unit = (raid and "raid" or "party") .. i
-		local name = UnitName(unit)
-		if name and name ~= me and SquidBotsLite_BotKind and SquidBotsLite_BotKind(name) == "alt" then
-			table.insert(list, { name = name, unit = unit })
-			if #list >= ALT_COL_ROWS then break end
-		end
-	end
-	return list
-end
-SquidBotsLite_GroupAlts = GroupAlts
 
 local function BuildAltColumn()
 	altCol = CreateFrame("Frame", nil, sheet)
@@ -2231,6 +2364,7 @@ local function BuildAltColumn()
 		b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
 			tile = false, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
 		b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		b.altColumn = true
 		b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		b.label:SetPoint("TOPLEFT", 8, -5)
 		b.label:SetPoint("RIGHT", -16, 0)
@@ -2250,6 +2384,7 @@ local function BuildAltColumn()
 			GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 			GameTooltip:AddLine(self.alt, 1, 1, 1)
 			GameTooltip:AddLine(self.alt == current and T("ALTS_COL_SHOWN") or T("ALTS_COL_TIP"), 0.7, 0.7, 0.7, true)
+			if self.alt ~= current and CanGiveToAlt() then GameTooltip:AddLine(T("ALTS_COL_DROP"), 0.7, 0.7, 0.7, true) end
 			GameTooltip:Show()
 		end)
 		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -2365,6 +2500,8 @@ local function Load()
 		Ask("nc", "nc ?")
 	else
 		Ask("stats", "stats")
+		local A = SquidBotsLite_Alts
+		if current and A and A.hello and A.hello.trust and A.Send then A.Send(current, "trust") end
 	end
 	Render()
 end

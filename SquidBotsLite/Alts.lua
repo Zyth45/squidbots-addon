@@ -70,6 +70,8 @@ local STRINGS = {
 		TIP_MODE_both = "In this log, and the main ones in the chat too.",
 		HELLO_ON = "Server: quiet mode on%s.", HELLO_CATCH = ", chains caught up automatically",
 		HELLO_NONE = "The server has not answered the handshake: it needs CoA Bots 2.8.3.", HELLO_OFF = "Handshake off: chat mode.",
+		MUTE_ON = "Mute on: your bots stop chattering (they still answer your orders).", MUTE_OFF = "Mute off: your bots chat again.",
+		MUTE_OLD = "Mute needs the server's update (CoA Bots 3.1.6).",
 		CLEAR = "Clear",
 		T_SUMMON = "Regroup", T_FOLLOW = "Recall all", T_LEARN = "Learn all", T_MISSIONS = "Missions", T_REPAIR = "Repair, sell junk",
 		T_ACCOUNTS = "Accounts", TIP_T_ACCOUNTS = "Your linked accounts: show them, link one, set this account's key.",
@@ -139,6 +141,8 @@ local STRINGS = {
 		TIP_MODE_both = "Dans ce journal, et les principales aussi dans le chat.",
 		HELLO_ON = "Serveur : mode silencieux actif%s.", HELLO_CATCH = ", chaînes rattrapées automatiquement",
 		HELLO_NONE = "Le serveur n'a pas répondu à la poignée de main : il faut CoA Bots 2.8.3.", HELLO_OFF = "Poignée de main coupée : mode chat.",
+		MUTE_ON = "Muet : vos bots arrêtent de bavarder (ils répondent toujours à vos ordres).", MUTE_OFF = "Muet coupé : vos bots bavardent de nouveau.",
+		MUTE_OLD = "Le mode muet demande la mise à jour du serveur (CoA Bots 3.1.6).",
 		CLEAR = "Effacer",
 		T_SUMMON = "Regrouper", T_FOLLOW = "Rappeler tous", T_LEARN = "Tout apprendre", T_MISSIONS = "Missions", T_REPAIR = "Réparer, vendre la camelote",
 		T_ACCOUNTS = "Comptes", TIP_T_ACCOUNTS = "Vos comptes liés : les voir, en lier un, définir la clé de ce compte.",
@@ -198,7 +202,7 @@ local STATE = {
 -- members[alt] = the last TEAM; obj[questId][alt] = { state, done, needed } from OBJ.
 -- ench: the team's disenchanter and mode (ENCH); enchSkill[alt] = its Enchanting.
 local A = { seen = {}, gone = {}, sent = {}, quests = {}, asked = {}, titles = {}, recent = {}, train = {}, journal = {},
-	nextHello = 0, members = {}, obj = {}, enchSkill = {}, left = {}, grouped = {} }
+	nextHello = 0, members = {}, obj = {}, enchSkill = {}, left = {}, grouped = {}, muted = {}, muteAsked = {} }
 -- An alt that sent TEAM and has been silent this long is gone (TEAM comes at least once a minute).
 local TEAM_SILENT = 150
 local UI = SquidBotsLite_UI
@@ -1463,8 +1467,48 @@ end
 
 function Handle.HELLO(name, f)
 	-- 6th field (CoA Bots 3.1): the alt bags commands (cmp, bags, sell, destroy) are on.
-	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", bags = f[6] == "1", at = GetTime() }
+	-- 3.1.6: 7th give to alt, 8th this bot's mute (0|1, so the realm has it), 9th trust.
+	A.hello = { from = name, catchup = f[3] == "1", silent = f[4] == "1", sheet = f[5] == "1", bags = f[6] == "1",
+		give = f[7] == "1", mute = f[8] == "0" or f[8] == "1", trust = f[9] == "1", at = GetTime() }
+	if f[8] == "0" or f[8] == "1" then A.muted[name] = f[8] == "1" end
 	A.RefreshLog()
+	A.MuteSync()
+end
+
+-- 3.1.6: GIVE and TRUST are drawn by the bot sheet (Manager.lua).
+function Handle.GIVE(name, f) if SquidBotsLite_OnGive then SquidBotsLite_OnGive(name, f) end end
+function Handle.TRUST(name, f) if SquidBotsLite_OnTrust then SquidBotsLite_OnTrust(name, f) end end
+function Handle.MUTE(name, f)
+	A.muted[name], A.muteAsked[name] = f[2] == "1", nil
+	if SquidBotsLite_MuteChanged then SquidBotsLite_MuteChanged() end
+end
+
+-- 3.1.6: the Mute button (My alts, /sbl mute) cuts the chatter of the player's own bots; their answers to orders
+-- stay. "mute on|off" to every bot of the group (the realm answers MUTE <0|1> only for the bots the player is master
+-- of: three tries, then a silent bot is left alone). Kept in SquidBotsLiteDB.mute, sent again to a bot that joins.
+local MUTE_RETRY, MUTE_TRIES = 10, 3
+function A.MuteSync()
+	if not (A.hello and A.hello.mute and SquidBotsLiteDB) then return end
+	local want, now = SquidBotsLiteDB.mute and true or false, GetTime()
+	for _, unit in ipairs(GroupUnits()) do
+		local name = UnitName(unit)
+		if name and SquidBotsLite_IsBot and SquidBotsLite_IsBot(name) and (A.muted[name] or false) ~= want then
+			local ask = A.muteAsked[name]
+			if not ask or (ask.n < MUTE_TRIES and now - ask.at >= MUTE_RETRY) then
+				A.muteAsked[name] = { at = now, n = (ask and ask.n or 0) + 1 }
+				Send(name, "mute " .. (want and "on" or "off"))
+			end
+		end
+	end
+end
+function A.CanMute() return A.hello and A.hello.mute and true or false end
+function A.SetMute(on)
+	if not A.CanMute() then Print(T("MUTE_OLD")) return end
+	SquidBotsLiteDB.mute = on and true or nil
+	A.muteAsked = {}
+	A.MuteSync()
+	Print(T(on and "MUTE_ON" or "MUTE_OFF"))
+	if SquidBotsLite_MuteChanged then SquidBotsLite_MuteChanged() end
 end
 
 function Handle.ENCH(name, f)
@@ -1655,6 +1699,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 		if not IsAlt(arg4) then
 			-- From the group only: anyone on the realm can whisper an addon message.
 			if f[1] == "HELLO" and SquidBotsLite_InGroup and SquidBotsLite_InGroup(arg4) then Handle.HELLO(arg4, f) end
+			-- 3.1.6: trust and mute answer from any bot of the group the player is master of (recruited too).
+			if (f[1] == "TRUST" or f[1] == "MUTE") and SquidBotsLite_InGroup and SquidBotsLite_InGroup(arg4) then Handle[f[1]](arg4, f) end
 			return
 		end
 		A.seen[arg4], A.gone[arg4] = GetTime(), nil
@@ -1721,6 +1767,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
 	else
 		-- An alt that joins the group opens the team bar again, even after the player closed it.
 		if event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+			A.MuteSync()
 			local count, now = 0, {}
 			for _, unit in ipairs(GroupUnits()) do
 				local name = UnitName(unit)
