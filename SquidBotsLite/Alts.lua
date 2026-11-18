@@ -1488,7 +1488,7 @@ end
 -- of: three tries, then a silent bot is left alone). Kept in SquidBotsLiteDB.mute, sent again to a bot that joins.
 local MUTE_RETRY, MUTE_TRIES = 10, 3
 function A.MuteSync()
-	if not (A.hello and A.hello.mute and SquidBotsLiteDB) then return end
+	if not (A.CanMute() and SquidBotsLiteDB) then return end
 	local want, now = SquidBotsLiteDB.mute and true or false, GetTime()
 	for _, unit in ipairs(GroupUnits()) do
 		local name = UnitName(unit)
@@ -1501,7 +1501,12 @@ function A.MuteSync()
 		end
 	end
 end
-function A.CanMute() return A.hello and A.hello.mute and true or false end
+-- An alt's HELLO says whether the realm has it; with no alt in the group (recruited bots only: they answer mute but
+-- never HELLO) it is tried, an older realm stays silent. The realm forgets it at a restart: sent again at login.
+function A.CanMute()
+	if not A.hello then return true end
+	return A.hello.mute and true or false
+end
 function A.SetMute(on)
 	if not A.CanMute() then Print(T("MUTE_OLD")) return end
 	SquidBotsLiteDB.mute = on and true or nil

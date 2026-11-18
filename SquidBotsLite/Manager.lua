@@ -1627,6 +1627,12 @@ local function RankName(key)
 	return T("TR_" .. key) or (key:sub(1, 1):upper() .. key:sub(2))
 end
 function SquidBotsLite_OnTrust(name, f)
+	-- TRUST err off: the option is off on the realm, nothing to show.
+	if f[2] == "err" then
+		trust[name] = nil
+		if name == current and Render then Render() end
+		return
+	end
 	trust[name] = { rank = f[2], value = tonumber(f[3] or "") or 0, low = tonumber(f[4] or "") or 0,
 		high = tonumber(f[5] or "") or 0, nxt = f[6] }
 	if name == current and Render then Render() end
@@ -2506,7 +2512,9 @@ local function Load()
 	else
 		Ask("stats", "stats")
 		local A = SquidBotsLite_Alts
-		if current and A and A.hello and A.hello.trust and A.Send then A.Send(current, "trust") end
+		-- Asked when an alt's HELLO said trust, or when no alt said HELLO at all (a group of recruited bots only:
+		-- they answer trust but never HELLO); an older realm ignores it.
+		if current and A and A.Send and (not A.hello or A.hello.trust) then A.Send(current, "trust") end
 	end
 	Render()
 end
