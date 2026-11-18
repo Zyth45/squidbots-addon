@@ -19,7 +19,8 @@ local ASK_EVERY, ASK_WAIT, REPLY_FOR, BIG_CD = 30, 4, 4, 180
 local QUICK, QUICK_ICON, QA_WAIT, QA_STATE_EVERY, QA_RETRY, STATUS_FOR = { "heal", "cc", "taunt" }, 32, 3, 5, 60, 8
 local QUICK_SPELL = { heal = 2061, cc = 118, taunt = 355 } -- Flash Heal, Polymorph, Taunt: icons only
 local QUICK_PHRASE = { heal = "heal me", cc = "cc please", taunt = "taunt please" }
--- The realm's categories (7th field of KSPELL it), shown on the full bar; anything else is left out.
+-- The realm's categories (7th field of KSPELL it), shown on the full bar. Any other spell ("-") only when it is one
+-- of KEYS (Innervate, Rebirth, Tranquility...).
 local SHOWN_CAT = { def = true, burst = true, cc = true }
 
 local STRINGS = {
@@ -41,6 +42,7 @@ local STRINGS = {
 		N_notank = "no tank bot", N_nocc = "no crowd control ready", N_noheal = "no healer bot", N_cd = "all on cooldown",
 		N_notarget = "no target", N_range = "out of range", N_off = "option off", N_unknown = "no bot could do it", N_busy = "the bot could not cast", N_notgroup = "your target is not in your group", N_immune = "the target is immune", N_held = "the tank already holds it", N_full = "the target has full health",
 		TIP_FULL = "Show every key spell of your bots.", TIP_SMALL = "Only the three quick actions.",
+		HINT_FULL = "Your bots' key spells: click + to see them all.", TIP_CLOSE = "Hide the bar (the Keys button brings it back).",
 	},
 	fr = {
 		TITLE = "Sorts clés", NO_BOT = "Aucun bot du groupe n'a encore de sort clé.",
@@ -60,6 +62,7 @@ local STRINGS = {
 		N_notank = "aucun bot tank", N_nocc = "aucun contrôle prêt", N_noheal = "aucun bot soigneur", N_cd = "tous en recharge",
 		N_notarget = "aucune cible", N_range = "hors de portée", N_off = "option désactivée", N_unknown = "aucun bot n'a pu", N_busy = "le bot n'a pas pu lancer", N_notgroup = "votre cible n'est pas dans votre groupe", N_immune = "la cible est insensible", N_held = "le tank la tient déjà", N_full = "la cible a toute sa vie",
 		TIP_FULL = "Afficher tous les sorts clés de vos bots.", TIP_SMALL = "Seulement les trois actions rapides.",
+		HINT_FULL = "Les sorts clés de vos bots : cliquez sur + pour les voir.", TIP_CLOSE = "Cacher la barre (le bouton Clés la rend).",
 	},
 }
 
@@ -224,10 +227,11 @@ function ks.OnAddon(sender, message)
 			local key = KeyByName()[name]
 			local total = (tonumber(f[5]) or 0) / 1000
 			local cat = f[7] ~= "" and f[7] or nil
-			-- The realm says the category: def, burst and cc are shown, nothing else. Without it (a 3.1.1 realm), a
-			-- spell that is not a key spell is shown only when it is a big cooldown (a CoA class's own).
+			-- def, burst and cc are shown, and a key spell whatever its category (3.1.3 to 3.1.4.1 dropped Innervate,
+			-- Rebirth, Tranquility...: "-" for the realm). Without a category (a 3.1.1 realm), any other spell only
+			-- when it is a big cooldown (a CoA class's own).
 			if cat then
-				if not SHOWN_CAT[cat] then return end
+				if not SHOWN_CAT[cat] and not key then return end
 			elseif not key and total < BIG_CD then
 				return
 			end
@@ -583,13 +587,18 @@ local function DrawQuick(list)
 	end
 end
 
--- A small text button ("+", "-", "x").
+-- A text button ("+", "-", "x"): 18 px, gold on a dark square with a border, white when hovered (3.1.4.1 had a
+-- bare 14 px "+": a player never found the full bar).
 local function TextButton(parent, text, tip, onClick)
 	local b = CreateFrame("Button", nil, parent)
-	b:SetWidth(14)
-	b:SetHeight(14)
-	b:SetNormalFontObject(GameFontNormalSmall)
-	b:SetHighlightFontObject(GameFontHighlightSmall)
+	b:SetWidth(18)
+	b:SetHeight(18)
+	b:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = true, tileSize = 8, edgeSize = 8, insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+	b:SetBackdropColor(0, 0, 0, 0.9)
+	b:SetBackdropBorderColor(1, 0.82, 0, 0.9)
+	b:SetNormalFontObject(GameFontNormalLarge)
+	b:SetHighlightFontObject(GameFontHighlightLarge)
 	b:SetText(text)
 	b:SetScript("OnClick", onClick)
 	if tip then
@@ -616,7 +625,7 @@ end
 
 local function BuildSmall()
 	small = CreateFrame("Frame", "SquidBotsLiteQuickBar", UIParent)
-	small:SetWidth(8 + 3 * (QUICK_ICON + 4) + 16)
+	small:SetWidth(8 + 3 * (QUICK_ICON + 4) + 20)
 	small:SetHeight(QUICK_ICON + 8)
 	small:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", tile = true, tileSize = 16 })
 	small:SetBackdropColor(0, 0, 0, 0.35)
@@ -624,9 +633,9 @@ local function BuildSmall()
 	Movable(small, "keyQuick", { 0, -140 })
 	small.buttons = QuickButtons(small, QUICK_ICON, 4, -4)
 	local more = TextButton(small, "+", "TIP_FULL", function() ks.SetMode("full") end)
-	more:SetPoint("TOPRIGHT", -2, -3)
-	local close = TextButton(small, "x", nil, function() SquidBotsLite_ToggleKeySpells() end)
-	close:SetPoint("BOTTOMRIGHT", -2, 3)
+	more:SetPoint("TOPRIGHT", -2, -2)
+	local close = TextButton(small, "x", "TIP_CLOSE", function() SquidBotsLite_ToggleKeySpells() end)
+	close:SetPoint("BOTTOMRIGHT", -2, 2)
 	small.status = small:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	small.status:SetPoint("TOP", small, "BOTTOM", 0, -2)
 	small:SetScript("OnShow", function() ks.qaAsked = nil; Changed() end)
@@ -699,7 +708,7 @@ function ks.Draw()
 	ks.dirty = nil
 	if small and small:IsShown() then
 		DrawQuick(small.buttons)
-		small.status:SetText(ks.status or "")
+		small.status:SetText(ks.status or ks.Hint() or "")
 	end
 	if not frame or not frame:IsShown() then return end
 	DrawQuick(frame.quick)
@@ -749,9 +758,15 @@ function ks.Apply()
 	if SquidBotsLite_RefreshBar then SquidBotsLite_RefreshBar() end
 end
 
+-- The line under the small bar until the full bar was opened once (SquidBotsLiteDB.keyFullSeen).
+function ks.Hint()
+	if SquidBotsLiteDB and not SquidBotsLiteDB.keyFullSeen then return T("HINT_FULL") end
+end
+
 function ks.SetMode(mode)
 	if not SquidBotsLiteDB then return end
 	SquidBotsLiteDB.keyMode = mode
+	if mode == "full" then SquidBotsLiteDB.keyFullSeen = true end
 	SquidBotsLiteDB.keyBarShown = true
 	ks.Apply()
 end
