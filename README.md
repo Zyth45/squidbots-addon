@@ -1,14 +1,18 @@
-# SquidBots Lite
+# SquidBots Manager
 
-A World of Warcraft 3.3.5 addon for [CoA Bots](https://github.com/Zyth45/mod-playerbots): your bots, without a window in the way.
+A World of Warcraft 3.3.5 addon for [CoA Bots](https://github.com/Zyth45/mod-playerbots): your bots, without a window in the way. Current version: **3.1.4.1**, made for CoA Bots 3.1.4.
 
-A thin bar of buttons, the bots' roles drawn straight onto the party frames you already have, and offers arriving as small toasts. And for those who play their own alts as bots: **My alts** and a **bot sheet** for every one of them (gear in 3D, bags, quests, talents, favourite mount).
+A thin bar of buttons, the bots' roles drawn straight onto the party frames you already have, and offers arriving as small toasts. And for those who play their own alts as bots: **My alts**, **teams**, and a **bot sheet** for every one of them (gear in 3D, bags, quests, talents, favourite mount).
 
-![The SquidBots Lite bar in game](images/bar.png)
+Formerly SquidBots Lite: the folder is still `SquidBotsLite` and the command is still `/sbl`.
+
+**Discord:** [SquidBots](https://discord.gg/DTJceaG9Ky), for support and news.
+
+![The SquidBots Manager bar in game](images/bar.png)
 
 ## The bar
 
-The **Alts** button opens [My alts](#my-alts); **Bots** asks for bots. Seven orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Auto pull / No pull**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
+The **Alts** button opens [My alts](#my-alts); **Bots** asks for bots; **World** opens the [World panel](#world-panel); **Keys** shows or hides the [key spells bar](#key-spells-bar). Seven orders, one click each: **Follow**, **Stay**, **Attack my target**, **Active / Passive**, **Auto pull / No pull**, **Dungeon**, **Regroup**. Dungeon mode keeps bots with you, out of the stuff on the ground, and pulling when you pull. Regroup teleports every bot next to you, for the one stuck behind a wall.
 
 The Active / Passive button shows where the bots stand: a charge arrow and *Active* while they fight, **Zzz** and *Passive* while they hold back. Passive also stops the tank pulling on its own; any order wakes them all.
 
@@ -23,9 +27,13 @@ Right-click the bar for profiles: **Farm** (hunt, loot, eat), **Strict follow**,
 
 Shift-drag a button to move the bar.
 
+## Minimap button
+
+A button on the minimap, for those who do not use chat commands. Left-click shows or hides the bar and the addon's windows; right-click opens a menu (the bar, the key spells bar, My alts, World, Quests, Dashboard, Missions, the language). Drag it around the minimap; its place is remembered. Hide it from its menu; `/sbl minimap` brings it back.
+
 ## Key bindings
 
-Follow, Stay, Attack, Passive, Dungeon, Regroup and Release can each get a key: Esc > Key Bindings > SquidBots Lite. The keys work with the bar hidden.
+Follow, Stay, Attack, Passive, Dungeon, Regroup and Release can each get a key, as can the key spells bar and its quick actions (Heal please, CC please, Taunt please): Esc > Key Bindings > SquidBots Manager. The keys work with the bar hidden.
 
 ## Asking for bots
 
@@ -39,8 +47,11 @@ GMs can switch to `.playerbots coa` with `/sbl gm` and skip the channel. GM mode
 
 The **Alts** button on the bar (or **Bots > My alts**, or `/sbl alts`) lists the other characters of your account, logged-in ones first, each with its level, class, specialization and an XP bar; hover a name for its gold and XP. **Log in** brings one online as a bot of yours, and it joins your group; **Summon** brings it next to you, since it logs in where it logged out; **Sheet** opens its bot sheet; **Log out** sends it home. The list comes from `.playerbots bot list`, and the buttons type `.playerbots bot add` / `remove`, as you could yourself.
 
-- **Teams**: save your group, or the logged-in alts, under a name, then log the whole team in or out in one click (one a second; a sixth member turns the party into a raid).
+- **Sort** (bottom right): logged in first, name, last played, team or level. With the Team sort, each alt shows up to three of its teams; its tooltip lists them all.
+- **Hide**: right-click an alt to hide it from the list, or hide every alt of a linked account from the Accounts menu. Sort > Show hidden alts brings them back. Nothing is deleted on the server.
+- **Teams**: save your group, or the logged-in alts, under a name, then log the whole team in or out in one click (one a second; a sixth member turns the party into a raid). **Log in my group's bots** logs in every offline alt of your group or raid. Each team can be edited (click or drag alts in and out, drag a member up or down for the login order, rename it) or duplicated.
 - **Accounts**: link another account with its security key (`.playerbots account setKey` on that account, then Link an account here) and log all its characters in as bots.
+- **Dashboard** (`/sbl dashboard`), **Missions** (`/sbl missions`: send a logged-in alt gathering on its own) and **Quests** (`/sbl quests`: one row per quest, one column for you and each alt of your group, with share, abandon and turn in).
 
 With `CoA.CollectionsForBots = 1` on the server, alts keep their look: wardrobe, outfits, vanity and mounts.
 
@@ -69,9 +80,21 @@ Each bot gets a role icon on its frame. Click it for that bot alone: come to me,
 
 A bot you invited by hand, not through `lfg bot`, is asked `co ?` once to learn its role; the question and its answer stay out of your chat. Only members known as bots are asked (a bot answer, the "Bot" surname, an alt of yours), never a real player; `/sbl roles off` turns it off. The frames also show **Low mana**, **Pulling** and **Rez** without a word of chat.
 
+## World panel
+
+The **World** button (or `/sbl world`), with a CoA Bots 3.0 server or later:
+
+- **Guild**: order an item from the guild, browse the catalogue by category (Trade goods, Consumables, Equipment by slot, Other), and follow each order: served from the guild bank, sent free, crafted or bought at the auction house cash on delivery, or why nobody could serve it.
+- **Artisans**: the realm's bot artisans and their recipes, a quote, then the order through to your cash-on-delivery mail.
+- **Events**: invasions, gold rushes and capital raids with their countdown, and the latest server firsts.
+
+## Key spells bar
+
+The **Keys** button (or `/sbl keys`): **Heal please**, **CC please** and **Taunt please**, one click or one key each; the bar says which bot acted and with which spell, or why none could. Right-click Keys to switch to the full bar: each bot's big cooldowns (Bloodlust and the like, external saves, a battle res), cast when you click them.
+
 ## Version check
 
-At login the server names its CoA Bots version. SquidBots Lite carries the same number: when the server is ahead, the addon says in chat that a new version is out.
+At login the server names its CoA Bots version. When the server is ahead of the version the addon was made for, the addon says in chat that a new version is out.
 
 ## Commands
 
@@ -82,10 +105,20 @@ At login the server names its CoA Bots version. SquidBots Lite carries the same 
 /sbl lang fr | en    French or English
 /sbl channel <name>  ask in a different channel (a name, not a number)
 /sbl alts            your other characters, played as bots
-/sbl bot <name>      the bot sheet of a bot of your group (or of your target)
+/sbl dashboard       the alts dashboard
+/sbl quests          the quests of your group, one column per alt
+/sbl spec            the specializations of your group
+/sbl keys            the key spells bar
 /sbl missions        send your logged-in alts gathering on their own
+/sbl world           the World panel (guild, artisans, events)
+/sbl dc              the Dungeon clear panel
+/sbl bot <name>      the bot sheet of a bot of your group (or of your target)
+/sbl icons           the bag icons next to your alts on the group frames
+/sbl raidframes on | off  role icons on raid-style party frames
+/sbl sheettrade on | off  a trade with one of your bots opens its sheet
 /sbl roles on | off  ask bots of unknown role for it
 /sbl questask on | off | always  ask whether your alts take the quest you accept
+/sbl minimap         show or hide the minimap button
 /sbl gm              GM mode
 /sbl reset           put the bar back in the middle
 ```
@@ -94,13 +127,38 @@ Ctrl + mouse wheel over the bar also resizes it. The bar's size, place and shown
 
 ## Install
 
-It ships with CoA Bots, whose installer copies it into your client. To install it by hand, copy the `SquidBotsLite` folder into `Interface/AddOns`.
+The SquidBots launcher installs it and keeps it up to date. To install it by hand, take the zip of the [latest release](https://github.com/Zyth45/squidbots-addon/releases/latest), replace your `Interface/AddOns/SquidBotsLite` folder with the one inside, then `/reload`.
+
+Questions, bugs, ideas: the [SquidBots Discord](https://discord.gg/DTJceaG9Ky).
 
 Everything it sends is a chat command mod-playerbots already understands: it never asks the server for anything a player could not type.
 
 ## Changes
 
-**3.0** (in progress, for CoA Bots 3.0)
+**3.1.4.1** (2026-11-17, for CoA Bots 3.1.4; requested by a player)
+- My alts: **Log in my group's bots**; **Sort** by logged in first, name, last played, team or level (up to three teams on each alt); **hide** alts or every alt of a linked account (nothing deleted on the server).
+- Teams: **Edit** (click or drag alts in and out, drag for the login order, rename), **Duplicate**, **New team**.
+- The logged-in count of My alts is no longer hidden under the icons.
+
+**3.1.4** (2026-11-17, for CoA Bots 3.1.4)
+- **Minimap button** (issue #4): show or hide the bar and windows, a menu on right-click, drag it around.
+- Guild orders: an order served in several ways is one line ("12 of 20: guild bank 5, bags 2, AH 5"), yellow until complete; when nobody could serve it, the line says why.
+- Guild catalogue by category (Trade goods, Consumables, Equipment by slot, Other).
+- On a server without Dungeon Clear, the Dungeon button says so and gives the SquidBots dungeon mode.
+
+**3.1.3** (2026-11-15, for CoA Bots 3.1.3)
+- **Keys** button: Heal please, CC please, Taunt please, and a full bar of each bot's big cooldowns; two sizes, both remembered.
+- **Quests** tab for your group (`/sbl quests`): progress per alt, share, abandon, everyone turns in.
+- Guild catalogue Refresh button; guild orders say why nobody could serve them.
+- Safer: addon messages only from your group, no bot orders to the players of your group, dot commands never said aloud.
+
+**3.1.1** (2026-11-14, for CoA Bots 3.1.1)
+- **Key spells bar** (`/sbl keys`): each bot's big cooldowns, click to cast, cooldown sweeps, right-click to keep a spell for your clicks only.
+
+**3.1** (2026-11-14, for CoA Bots 3.1)
+- Compare an item with the bot's gear in its tooltip, the alt's own verdict and upgrade arrows; its four bags; sell or destroy by quality; select several items at once; a scrolling Bags tab; up to 150 recipes per artisan with a search box.
+
+**3.0** (2026-11-12, for CoA Bots 3.0)
 - **World** button on the bar (or /sbl world): Guild (order an item for yourself, follow each order: sent free, crafted or bought at the AH cash on delivery, refused and why; gear gifts received), Artisans (bot artisans, their recipes, a quote, then the order; your cash-on-delivery mails), Events (invasions and gold rushes with their countdown, the last server firsts). Needs CoA Bots 3.0 with each feature and its .Addon option on; otherwise the tab says so.
 - **Bot soul**: a bot's archetype and traits in its icon's tooltip and on its sheet's Info tab (CoA Bots 3.0, CoaSoul.Addon).
 - **Group frames**: a small bag icon next to each of your alts opens its bags. /sbl icons off hides them.
@@ -227,6 +285,7 @@ Everything it sends is a chat command mod-playerbots already understands: it nev
 
 - [mod-playerbots, CoA Bots branch](https://github.com/Zyth45/mod-playerbots)
 - [SquidBots dashboard](https://github.com/Zyth45/squidbots-dashboard)
+- [SquidBots Discord](https://discord.gg/DTJceaG9Ky): support and news
 
 ## License
 
