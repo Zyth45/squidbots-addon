@@ -1116,6 +1116,11 @@ SquidBotsLite_GroupAlts = GroupAlts
 -- GIVE err <itemId> <bound|notalt|notgroup|full|missing|off> (missing: fewer than asked, nothing given).
 -- From the item's menu, or dragged onto an alt of the column.
 local dragGive
+-- Bound: refused, except an heirloom (quality 7, bound to the account: the user's go of 18/11). The bot's bag list marks
+-- both "(soulbound)"; the realm checks again.
+local function GiveBound(item)
+	return item.soulbound and select(3, GetItemInfo(item.link)) ~= 7
+end
 local function CanGiveToAlt()
 	local A = SquidBotsLite_Alts
 	return A and A.hello and A.hello.give and A.IsAlt and A.IsAlt(current) and A.Send and true or false
@@ -1123,7 +1128,7 @@ end
 
 local function GiveToAlt(item, to)
 	if not current or not item or not to or to == current then return end
-	if item.soulbound then Print(string.format(T("GA_BOUND"), item.link)) return end
+	if GiveBound(item) then Print(string.format(T("GA_BOUND"), item.link)) return end
 	local A = SquidBotsLite_Alts
 	if not (A and A.IsAlt and A.IsAlt(current) and A.IsAlt(to)) then Print(T("GA_NOTALT")) return end
 	if not CanGiveToAlt() then Print(T("GA_OLD")) return end
@@ -1154,7 +1159,7 @@ local function GiveToAltItem(item)
 		end
 	end
 	local line = { text = T("GA_MENU"), notCheckable = true }
-	if item.soulbound then line.text, line.disabled = T("GA_MENU") .. " (" .. T("GA_BOUND_SHORT") .. ")", true
+	if GiveBound(item) then line.text, line.disabled = T("GA_MENU") .. " (" .. T("GA_BOUND_SHORT") .. ")", true
 	elseif not CanGiveToAlt() then line.text, line.disabled = T("GA_MENU_OLD"), true
 	elseif #others == 0 then line.text, line.disabled = T("GA_MENU_NONE"), true
 	else line.hasArrow, line.menuList = true, others end
@@ -1381,7 +1386,7 @@ local function BuildBags(page)
 		-- 3.1.6: dragged onto an alt of the column, the item goes to that alt (Give to alt).
 		b:RegisterForDrag("LeftButton")
 		b:SetScript("OnDragStart", function(self)
-			if self.item and bagMode == "bags" and CanGiveToAlt() and not self.item.soulbound and not CursorHasItem() then
+			if self.item and bagMode == "bags" and CanGiveToAlt() and not GiveBound(self.item) and not CursorHasItem() then
 				dragGive = self.item
 				SetCursor(GetItemIcon(self.item.id) or "Interface\\Icons\\INV_Misc_QuestionMark")
 			end
