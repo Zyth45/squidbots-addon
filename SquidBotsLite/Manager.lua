@@ -5,6 +5,7 @@
 
 local STRINGS = {
 	en = {
+		ALTS_COL = "Group alts", ALTS_COL_LEVEL = "Level %d", ALTS_COL_TIP = "Click: its sheet, on the same tab.", ALTS_COL_SHOWN = "Its sheet is the one shown.",
 		TITLE = "Bot sheet", GEAR = "Gear", BAGS = "Bags", QUESTS = "Quests", INFO = "Info", REFRESH = "Refresh",
 		BEST_GEAR = "Best gear", BEST_GEAR_ASK = "%s gets free gear for its level, replacing what it wears. Players who earn their gear may not want this. Sure?",
 		BEST_GEAR_TIP = "Free gear for its level from the server, replacing what it wears (cannot be undone). A server can turn it off for alts (AiPlayerbot.AutoGearCommandAltBots = 0).",
@@ -84,6 +85,7 @@ local STRINGS = {
 		T_NO_OPTIONS = "No talent to choose (CoA classes only, CoA Bots 2.1 or later).", T_SAVING = "Learning %d ranks...",
 	},
 	fr = {
+		ALTS_COL = "Alts du groupe", ALTS_COL_LEVEL = "Niveau %d", ALTS_COL_TIP = "Clic : sa fiche, sur le même onglet.", ALTS_COL_SHOWN = "C'est sa fiche qui est affichée.",
 		TITLE = "Fiche du bot", GEAR = "Équipement", BAGS = "Sacs", QUESTS = "Quêtes", INFO = "Infos", REFRESH = "Actualiser",
 		BEST_GEAR = "Meilleur équipement", BEST_GEAR_ASK = "%s reçoit un équipement gratuit de son niveau, à la place de ce qu'il porte. Les joueurs qui gagnent leur équipement n'en voudront peut-être pas. Sûr ?",
 		BEST_GEAR_TIP = "Équipement gratuit de son niveau donné par le serveur, à la place de ce qu'il porte (impossible à annuler). Un serveur peut le désactiver pour les alts (AiPlayerbot.AutoGearCommandAltBots = 0).",
@@ -2191,8 +2193,109 @@ local function RenderInfo(page)
 	for _, b in ipairs(page.buttons) do b:SetText(T(b.label)) end
 end
 
+-- 3.1.6: the logged-in alts of the group, in a column left of the sheet (8 at most). A click shows that alt's sheet
+-- on the same tab; the alt shown has a gold frame and an arrow. Recruited bots are not in it: alts only.
+local ALT_COL_W, ALT_COL_ROWS, ALT_ROW_H = 120, 8, 32
+local altCol
+
+local function GroupAlts()
+	local list, me = {}, UnitName("player")
+	local raid = GetNumRaidMembers() > 0
+	for i = 1, raid and GetNumRaidMembers() or GetNumPartyMembers() do
+		local unit = (raid and "raid" or "party") .. i
+		local name = UnitName(unit)
+		if name and name ~= me and SquidBotsLite_BotKind and SquidBotsLite_BotKind(name) == "alt" then
+			table.insert(list, { name = name, unit = unit })
+			if #list >= ALT_COL_ROWS then break end
+		end
+	end
+	return list
+end
+SquidBotsLite_GroupAlts = GroupAlts
+
+local function BuildAltColumn()
+	altCol = CreateFrame("Frame", nil, sheet)
+	altCol:SetWidth(ALT_COL_W)
+	altCol:SetPoint("TOPRIGHT", sheet, "TOPLEFT", 2, 0)
+	altCol:SetBackdrop(BACKDROP)
+	altCol:SetBackdropColor(0.04, 0.04, 0.05, 1)
+	altCol:EnableMouse(true)
+	altCol.title = altCol:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	altCol.title:SetPoint("TOP", 0, -12)
+	altCol.rows = {}
+	for i = 1, ALT_COL_ROWS do
+		local b = CreateFrame("Button", nil, altCol)
+		b:SetWidth(ALT_COL_W - 18)
+		b:SetHeight(ALT_ROW_H)
+		b:SetPoint("TOP", 0, -28 - (i - 1) * (ALT_ROW_H + 3))
+		b:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			tile = false, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+		b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+		b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		b.label:SetPoint("TOPLEFT", 8, -5)
+		b.label:SetPoint("RIGHT", -16, 0)
+		b.label:SetJustifyH("LEFT")
+		b.info = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		b.info:SetPoint("BOTTOMLEFT", 8, 5)
+		b.arrow = b:CreateTexture(nil, "OVERLAY")
+		b.arrow:SetWidth(14)
+		b.arrow:SetHeight(14)
+		b.arrow:SetPoint("RIGHT", -4, 0)
+		b.arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+		b:SetScript("OnClick", function(self)
+			if self.alt and self.alt ~= current then SquidBotsLite_OpenSheet(self.alt) end
+		end)
+		b:SetScript("OnEnter", function(self)
+			if not self.alt then return end
+			GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+			GameTooltip:AddLine(self.alt, 1, 1, 1)
+			GameTooltip:AddLine(self.alt == current and T("ALTS_COL_SHOWN") or T("ALTS_COL_TIP"), 0.7, 0.7, 0.7, true)
+			GameTooltip:Show()
+		end)
+		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		altCol.rows[i] = b
+	end
+	-- Raid or party changes: the column follows while the sheet is up.
+	altCol:RegisterEvent("PARTY_MEMBERS_CHANGED")
+	altCol:RegisterEvent("RAID_ROSTER_UPDATE")
+	altCol:SetScript("OnEvent", function() if sheet:IsShown() and Render then Render() end end)
+end
+
+local function RenderAltColumn()
+	if not altCol then return end
+	local alts = GroupAlts()
+	if #alts == 0 then altCol:Hide() return end
+	altCol:Show()
+	altCol.title:SetText(T("ALTS_COL"))
+	altCol:SetHeight(40 + #alts * (ALT_ROW_H + 3))
+	for i, b in ipairs(altCol.rows) do
+		local a = alts[i]
+		b.alt = a and a.name
+		if a then
+			local _, token = UnitClass(a.unit)
+			local color = token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
+			b.label:SetText(a.name)
+			if color then b.label:SetTextColor(color.r, color.g, color.b) else b.label:SetTextColor(1, 0.82, 0) end
+			b.info:SetText(string.format(T("ALTS_COL_LEVEL"), UnitLevel(a.unit) or 0))
+			if a.name == current then
+				b:SetBackdropColor(0.30, 0.22, 0, 0.95)
+				b:SetBackdropBorderColor(1, 0.82, 0, 1)
+				b.arrow:Show()
+			else
+				b:SetBackdropColor(0, 0, 0, 0.6)
+				b:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
+				b.arrow:Hide()
+			end
+			b:Show()
+		else
+			b:Hide()
+		end
+	end
+end
+
 Render = function()
 	if not sheet or not sheet:IsShown() then return end
+	RenderAltColumn()
 	sheet.title:SetText("SquidBots Manager - " .. T("TITLE") .. " : " .. (current or "?")
 		.. (readOnly.on and ("  |cffaaaaaa(" .. T("READ_ONLY") .. ")|r") or ""))
 	local info = SquidBotsLiteDB.altInfo and current and SquidBotsLiteDB.altInfo[current] or {}
@@ -2291,6 +2394,9 @@ local function Build()
 		self.moved = true
 	end)
 	table.insert(UISpecialFrames, "SquidBotsLiteSheet")
+	-- 3.1.6: the alts column left of it stays on screen too.
+	sheet:SetClampRectInsets(-ALT_COL_W, 0, 0, 0)
+	BuildAltColumn()
 	sheet.title = sheet:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	sheet.title:SetPoint("TOP", 0, -14)
 	local close = CreateFrame("Button", nil, sheet, "UIPanelCloseButton")
@@ -2563,7 +2669,7 @@ function SquidBotsLite_OpenSheet(name, tabKey, ro)
 	if not sheet.moved then
 		sheet:ClearAllPoints()
 		if alts and alts:IsShown() then
-			sheet:SetPoint("TOPLEFT", alts, "TOPRIGHT", 4, 0)
+			sheet:SetPoint("TOPLEFT", alts, "TOPRIGHT", ALT_COL_W + 2, 0)
 		else
 			sheet:SetPoint("CENTER", 120, 0)
 		end
