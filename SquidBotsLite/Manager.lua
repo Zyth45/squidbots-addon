@@ -1437,6 +1437,47 @@ local function BuildGear(page)
 	page.best:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
+-- 3.1.6: the item dragged to an alt follows the cursor in a frame of its own: the client's cursor icon (SetCursor) is
+-- reset as soon as the cursor crosses the world, and GetMouseFocus() is then the world, so the drag was lost. The alt
+-- is the row of the column under the cursor when the button is released, wherever the cursor went meanwhile;
+-- released anywhere else, nothing happens (the item never left the bot's bags; the selection is left as it is).
+local dragIcon
+local function DragTarget()
+	if not altCol or not altCol:IsShown() then return end
+	for _, row in ipairs(altCol.rows) do
+		if row:IsShown() and row.alt and MouseIsOver(row) then return row.alt end
+	end
+end
+local function EndDragGive()
+	local item = dragGive
+	dragGive = nil
+	if dragIcon then dragIcon:Hide() end
+	local to = item and DragTarget()
+	if to then GiveToAlt(item, to) end
+end
+local function StartDragGive(item)
+	if not dragIcon then
+		dragIcon = CreateFrame("Frame", nil, UIParent)
+		dragIcon:SetFrameStrata("TOOLTIP")
+		dragIcon:SetWidth(32)
+		dragIcon:SetHeight(32)
+		dragIcon:EnableMouse(false)
+		dragIcon.tex = dragIcon:CreateTexture(nil, "OVERLAY")
+		dragIcon.tex:SetAllPoints()
+		dragIcon:SetScript("OnUpdate", function(self)
+			local x, y = GetCursorPosition()
+			local s = UIParent:GetEffectiveScale()
+			self:ClearAllPoints()
+			self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / s + 14, y / s - 14)
+			-- Released where no frame of ours heard it: ended here all the same.
+			if dragGive and not IsMouseButtonDown("LeftButton") then EndDragGive() end
+		end)
+	end
+	dragGive = item
+	dragIcon.tex:SetTexture(ItemCache.Icon(item.id))
+	dragIcon:Show()
+end
+
 local function BuildBags(page)
 	page.buttons = {}
 	for i = 1, BAG_COLS * BAG_ROWS do
@@ -1458,17 +1499,10 @@ local function BuildBags(page)
 		b:RegisterForDrag("LeftButton")
 		b:SetScript("OnDragStart", function(self)
 			if self.item and bagMode == "bags" and CanGiveToAlt() and not GiveBound(self.item) and not CursorHasItem() then
-				dragGive = self.item
-				SetCursor(GetItemIcon(self.item.id) or "Interface\\Icons\\INV_Misc_QuestionMark")
+				StartDragGive(self.item)
 			end
 		end)
-		b:SetScript("OnDragStop", function()
-			local item = dragGive
-			dragGive = nil
-			ResetCursor()
-			local focus = GetMouseFocus()
-			if item and focus and focus.altColumn and focus.alt then GiveToAlt(item, focus.alt) end
-		end)
+		b:SetScript("OnDragStop", EndDragGive)
 		-- 3.1: a small tick box in the corner, the same as Ctrl+click.
 		b.box = CreateFrame("CheckButton", nil, b, "UICheckButtonTemplate")
 		b.box:SetWidth(16)
