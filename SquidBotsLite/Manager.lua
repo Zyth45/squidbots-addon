@@ -40,7 +40,7 @@ local STRINGS = {
 		BULK_TOOMANY = "Too many unticked items for one order: untick fewer, or sell those one by one.",
 		BULK_H_SERVER = "The bot leaves out quest items, what it would wear, what it keeps and what has a use.",
 		NO_VENDOR = "Nothing sold: the bot sells only standing right next to a vendor (Summon it there, or walk it there with Follow).", LINK = "Link in chat",
-		UNEQUIP = "Unequip", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
+		UNEQUIP = "Unequip", ITEM_LOADING = "Loading the item from the server...", ITEM_HINT = "Click an item for what to do with it. Shift-click: link it in chat.",
 		GEAR_HINT = "Right-click a piece to take it off.",
 		CMP_WORN = "Worn by %s", CMP_ILVL = "Item level %s compared with what %s wears (%d)", CMP_NONE = "%s: nothing known in that slot (Gear tab, in range).",
 		CMP_LEVEL = "%s is level %d: this needs %d.", CMP_ASKING = "Asking %s...", CMP_V_equip = "Upgrade for %s: that slot is empty.",
@@ -128,7 +128,7 @@ local STRINGS = {
 		BULK_TOOMANY = "Trop d'objets décochés pour un seul ordre : décochez-en moins, ou vendez-les un par un.",
 		BULK_H_SERVER = "Le bot laisse de côté les objets de quête, ce qu'il porterait, ce qu'il garde et ce qui s'utilise.",
 		NO_VENDOR = "Rien vendu : le bot ne vend que collé à un marchand (appelez-le devant le marchand, ou amenez-le avec Suivre).", LINK = "Lien dans le chat",
-		UNEQUIP = "Retirer", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
+		UNEQUIP = "Retirer", ITEM_LOADING = "Chargement de l'objet depuis le serveur...", ITEM_HINT = "Cliquez un objet pour choisir quoi en faire. Maj-clic : lien dans le chat.",
 		GEAR_HINT = "Clic droit sur une pièce pour la retirer.",
 		CMP_WORN = "Porté par %s", CMP_ILVL = "Niveau d'objet %s par rapport à ce que porte %s (%d)", CMP_NONE = "%s : rien de connu à cet emplacement (onglet Équipement, à portée).",
 		CMP_LEVEL = "%s est niveau %d : il faut le niveau %d.", CMP_ASKING = "Question à %s...", CMP_V_equip = "Mieux pour %s : cet emplacement est vide.",
@@ -251,6 +251,77 @@ end
 -- Listings: "c", "quests all", "stats" come back as one whisper per line
 -- ---------------------------------------------------------------------------
 local Render
+-- 3.1.6: items this client has never seen (an alt's bags, its gear) are asked of the realm through a hidden tooltip as
+-- soon as the list arrives, a few at a time; until then the slot shows a watch. When they arrive the sheet is drawn
+-- again, and a tooltip still hovered is filled again: the 3.3.5 client does neither by itself (no
+-- GET_ITEM_INFO_RECEIVED), hence "Retrieving item information" until a Refresh.
+local ItemCache = { list = {}, state = {}, PER_TICK = 4, TICK = 0.25, RETRY = 2, TRIES = 3,
+	WAIT_ICON = "Interface\\Icons\\INV_Misc_PocketWatch_01" }
+function ItemCache.Want(id)
+	id = tonumber(id)
+	if not id or id == 0 or GetItemInfo(id) or ItemCache.state[id] then return end
+	ItemCache.state[id] = { tries = 0, at = 0 }
+	table.insert(ItemCache.list, id)
+	if not ItemCache.frame then
+		ItemCache.frame = CreateFrame("Frame")
+		ItemCache.frame.wait = 0
+		ItemCache.frame:SetScript("OnUpdate", function(self, elapsed)
+			self.wait = self.wait - elapsed
+			if self.wait > 0 then return end
+			self.wait = ItemCache.TICK
+			ItemCache.Tick()
+		end)
+	end
+	ItemCache.frame:Show()
+end
+function ItemCache.Waiting(id) return id and ItemCache.state[id] ~= nil end
+-- The icon of an item: its own once known, a watch while asked, else what the client can guess.
+function ItemCache.Icon(id, fallback)
+	return select(10, GetItemInfo(id)) or (ItemCache.Waiting(id) and ItemCache.WAIT_ICON)
+		or (GetItemIcon and GetItemIcon(id)) or fallback or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+function ItemCache.Tick()
+	local now, asked, got, keep = GetTime(), 0, false, {}
+	for _, id in ipairs(ItemCache.list) do
+		local s = ItemCache.state[id]
+		if GetItemInfo(id) then
+			ItemCache.state[id], got = nil, true
+		elseif s.tries >= ItemCache.TRIES and now >= s.at then
+			-- Unknown to the realm too: given up, the slot falls back to the client's guess.
+			ItemCache.state[id], got = nil, true
+		else
+			if now >= s.at and asked < ItemCache.PER_TICK then
+				if not ItemCache.scan then
+					ItemCache.scan = CreateFrame("GameTooltip", "SquidBotsLiteItemScan", UIParent, "GameTooltipTemplate")
+				end
+				ItemCache.scan:SetOwner(UIParent, "ANCHOR_NONE")
+				ItemCache.scan:SetHyperlink("item:" .. id)
+				ItemCache.scan:Hide()
+				s.tries, s.at, asked = s.tries + 1, now + ItemCache.RETRY, asked + 1
+			end
+			table.insert(keep, id)
+		end
+	end
+	ItemCache.list = keep
+	if #keep == 0 and ItemCache.frame then ItemCache.frame:Hide() end
+	if not got then return end
+	if Render and sheet and sheet:IsShown() then Render() end
+	local hover = ItemCache.hover
+	if hover and GameTooltip:IsOwned(hover) and hover:GetScript("OnEnter") then hover:GetScript("OnEnter")(hover) end
+end
+-- A tooltip for an item maybe not known yet: its name and "Loading..." until it is, then the real one.
+function ItemCache.Tooltip(owner, id, link)
+	GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+	ItemCache.hover = owner
+	if GetItemInfo(id) or not link then
+		GameTooltip:SetHyperlink(link and link:match("|H(item:[^|]+)|h") or ("item:" .. id))
+	else
+		ItemCache.Want(id)
+		GameTooltip:SetText(link)
+		GameTooltip:AddLine(T("ITEM_LOADING"), 0.6, 0.6, 0.6)
+	end
+	GameTooltip:Show()
+end
 -- 3.1: whether an item is an upgrade for the sheet's alt, by its own answer (the compare block, further down).
 local IconVerdict
 
@@ -283,6 +354,7 @@ local function ParseBags(lines)
 			local id = tonumber(link:match("|Hitem:(%d+)"))
 			local count = tonumber(line:match("|h|rx(%d+)")) or 1
 			table.insert(list, { link = link, id = id, count = count, soulbound = line:find("(soulbound)", 1, true) ~= nil })
+			ItemCache.Want(id)
 		end
 	end
 	return list
@@ -1299,8 +1371,11 @@ local function BuildGear(page)
 		b.slot = slot
 		b:SetScript("OnEnter", function(self)
 			local unit = current and UnitOf(current)
-			if unit and GetInventoryItemLink(unit, self.slot) then
+			local link = unit and GetInventoryItemLink(unit, self.slot)
+			if link then
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				ItemCache.hover = self
+				if not GetItemInfo(link) then ItemCache.Want(link:match("item:(%d+)")) end
 				GameTooltip:SetInventoryItem(unit, self.slot)
 				GameTooltip:Show()
 			end
@@ -1368,11 +1443,7 @@ local function BuildBags(page)
 		local b = ItemButton(page, 40)
 		b:SetPoint("TOPLEFT", 14 + ((i - 1) % BAG_COLS) * 46, -math.floor((i - 1) / BAG_COLS) * 46)
 		b:SetScript("OnEnter", function(self)
-			if self.item then
-				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-				GameTooltip:SetHyperlink(self.item.link:match("|H(item:[^|]+)|h"))
-				GameTooltip:Show()
-			end
+			if self.item then ItemCache.Tooltip(self, self.item.id, self.item.link) end
 		end)
 		b:SetScript("OnClick", function(self)
 			if CursorHasItem() then DropOnBags() return end
@@ -1475,12 +1546,12 @@ local function BuildBags(page)
 	page.note:SetPoint("TOP", 0, -120)
 	page.hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	page.hint:SetPoint("TOPLEFT", 14, -282)
-	page.hint:SetWidth(360)
+	page.hint:SetWidth(476)
 	page.hint:SetJustifyH("LEFT")
 	page.trade = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.trade:SetWidth(130)
 	page.trade:SetHeight(22)
-	page.trade:SetPoint("TOPLEFT", 14, -310)
+	page.trade:SetPoint("TOPLEFT", 14, -340)
 	page.trade:SetScript("OnClick", function()
 		local unit = current and UnitOf(current)
 		if unit then InitiateTrade(unit) end
@@ -2246,6 +2317,8 @@ local function RenderGear(page)
 	page.best:SetText(T("BEST_GEAR"))
 	for slot, b in pairs(page.slots) do
 		local texture = unit and GetInventoryItemTexture(unit, slot)
+		local link = texture and GetInventoryItemLink(unit, slot)
+		if link and not GetItemInfo(link) then ItemCache.Want(link:match("item:(%d+)")) end
 		b.icon:SetTexture(texture)
 		if texture then b.icon:Show() else b.icon:Hide() end
 		SetQuality(b, texture and GetInventoryItemQuality(unit, slot))
@@ -2311,7 +2384,7 @@ local function RenderBags(page)
 		local item = list[bagOffset + i]
 		b.item = item
 		if item then
-			b.icon:SetTexture((GetItemIcon and GetItemIcon(item.id)) or select(10, GetItemInfo(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+			b.icon:SetTexture(ItemCache.Icon(item.id))
 			b.icon:Show()
 			SetQuality(b, select(3, GetItemInfo(item.id)))
 			b.count:SetText(item.count > 1 and item.count or "")
