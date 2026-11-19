@@ -1551,7 +1551,8 @@ local function BuildBags(page)
 	page.trade = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 	page.trade:SetWidth(130)
 	page.trade:SetHeight(22)
-	page.trade:SetPoint("TOPLEFT", 14, -340)
+	-- Under the help text, whatever its height (font, UI scale, language): no height is set on it, so it fits its lines.
+	page.trade:SetPoint("TOPLEFT", page.hint, "BOTTOMLEFT", 0, -8)
 	page.trade:SetScript("OnClick", function()
 		local unit = current and UnitOf(current)
 		if unit then InitiateTrade(unit) end
