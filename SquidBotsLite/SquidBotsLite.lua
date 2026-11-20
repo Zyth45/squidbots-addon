@@ -3605,7 +3605,8 @@ end
 
 function dc.BuildPanel()
 	local f = CreateFrame("Frame", "SquidBotsLiteDungeonClear", UIParent)
-	f:SetWidth(340)
+	-- 3.1.8: 20 px more for the boss list's scroll bar.
+	f:SetWidth(360)
 	f:SetPoint("CENTER", 260, 40)
 	f:SetBackdrop(PANEL_BACKDROP)
 	f:SetBackdropColor(0.04, 0.04, 0.05, 0.96)
@@ -3699,6 +3700,23 @@ function dc.BuildPanel()
 		row.go:SetHeight(16)
 		row.go:SetPoint("RIGHT", -2, 0)
 		f.rows[i] = row
+	end
+	-- 3.1.8: a long list (Blackrock Depths, Dire Maul: bosses and scripted events, past dc.ROWS) scrolls; its last
+	-- bosses were cut off. Under the rows so that their Go buttons still take the clicks; the rows pass the wheel on.
+	f.scroll = CreateFrame("ScrollFrame", "SquidBotsLiteDCScroll", f, "FauxScrollFrameTemplate")
+	f.scroll:SetPoint("TOPLEFT", 16, -dc.ROWS_TOP)
+	f.scroll:SetWidth(308)
+	f.scroll:SetHeight(dc.ROWS * dc.ROW_H)
+	f.scroll:SetScript("OnVerticalScroll", function(self, offset)
+		FauxScrollFrame_OnVerticalScroll(self, offset, dc.ROW_H, dc.RefreshPanel)
+	end)
+	f.scroll:SetFrameLevel(f:GetFrameLevel())
+	for _, row in ipairs(f.rows) do
+		row:EnableMouseWheel(true)
+		row:SetScript("OnMouseWheel", function(_, delta)
+			local bar = _G.SquidBotsLiteDCScrollScrollBar
+			if bar and bar:IsShown() then bar:SetValue(bar:GetValue() - delta * dc.ROW_H) end
+		end)
 	end
 	f.manual = dc.Button(f, 200, "DC_MANUAL", function() dc.DungeonMode() end, "TIP_DC_MANUAL")
 	f.manual:SetHeight(18)
@@ -3913,6 +3931,7 @@ function dc.RefreshPanel()
 		f.next:SetText("")
 		f.empty:SetText("")
 		for _, row in ipairs(f.rows) do row:Hide() end
+		FauxScrollFrame_Update(f.scroll, 0, dc.ROWS, dc.ROW_H)
 		return
 	end
 	local r, g, b, state
@@ -3948,8 +3967,26 @@ function dc.RefreshPanel()
 		end
 	end
 	f.bossTitle:SetText(total > 0 and string.format("%s  |cffaaaaaa%d / %d|r", L.DC_BOSSES_T, dead, total) or L.DC_BOSSES_T)
+	-- 3.1.8: a new next boss out of sight is scrolled into view (once: the user's own scrolling is left alone).
+	if dc.nextBoss ~= f.scrolledTo then
+		f.scrolledTo = dc.nextBoss
+		for k, boss in ipairs(bosses) do
+			if not boss.event and boss.name == dc.nextBoss then
+				local top = FauxScrollFrame_GetOffset(f.scroll)
+				if k <= top or k > top + dc.ROWS then
+					local want = math.max(0, math.min(k - 2, #bosses - dc.ROWS))
+					FauxScrollFrame_SetOffset(f.scroll, want)
+					local bar = _G.SquidBotsLiteDCScrollScrollBar
+					if bar then bar:SetValue(want * dc.ROW_H) end
+				end
+				break
+			end
+		end
+	end
+	FauxScrollFrame_Update(f.scroll, #bosses, dc.ROWS, dc.ROW_H)
+	local offset = FauxScrollFrame_GetOffset(f.scroll)
 	for i, row in ipairs(f.rows) do
-		local boss = bosses[i]
+		local boss = bosses[i + offset]
 		if boss then
 			local isNext = dc.enabled and boss.name == dc.nextBoss
 			row.entry = not boss.event and boss.entry or nil
@@ -3961,7 +3998,7 @@ function dc.RefreshPanel()
 			if isNext then
 				row.bg:SetVertexColor(1, 0.82, 0, 0.16)
 			else
-				row.bg:SetVertexColor(1, 1, 1, i % 2 == 0 and 0.04 or 0)
+				row.bg:SetVertexColor(1, 1, 1, (i + offset) % 2 == 0 and 0.04 or 0)
 			end
 			-- A skull on a dead boss, an arrow on the one the tank heads for.
 			if boss.status == "dead" then
