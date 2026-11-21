@@ -1,26 +1,27 @@
 -- SquidBots Manager 3.2: "What is this bot doing?" on the target frame, for debugging (module 32fd04de).
 -- The button says ".squidbots why" (the realm takes the line as a command, nothing is said aloud). The realm answers with
 -- system lines "[SquidBots why] ..."; they are gathered in a small window whose text can be copied (Ctrl+C) and pasted
--- to us. The command needs a GM account: a refusal, or no answer at all, is shown in the window in plain words.
+-- to us. Open to every account on CoA Bots 3.2 (a realm may keep it to GMs: its refusal is one of those lines); no
+-- answer at all, or the line echoed as chat, means an older realm, said in the window in plain words.
 
 local W = { lines = {}, WAIT = 3, PREFIX = "[SquidBots why] " }
 SquidBotsLite_Why = W
 
 local STRINGS = {
 	en = {
-		BUTTON_TIP = "What is this bot doing?", BUTTON_TIP2 = "Asks the realm (.squidbots why). Needs a GM account.",
-		TITLE = "What is this bot doing?", ASKING = "Asking the realm about %s...",
+		BUTTON_TIP = "What is this bot doing?", BUTTON_TIP2 = "Asks the server (.squidbots why). Needs CoA Bots 3.2.",
+		TITLE = "What is this bot doing?", ASKING = "Asking the server about %s...",
 		COPY = "Ctrl+C copies the text; paste it to us when you report a bot.",
-		REFUSED = "No answer from the realm: .squidbots why needs a GM account (and a realm with CoA Bots 3.2).",
-		REFUSED_SAID = "Refused: the realm took .squidbots why as plain chat, so your account is not a GM account.",
+		REFUSED = "No answer from the server (CoA Bots 3.2 needed).",
+		REFUSED_SAID = "Refused: the server took .squidbots why as plain chat (CoA Bots 3.2 needed).",
 		CLOSE = "Close", SELECT = "Select all",
 	},
 	fr = {
-		BUTTON_TIP = "Que fait ce bot ?", BUTTON_TIP2 = "Demande au royaume (.squidbots why). Il faut un compte MJ.",
-		TITLE = "Que fait ce bot ?", ASKING = "Question au royaume sur %s...",
+		BUTTON_TIP = "Que fait ce bot ?", BUTTON_TIP2 = "Demande au serveur (.squidbots why). Il faut CoA Bots 3.2.",
+		TITLE = "Que fait ce bot ?", ASKING = "Question au serveur sur %s...",
 		COPY = "Ctrl+C copie le texte ; collez-le-nous quand vous signalez un bot.",
-		REFUSED = "Pas de réponse du royaume : .squidbots why demande un compte MJ (et un royaume en CoA Bots 3.2).",
-		REFUSED_SAID = "Refusé : le royaume a pris .squidbots why pour du texte, votre compte n'est donc pas MJ.",
+		REFUSED = "Pas de réponse du serveur (il faut CoA Bots 3.2).",
+		REFUSED_SAID = "Refusé : le serveur a pris .squidbots why pour du texte (il faut CoA Bots 3.2).",
 		CLOSE = "Fermer", SELECT = "Tout sélectionner",
 	},
 }
@@ -116,7 +117,7 @@ function W.OnSystem(message)
 	W.Show(table.concat(W.lines, "\n"))
 end
 
--- A player account: the realm pretends the command does not exist and says it aloud; the echo is the refusal.
+-- An older realm: the command is unknown to it and said aloud; the echo is the refusal.
 function W.OnSay(message, sender)
 	if W.waiting and sender == UnitName("player") and type(message) == "string" and message:find("^%.squidbots why") then
 		W.Refused(T("REFUSED_SAID"))
