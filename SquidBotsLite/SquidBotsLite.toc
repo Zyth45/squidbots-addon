@@ -21,3 +21,4 @@ World.lua
 KeySpells.lua
 Minimap.lua
 AltsList.lua
+Why.lua
